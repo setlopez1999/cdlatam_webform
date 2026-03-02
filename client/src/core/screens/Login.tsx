@@ -15,15 +15,38 @@ export default function Login() {
   const { login, isLoggingIn } = useLocalAuth();
   const [, navigate] = useLocation();
 
+  // ... dentro de Login
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+
+    console.log("Intentando iniciar sesión con:", username); // <--- LOG 1
+
     try {
       await login(username.trim(), password);
+      console.log("Login exitoso, navegando..."); // <--- LOG 2
       navigate("/");
     } catch (err: unknown) {
+      console.error("Error en login:", err); // <--- LOG 3
       setError(
         err instanceof Error ? err.message : "Error al iniciar sesión. Intente nuevamente."
+      );
+    }
+  };
+
+  // Cambiamos handleSubmit por una función de acción directa
+  const handleLoginAction = async () => {
+    setError(null);
+    console.log("Acción de login iniciada"); // Log para verificar
+
+    try {
+      await login(username.trim(), password);
+      console.log("Login exitoso"); // Log para verificar
+      navigate("/");
+    } catch (err: unknown) {
+      console.error("Error en login:", err);
+      setError(
+        err instanceof Error ? err.message : "Error al iniciar sesión."
       );
     }
   };
@@ -116,6 +139,7 @@ export default function Login() {
               {/* Submit */}
               <Button
                 type="submit"
+
                 className="w-full h-11 bg-blue-600 hover:bg-blue-500 text-white font-medium shadow-lg shadow-blue-600/20 transition-all duration-200 mt-2"
                 disabled={isLoggingIn || !username || !password}
               >

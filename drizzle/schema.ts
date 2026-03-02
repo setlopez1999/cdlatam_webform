@@ -1,143 +1,140 @@
+import { sql } from "drizzle-orm";
 import {
-  int,
-  mysqlEnum,
-  mysqlTable,
+  sqliteTable,
   text,
-  timestamp,
-  varchar,
-  decimal,
-  json,
-} from "drizzle-orm/mysql-core";
+  integer,
+  real,
+} from "drizzle-orm/sqlite-core";
 
 // ─── Core user table ─────────────────────────────────────────────────────────
-export const users = mysqlTable("users", {
-  id: int("id").autoincrement().primaryKey(),
-  openId: varchar("openId", { length: 64 }).notNull().unique(),
+export const users = sqliteTable("users", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  openId: text("openId").notNull().unique(),
   name: text("name"),
-  email: varchar("email", { length: 320 }),
-  loginMethod: varchar("loginMethod", { length: 64 }),
-  role: mysqlEnum("role", ["user", "admin"]).default("user").notNull(),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-  lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
+  email: text("email"),
+  loginMethod: text("loginMethod"),
+  role: text("role").default("user").notNull(),
+  createdAt: integer("createdAt", { mode: "timestamp" }).default(sql`(strftime('%s', 'now'))`).notNull(),
+  updatedAt: integer("updatedAt", { mode: "timestamp" }).default(sql`(strftime('%s', 'now'))`).notNull(),
+  lastSignedIn: integer("lastSignedIn", { mode: "timestamp" }).default(sql`(strftime('%s', 'now'))`).notNull(),
 });
 
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 
 // ─── Actas (Formulario 1) ─────────────────────────────────────────────────────
-export const actas = mysqlTable("actas", {
-  id: int("id").autoincrement().primaryKey(),
-  userId: int("userId").notNull(),
+export const actas = sqliteTable("actas", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  userId: integer("userId").notNull(),
 
   // Encabezado
-  noActa: varchar("noActa", { length: 50 }),
-  atencion: varchar("atencion", { length: 255 }),
-  fecha: timestamp("fecha"),
+  noActa: text("noActa"),
+  atencion: text("atencion"),
+  fecha: integer("fecha", { mode: "timestamp" }),
 
   // Datos Empresa
-  razonSocial: varchar("razonSocial", { length: 255 }),
-  nombreFantasia: varchar("nombreFantasia", { length: 255 }),
-  rucDniRut: varchar("rucDniRut", { length: 50 }),
+  razonSocial: text("razonSocial"),
+  nombreFantasia: text("nombreFantasia"),
+  rucDniRut: text("rucDniRut"),
   direccionComercial: text("direccionComercial"),
 
   // Contacto Representante Legal
-  representanteLegal: varchar("representanteLegal", { length: 255 }),
-  representanteDni: varchar("representanteDni", { length: 50 }),
-  representanteEmail: varchar("representanteEmail", { length: 320 }),
-  representanteFono: varchar("representanteFono", { length: 50 }),
+  representanteLegal: text("representanteLegal"),
+  representanteDni: text("representanteDni"),
+  representanteEmail: text("representanteEmail"),
+  representanteFono: text("representanteFono"),
 
   // Contacto Técnico
-  contactoTecnico: varchar("contactoTecnico", { length: 255 }),
-  contactoTecnicoEmail: varchar("contactoTecnicoEmail", { length: 320 }),
-  contactoTecnicoFono: varchar("contactoTecnicoFono", { length: 50 }),
+  contactoTecnico: text("contactoTecnico"),
+  contactoTecnicoEmail: text("contactoTecnicoEmail"),
+  contactoTecnicoFono: text("contactoTecnicoFono"),
 
   // Contacto Facturación
-  contactoFacturacion: varchar("contactoFacturacion", { length: 255 }),
-  contactoFacturacionEmail: varchar("contactoFacturacionEmail", { length: 320 }),
-  contactoFacturacionFono: varchar("contactoFacturacionFono", { length: 50 }),
+  contactoFacturacion: text("contactoFacturacion"),
+  contactoFacturacionEmail: text("contactoFacturacionEmail"),
+  contactoFacturacionFono: text("contactoFacturacionFono"),
 
-  // Servicios Contratados (JSON array)
-  serviciosContratados: json("serviciosContratados"),
+  // Servicios Contratados (JSON se guarda como texto)
+  serviciosContratados: text("serviciosContratados", { mode: "json" }),
 
-  // Formas de Pago (JSON arrays)
-  formasPagoImplementacion: json("formasPagoImplementacion"),
-  formasPagoMantencion: json("formasPagoMantencion"),
+  // Formas de Pago
+  formasPagoImplementacion: text("formasPagoImplementacion", { mode: "json" }),
+  formasPagoMantencion: text("formasPagoMantencion", { mode: "json" }),
 
   // Estado
-  status: mysqlEnum("status", ["borrador", "completado", "exportado"]).default("borrador").notNull(),
+  status: text("status").default("borrador").notNull(),
 
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  createdAt: integer("createdAt", { mode: "timestamp" }).default(sql`(strftime('%s', 'now'))`).notNull(),
+  updatedAt: integer("updatedAt", { mode: "timestamp" }).default(sql`(strftime('%s', 'now'))`).notNull(),
 });
 
 export type Acta = typeof actas.$inferSelect;
 export type InsertActa = typeof actas.$inferInsert;
 
 // ─── Evaluaciones de Proyecto (Formulario 2) ─────────────────────────────────
-export const evaluaciones = mysqlTable("evaluaciones", {
-  id: int("id").autoincrement().primaryKey(),
-  userId: int("userId").notNull(),
-  actaId: int("actaId"), // Opcional: vinculación con Acta
+export const evaluaciones = sqliteTable("evaluaciones", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  userId: integer("userId").notNull(),
+  actaId: integer("actaId"),
 
   // Información General
-  unidadNegocios: varchar("unidadNegocios", { length: 100 }),
-  empresa: varchar("empresa", { length: 255 }),
-  solucion: varchar("solucion", { length: 100 }),
-  tipoMoneda: varchar("tipoMoneda", { length: 20 }),
-  montoProyecto: decimal("montoProyecto", { precision: 15, scale: 2 }),
-  tipoCambio: decimal("tipoCambio", { precision: 10, scale: 4 }),
-  totalClp: decimal("totalClp", { precision: 15, scale: 2 }),
+  unidadNegocios: text("unidadNegocios"),
+  empresa: text("empresa"),
+  solucion: text("solucion"),
+  tipoMoneda: text("tipoMoneda"),
+  montoProyecto: real("montoProyecto"),
+  tipoCambio: real("tipoCambio"),
+  totalClp: real("totalClp"),
   descripcion: text("descripcion"),
-  preventa: varchar("preventa", { length: 255 }),
-  fechaEntrega: timestamp("fechaEntrega"),
-  ejecutivoComercial: varchar("ejecutivoComercial", { length: 255 }),
-  plazoImplementacion: varchar("plazoImplementacion", { length: 50 }),
-  propuestaNumero: varchar("propuestaNumero", { length: 50 }),
-  paisImplementacion: varchar("paisImplementacion", { length: 100 }),
-  rut: varchar("rut", { length: 50 }),
-  nombreCliente: varchar("nombreCliente", { length: 255 }),
+  preventa: text("preventa"),
+  fechaEntrega: integer("fechaEntrega", { mode: "timestamp" }),
+  ejecutivoComercial: text("ejecutivoComercial"),
+  plazoImplementacion: text("plazoImplementacion"),
+  propuestaNumero: text("propuestaNumero"),
+  paisImplementacion: text("paisImplementacion"),
+  rut: text("rut"),
+  nombreCliente: text("nombreCliente"),
 
-  // Costos por categoría (JSON arrays con filas de la tabla)
-  hardware: json("hardware"),
-  materiales: json("materiales"),
-  rrhh: json("rrhh"),
-  otrosGastos: json("otrosGastos"),
+  // Costos por categoría (JSON)
+  hardware: text("hardware", { mode: "json" }),
+  materiales: text("materiales", { mode: "json" }),
+  rrhh: text("rrhh", { mode: "json" }),
+  otrosGastos: text("otrosGastos", { mode: "json" }),
 
   // Totales calculados
-  totalHardware: decimal("totalHardware", { precision: 15, scale: 2 }),
-  totalMateriales: decimal("totalMateriales", { precision: 15, scale: 2 }),
-  totalRrhh: decimal("totalRrhh", { precision: 15, scale: 2 }),
-  totalOtros: decimal("totalOtros", { precision: 15, scale: 2 }),
-  totalGastos: decimal("totalGastos", { precision: 15, scale: 2 }),
+  totalHardware: real("totalHardware"),
+  totalMateriales: real("totalMateriales"),
+  totalRrhh: real("totalRrhh"),
+  totalOtros: real("totalOtros"),
+  totalGastos: real("totalGastos"),
 
   // Estado
-  status: mysqlEnum("status", ["borrador", "completado", "exportado"]).default("borrador").notNull(),
+  status: text("status").default("borrador").notNull(),
 
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  createdAt: integer("createdAt", { mode: "timestamp" }).default(sql`(strftime('%s', 'now'))`).notNull(),
+  updatedAt: integer("updatedAt", { mode: "timestamp" }).default(sql`(strftime('%s', 'now'))`).notNull(),
 });
 
 export type Evaluacion = typeof evaluaciones.$inferSelect;
 export type InsertEvaluacion = typeof evaluaciones.$inferInsert;
 
-// ─── Usuarios locales (autenticación propia con username/password) ──────────────
-export const localUsers = mysqlTable("localUsers", {
-  id: int("id").autoincrement().primaryKey(),
-  username: varchar("username", { length: 64 }).notNull().unique(),
-  passwordHash: varchar("passwordHash", { length: 255 }).notNull(),
-  displayName: varchar("displayName", { length: 255 }),
-  role: mysqlEnum("role", ["user", "admin"]).default("user").notNull(),
-  isActive: int("isActive").default(1).notNull(), // 1 = activo, 0 = desactivado
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-  lastSignedIn: timestamp("lastSignedIn"),
+// ─── Usuarios locales ──────────────────────────────────────────────────────────
+export const localUsers = sqliteTable("localUsers", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  username: text("username").notNull().unique(),
+  passwordHash: text("passwordHash").notNull(),
+  displayName: text("displayName"),
+  role: text("role").default("user").notNull(),
+  isActive: integer("isActive").default(1).notNull(),
+  createdAt: integer("createdAt", { mode: "timestamp" }).default(sql`(strftime('%s', 'now'))`).notNull(),
+  updatedAt: integer("updatedAt", { mode: "timestamp" }).default(sql`(strftime('%s', 'now'))`).notNull(),
+  lastSignedIn: integer("lastSignedIn", { mode: "timestamp" }),
 });
 
 export type LocalUser = typeof localUsers.$inferSelect;
 export type InsertLocalUser = typeof localUsers.$inferInsert;
 
-// ─── Tipos compartidos para JSON fields ──────────────────────────────────────
+// ─── Tipos compartidos para JSON fields (¡Estas eran las que faltaban!) ──────
 
 export interface ServicioContratado {
   item: number;
@@ -207,93 +204,74 @@ export interface FilaOtros {
   mes: 1 | 2 | 3;
 }
 
-// ─── Catálogos del Sistema (importados desde Excel Base de Datos) ─────────────
+// ─── Catálogos del Sistema ──────────────────────────────────────────────────
 
-/** Monedas disponibles para transacciones */
-export const catalogMonedas = mysqlTable("catalog_monedas", {
-  id: int("id").autoincrement().primaryKey(),
-  codigo: varchar("codigo", { length: 20 }).notNull().unique(), // USD, CLP, etc.
-  nombre: varchar("nombre", { length: 100 }).notNull(),         // USD-DÓLAR
-  activo: int("activo").default(1).notNull(),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
+export const catalogMonedas = sqliteTable("catalog_monedas", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  codigo: text("codigo").notNull().unique(),
+  nombre: text("nombre").notNull(),
+  activo: integer("activo").default(1).notNull(),
 });
 
-/** Países de operación */
-export const catalogPaises = mysqlTable("catalog_paises", {
-  id: int("id").autoincrement().primaryKey(),
-  nombre: varchar("nombre", { length: 100 }).notNull().unique(),
-  activo: int("activo").default(1).notNull(),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
+export const catalogPaises = sqliteTable("catalog_paises", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  nombre: text("nombre").notNull().unique(),
+  activo: integer("activo").default(1).notNull(),
 });
 
-/** Unidades de Negocio */
-export const catalogUnidadesNegocio = mysqlTable("catalog_unidades_negocio", {
-  id: int("id").autoincrement().primaryKey(),
-  nombre: varchar("nombre", { length: 150 }).notNull().unique(),
-  activo: int("activo").default(1).notNull(),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
+export const catalogUnidadesNegocio = sqliteTable("catalog_unidades_negocio", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  nombre: text("nombre").notNull().unique(),
+  activo: integer("activo").default(1).notNull(),
 });
 
-/** Soluciones por Unidad de Negocio */
-export const catalogSoluciones = mysqlTable("catalog_soluciones", {
-  id: int("id").autoincrement().primaryKey(),
-  nombre: varchar("nombre", { length: 200 }).notNull().unique(),
-  activo: int("activo").default(1).notNull(),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
+export const catalogSoluciones = sqliteTable("catalog_soluciones", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  nombre: text("nombre").notNull().unique(),
+  activo: integer("activo").default(1).notNull(),
 });
 
-/** Detalle de Servicio */
-export const catalogDetalleServicio = mysqlTable("catalog_detalle_servicio", {
-  id: int("id").autoincrement().primaryKey(),
-  nombre: varchar("nombre", { length: 200 }).notNull().unique(),
-  activo: int("activo").default(1).notNull(),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
+export const catalogDetalleServicio = sqliteTable("catalog_detalle_servicio", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  nombre: text("nombre").notNull().unique(),
+  activo: integer("activo").default(1).notNull(),
 });
 
-/** Tipos de Venta */
-export const catalogTipoVenta = mysqlTable("catalog_tipo_venta", {
-  id: int("id").autoincrement().primaryKey(),
-  nombre: varchar("nombre", { length: 100 }).notNull().unique(),
-  activo: int("activo").default(1).notNull(),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
+export const catalogTipoVenta = sqliteTable("catalog_tipo_venta", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  nombre: text("nombre").notNull().unique(),
+  activo: integer("activo").default(1).notNull(),
 });
 
-/** Plazos de entrega / contrato */
-export const catalogPlazos = mysqlTable("catalog_plazos", {
-  id: int("id").autoincrement().primaryKey(),
-  nombre: varchar("nombre", { length: 50 }).notNull().unique(),
-  activo: int("activo").default(1).notNull(),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
+export const catalogPlazos = sqliteTable("catalog_plazos", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  nombre: text("nombre").notNull().unique(),
+  activo: integer("activo").default(1).notNull(),
 });
 
-/** Tipos de Documento de Identidad */
-export const catalogDocumentos = mysqlTable("catalog_documentos", {
-  id: int("id").autoincrement().primaryKey(),
-  nombre: varchar("nombre", { length: 20 }).notNull().unique(), // RUC, RUT, DNI, CC
-  activo: int("activo").default(1).notNull(),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
+export const catalogDocumentos = sqliteTable("catalog_documentos", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  nombre: text("nombre").notNull().unique(),
+  activo: integer("activo").default(1).notNull(),
 });
 
-/** Centros de Costo (CECOs) — tabla principal con 61 registros del Excel */
-export const catalogCecos = mysqlTable("catalog_cecos", {
-  id: int("id").autoincrement().primaryKey(),
-  codigo: varchar("codigo", { length: 10 }).notNull().unique(), // 20101
-  empresa: varchar("empresa", { length: 20 }).notNull(),        // GN, TP, CD, GIM, IPTV
-  departamento: varchar("departamento", { length: 200 }).notNull(), // Legal, Ventas, etc.
-  nombreCompleto: varchar("nombreCompleto", { length: 300 }).notNull(), // "20101 GN Legal"
-  activo: int("activo").default(1).notNull(),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
+export const catalogCecos = sqliteTable("catalog_cecos", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  codigo: text("codigo").notNull().unique(),
+  empresa: text("empresa").notNull(),
+  departamento: text("departamento").notNull(),
+  nombreCompleto: text("nombreCompleto").notNull(),
+  activo: integer("activo").default(1).notNull(),
 });
 
-/** Contactos de referencia (personas) */
-export const catalogContactos = mysqlTable("catalog_contactos", {
-  id: int("id").autoincrement().primaryKey(),
-  nombre: varchar("nombre", { length: 200 }).notNull(),
-  empresa: varchar("empresa", { length: 200 }),
-  activo: int("activo").default(1).notNull(),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
+export const catalogContactos = sqliteTable("catalog_contactos", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  nombre: text("nombre").notNull(),
+  empresa: text("empresa"),
+  activo: integer("activo").default(1).notNull(),
 });
 
+// Tipos de catálogo
 export type CatalogMoneda = typeof catalogMonedas.$inferSelect;
 export type CatalogPais = typeof catalogPaises.$inferSelect;
 export type CatalogUnidadNegocio = typeof catalogUnidadesNegocio.$inferSelect;

@@ -4,29 +4,44 @@ import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
+
+// 1. IMPORTACIONES CORREGIDAS (DB y LocalAuth)
 import {
   getActasByUserId, getActaById, createActa, updateActa, deleteActa,
   getEvaluacionesByUserId, getEvaluacionById, createEvaluacion, updateEvaluacion, deleteEvaluacion,
   searchRegistros,
   getDb,
+  // Estas funciones deben existir en server/db.ts
+  getLocalUsers,
+  createLocalUser,
+  findLocalUserByUsername,
+  // Necesitaremos estas funciones de cifrado desde localAuth
 } from "./db";
+
 import {
   catalogMonedas, catalogPaises, catalogUnidadesNegocio, catalogSoluciones,
   catalogDetalleServicio, catalogTipoVenta, catalogPlazos, catalogDocumentos,
   catalogCecos, catalogContactos,
 } from "../drizzle/schema";
+
 import {
   MONEDAS, PAISES, UNIDADES_NEGOCIO, SOLUCIONES, DETALLE_SERVICIO,
   TIPO_VENTA, PLAZOS, DOCUMENTO_IDENTIDAD, CECOS, EMPRESAS_REFERENCIA, NOMBRES_REFERENCIA, MESES,
 } from "../shared/catalogs";
+
+// 2. IMPORTACIONES DE LOCALAUTH (Solo para cifrado/tokens, NO BD)
 import {
-  findLocalUserByUsername, verifyPassword, signLocalJWT, getAllLocalUsers,
-  LOCAL_AUTH_COOKIE, hashPassword, createLocalUser, findLocalUserById,
+  verifyPassword, signLocalJWT,
+  LOCAL_AUTH_COOKIE, hashPassword,
 } from "./localAuth";
 import { getSessionCookieOptions as getCookieOpts } from "./_core/cookies";
 
+// 3. IMPORTAR ESQUEMAS DE DRIZZLE
+//import { insertLocalUserSchema } from "../../drizzle/schema";
+
 // ─── Zod Schemas ──────────────────────────────────────────────────────────────
 
+// Zod schemas para los campos JSON de la BD
 const ServicioContratadoSchema = z.object({
   item: z.number(),
   unidadNegocio: z.string(),
@@ -95,10 +110,11 @@ const FilaOtrosSchema = z.object({
   mes: z.union([z.literal(1), z.literal(2), z.literal(3)]),
 });
 
+// Zod schemas para los formularios (entrada de datos)
 const ActaInputSchema = z.object({
   noActa: z.string().optional(),
   atencion: z.string().optional(),
-  fecha: z.string().optional(),
+  fecha: z.string().optional(), // Recibimos string del input date, luego lo convertimos a Date
   razonSocial: z.string().optional(),
   nombreFantasia: z.string().optional(),
   rucDniRut: z.string().optional(),
@@ -148,9 +164,9 @@ const EvaluacionInputSchema = z.object({
   totalGastos: z.number().optional(),
   status: z.enum(["borrador", "completado", "exportado"]).optional(),
 });
-
 // ─── Router ───────────────────────────────────────────────────────────────────
 
+// ─── Router ───────────────────────────────────────────────────────────────────
 export const appRouter = router({
   system: systemRouter,
 
@@ -165,17 +181,13 @@ export const appRouter = router({
 
   // ─── Autenticación Local (username/password) ──────────────────────────────────
   localAuth: router({
-    /**
-     * Login con username y password.
-     * Devuelve el usuario y setea cookie httpOnly con JWT.
-     * TODO: Conectar con API de Base de Datos aquí para auditoría de accesos.
-     */
     login: publicProcedure
       .input(z.object({
         username: z.string().min(1),
         password: z.string().min(1),
       }))
       .mutation(async ({ ctx, input }) => {
+        // --- MODIFICADO: Uso de db.ts ---
         const user = await findLocalUserByUsername(input.username);
         if (!user || user.isActive !== 1) {
           throw new Error("Usuario o contraseña incorrectos");
@@ -188,7 +200,7 @@ export const appRouter = router({
           id: user.id,
           username: user.username,
           displayName: user.displayName,
-          role: user.role,
+          role: user.role as "user" | "admin",
         });
         const cookieOpts = getCookieOpts(ctx.req);
         ctx.res.cookie(LOCAL_AUTH_COOKIE, token, {
@@ -206,37 +218,25 @@ export const appRouter = router({
         };
       }),
 
-    /**
-     * Cierra la sesión local eliminando la cookie.
-     */
     logout: publicProcedure.mutation(({ ctx }) => {
       const cookieOpts = getCookieOpts(ctx.req);
       ctx.res.clearCookie(LOCAL_AUTH_COOKIE, { ...cookieOpts, maxAge: -1 });
       return { success: true } as const;
     }),
 
-    /**
-     * Retorna el usuario local actualmente autenticado.
-     */
     me: publicProcedure.query(({ ctx }) => {
       return ctx.localUser ?? null;
     }),
 
-    /**
-     * Lista todos los usuarios del sistema (solo admin).
-     * TODO: Conectar con API de Base de Datos aquí para gestión de usuarios.
-     */
+    // --- MODIFICADO: Uso de db.ts ---
     listUsers: protectedProcedure.query(async ({ ctx }) => {
       if (ctx.user?.role !== "admin") {
         throw new Error("Acceso denegado: se requiere rol admin");
       }
-      return getAllLocalUsers();
+      return await getLocalUsers();
     }),
 
-    /**
-     * Crea un nuevo usuario (solo admin).
-     * TODO: Conectar con API de Base de Datos aquí para notificaciones de bienvenida.
-     */
+    // --- MODIFICADO: Uso de db.ts ---
     createUser: protectedProcedure
       .input(z.object({
         username: z.string().min(3).max(64),
@@ -250,7 +250,9 @@ export const appRouter = router({
         }
         const existing = await findLocalUserByUsername(input.username);
         if (existing) throw new Error("El nombre de usuario ya existe");
+
         const passwordHash = await hashPassword(input.password);
+
         await createLocalUser({
           username: input.username,
           passwordHash,
@@ -262,12 +264,8 @@ export const appRouter = router({
       }),
   }),
 
-  // ─── Catálogos (públicos para dropdowns) ──────────────────────────────────
+  // ─── Catálogos (se mantienen iguales) ──────────────────────────────────
   catalogs: router({
-    /**
-     * Retorna todos los catálogos de referencia para poblar dropdowns.
-     * TODO: Conectar con API de Base de Datos aquí para catálogos dinámicos.
-     */
     getAll: publicProcedure.query(() => ({
       monedas: MONEDAS,
       paises: PAISES,
@@ -284,20 +282,12 @@ export const appRouter = router({
     })),
   }),
 
-  // ─── Actas (Formulario 1) ──────────────────────────────────────────────────
+  // ─── Actas (Se mantienen igual) ──────────────────────────────────────────────────
   actas: router({
-    /**
-     * Lista todas las actas del usuario autenticado.
-     * TODO: Conectar con API de Base de Datos aquí para paginación y filtros.
-     */
     list: protectedProcedure.query(async ({ ctx }) => {
       return getActasByUserId(ctx.user.id);
     }),
 
-    /**
-     * Obtiene una acta por ID.
-     * TODO: Conectar con API de Base de Datos aquí para validación de permisos.
-     */
     getById: protectedProcedure
       .input(z.object({ id: z.number() }))
       .query(async ({ ctx, input }) => {
@@ -306,10 +296,6 @@ export const appRouter = router({
         return acta;
       }),
 
-    /**
-     * Crea una nueva acta.
-     * TODO: Conectar con API de Base de Datos aquí para notificaciones y auditoría.
-     */
     create: protectedProcedure
       .input(ActaInputSchema)
       .mutation(async ({ ctx, input }) => {
@@ -324,10 +310,6 @@ export const appRouter = router({
         return result;
       }),
 
-    /**
-     * Actualiza una acta existente.
-     * TODO: Conectar con API de Base de Datos aquí para historial de versiones.
-     */
     update: protectedProcedure
       .input(z.object({ id: z.number(), data: ActaInputSchema }))
       .mutation(async ({ ctx, input }) => {
@@ -339,9 +321,6 @@ export const appRouter = router({
         });
       }),
 
-    /**
-     * Elimina una acta.
-     */
     delete: protectedProcedure
       .input(z.object({ id: z.number() }))
       .mutation(async ({ ctx, input }) => {
@@ -351,19 +330,12 @@ export const appRouter = router({
       }),
   }),
 
-  // ─── Evaluaciones de Proyecto (Formulario 2) ──────────────────────────────
+  // ─── Evaluaciones de Proyecto (Se mantienen igual) ──────────────────────────────
   evaluaciones: router({
-    /**
-     * Lista todas las evaluaciones del usuario.
-     * TODO: Conectar con API de Base de Datos aquí para filtros avanzados.
-     */
     list: protectedProcedure.query(async ({ ctx }) => {
       return getEvaluacionesByUserId(ctx.user.id);
     }),
 
-    /**
-     * Obtiene una evaluación por ID.
-     */
     getById: protectedProcedure
       .input(z.object({ id: z.number() }))
       .query(async ({ ctx, input }) => {
@@ -372,10 +344,6 @@ export const appRouter = router({
         return ev;
       }),
 
-    /**
-     * Crea una nueva evaluación de proyecto.
-     * TODO: Conectar con API de Base de Datos aquí para auto-generación de número de propuesta.
-     */
     create: protectedProcedure
       .input(EvaluacionInputSchema)
       .mutation(async ({ ctx, input }) => {
@@ -398,10 +366,6 @@ export const appRouter = router({
         });
       }),
 
-    /**
-     * Actualiza una evaluación existente y recalcula Formulario 3.
-     * TODO: Conectar con API de Base de Datos aquí para recalcular y notificar cambios.
-     */
     update: protectedProcedure
       .input(z.object({ id: z.number(), data: EvaluacionInputSchema }))
       .mutation(async ({ ctx, input }) => {
@@ -421,9 +385,6 @@ export const appRouter = router({
         });
       }),
 
-    /**
-     * Elimina una evaluación.
-     */
     delete: protectedProcedure
       .input(z.object({ id: z.number() }))
       .mutation(async ({ ctx, input }) => {
@@ -435,10 +396,6 @@ export const appRouter = router({
 
   // ─── Búsqueda global ──────────────────────────────────────────────────────
   search: router({
-    /**
-     * Búsqueda global en actas y evaluaciones.
-     * TODO: Conectar con API de Base de Datos aquí para búsqueda full-text con índices.
-     */
     global: protectedProcedure
       .input(z.object({ query: z.string().min(1) }))
       .query(async ({ ctx, input }) => {
@@ -446,9 +403,8 @@ export const appRouter = router({
       }),
   }),
 
-  // ─── Catálogos desde Base de Datos (MySQL) ──────────────────────────────────
+  // ─── Catálogos desde Base de Datos (SQLite) ──────────────────────────────────
   catalogsDB: router({
-    /** Obtiene todos los catálogos desde MySQL con conteo de registros */
     summary: protectedProcedure.query(async () => {
       const db = await getDb();
       if (!db) throw new Error("Base de datos no disponible");
@@ -467,7 +423,6 @@ export const appRouter = router({
       return { monedas, paises, unidades, soluciones, detalles, tipos, plazos, docs, cecos, contactos };
     }),
 
-    /** Obtiene CECOs agrupados por empresa */
     cecosByEmpresa: protectedProcedure.query(async () => {
       const db = await getDb();
       if (!db) throw new Error("Base de datos no disponible");
@@ -480,7 +435,6 @@ export const appRouter = router({
       return grouped;
     }),
 
-    /** Busca en cualquier catálogo por texto */
     search: protectedProcedure
       .input(z.object({ query: z.string(), catalog: z.string().optional() }))
       .query(async ({ input }) => {
@@ -496,12 +450,8 @@ export const appRouter = router({
       }),
   }),
 
-  // ─── Dashboard Stats ───────────────────────────────────────────────────────
+  // ─── Dashboard Stats (Se mantienen igual) ───────────────────────────────────────
   dashboard: router({
-    /**
-     * Estadísticas del dashboard para el usuario actual.
-     * TODO: Conectar con API de Base de Datos aquí para métricas avanzadas.
-     */
     stats: protectedProcedure.query(async ({ ctx }) => {
       const [userActas, userEvaluaciones] = await Promise.all([
         getActasByUserId(ctx.user.id),

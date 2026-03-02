@@ -141,9 +141,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
           alt=""
           className={cn("object-contain flex-shrink-0", collapsed ? "w-8 h-8" : "h-8 w-auto")}
         />
-        {!collapsed && (
-          <span className="text-sm font-bold text-sidebar-foreground/80 tracking-wide">CDLatam</span>
-        )}
+
       </div>
 
       {/* Navigation */}

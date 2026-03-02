@@ -9,6 +9,7 @@ import { formatDate, formatCurrency, getStatusColor, getStatusLabel } from "@/li
 import { loadActasList, loadEPList } from "@/hooks/useFormStore";
 import { useMemo } from "react";
 import { useLocalAuth } from "@/hooks/useLocalAuth";
+import { navigate } from "wouter/use-browser-location";
 
 export default function Dashboard() {
   const { currentUser } = useLocalAuth();
@@ -44,10 +45,10 @@ export default function Dashboard() {
             <Link href="/base-datos">Base de Datos</Link>
           </Button>
           <Button size="sm" asChild>
-            <Link href="/acta">
+            <div onClick={() => navigate("/nuevo-expediente")}>
               <Plus className="w-3.5 h-3.5 mr-1.5" />
               Nuevo Acta
-            </Link>
+            </div>
           </Button>
         </div>
       </div>
@@ -75,12 +76,12 @@ export default function Dashboard() {
         <h2 className="text-sm font-medium text-foreground mb-3">Flujo de trabajo</h2>
         <div className="flex items-center gap-2">
           {[
-            { step: "01", label: "Acta", desc: "Datos del cliente", href: "/acta", icon: FileText },
-            { step: "02", label: "Evaluación EP", desc: "Desglose de costos", href: "/ep", icon: ClipboardList },
-            { step: "03", label: "Resultado", desc: "Cálculo automático", href: "/resultado", icon: BarChart3 },
+            { step: "01", label: "Acta", desc: "Datos del cliente", href: "/nuevo-expediente", icon: FileText },
+            { step: "02", label: "Evaluación EP", desc: "Desglose de costos", href: "/nuevo-expediente", icon: ClipboardList },
+            { step: "03", label: "Resultado", desc: "Cálculo automático", href: "/nuevo-expediente", icon: BarChart3 },
           ].map((item, i) => (
             <div key={item.step} className="flex items-center gap-2 flex-1">
-              <Link href={item.href} className="flex-1">
+              <div onClick={() => navigate(item.href)} className="flex-1">
                 <div className="flex items-center gap-2.5 p-3 rounded-lg border border-border hover:border-primary/30 hover:bg-primary/5 transition-all cursor-pointer group">
                   <div className="w-7 h-7 rounded-md bg-primary/10 flex items-center justify-center flex-shrink-0">
                     <item.icon className="w-3.5 h-3.5 text-primary" />
@@ -90,7 +91,7 @@ export default function Dashboard() {
                     <p className="text-[10px] text-muted-foreground truncate">{item.desc}</p>
                   </div>
                 </div>
-              </Link>
+              </div>
               {i < 2 && <ArrowRight className="w-3.5 h-3.5 text-muted-foreground/40 flex-shrink-0" />}
             </div>
           ))}
@@ -110,9 +111,9 @@ export default function Dashboard() {
           {recentActas.length === 0 ? (
             <div className="px-4 py-8 text-center">
               <p className="text-xs text-muted-foreground mb-3">No hay actas registradas</p>
-              <Button size="sm" variant="outline" asChild>
+              {/* <Button size="sm" variant="outline" asChild>
                 <Link href="/acta"><Plus className="w-3.5 h-3.5 mr-1.5" />Crear primera Acta</Link>
-              </Button>
+              </Button> */}
             </div>
           ) : (
             <div className="divide-y divide-border">
@@ -146,9 +147,9 @@ export default function Dashboard() {
           {recentEP.length === 0 ? (
             <div className="px-4 py-8 text-center">
               <p className="text-xs text-muted-foreground mb-3">No hay evaluaciones registradas</p>
-              <Button size="sm" variant="outline" asChild>
+              {/* <Button size="sm" variant="outline" asChild>
                 <Link href="/ep"><Plus className="w-3.5 h-3.5 mr-1.5" />Crear primera EP</Link>
-              </Button>
+              </Button> */}
             </div>
           ) : (
             <div className="divide-y divide-border">
