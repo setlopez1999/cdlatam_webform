@@ -520,7 +520,7 @@ export default function ActaForm() {
 
 // ─── Payment Table Component ──────────────────────────────────────────────────
 
-function PaymentTable({
+function PaymentTable({ 
   items,
   catalogs,
   onChange,
