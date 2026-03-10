@@ -1,4 +1,4 @@
-# 1. Fase de construcción
+# fase de construccion
 FROM node:20-slim AS builder
 WORKDIR /app
 COPY package*.json ./
@@ -6,16 +6,18 @@ RUN npm install --legacy-peer-deps
 COPY . .
 RUN npm run build                
 
-# 2. Fase de producción
+# fase de produccion
 FROM node:20-slim
 WORKDIR /app
 COPY package*.json ./
 
-# MODIFICACIÓN AQUÍ: Instalamos dependencias, pero incluimos vite
-# Ya que tu servidor lo necesita para correr.
+# instalamos dependencias
 RUN npm install --legacy-peer-deps
 
-# Copiamos la carpeta compilada
+# copiamos la carpeta drizzle con las migraciones
+COPY drizzle ./drizzle 
+
+# copiamos la carpeta compilada
 COPY --from=builder /app/dist ./dist 
 
 EXPOSE 3000
