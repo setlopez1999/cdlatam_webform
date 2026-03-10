@@ -4,6 +4,12 @@ services:
     build: .
     ports:
       - "3002:3000"
+    volumes:
+      # Guardaremos la base de datos en una carpeta llamada 'data' en tu servidor
+      - ./data:/app/data
     environment:
       - OAUTH_SERVER_URL=tu_valor_aqui
       - NODE_ENV=production
+      - JWT_SECRET="mi_clave_secreta_jijijaja_escubitrakatelas_cdlatam_123!"
+      # IMPORTANTE: Cambiamos la ruta para que apunte a la carpeta del volumen
+      - DATABASE_URL="file:/app/data/gestion.db"
