@@ -1,11 +1,11 @@
 /**
- * useLocalAuth — Hook de autenticación desacoplado de tRPC
+ * useLocalAuth — Hook de autenticación conectado directamente a la Base de Datos local (gestion.db) 
+ * usando los endpoints nativos de tRPC del servidor. 
  *
- * Ahora consume authService, que llama a la API REST configurada en VITE_API_URL.
- * Si la API no está configurada, usa el fallback local (localStorage).
+ * Emplea Zustand (`useAuthStore`) para la gestión global y persistente de la sesión.
  *
  * Provee:
- *  - currentUser: usuario autenticado (id, username, nombre, role)
+ *  - currentUser: usuario autenticado
  *  - isAuthenticated: boolean
  *  - isAdmin: boolean
  *  - login(username, password): Promise
@@ -15,48 +15,59 @@
  *  - isLoggingIn: boolean
  */
 
-import { useState, useEffect, useCallback } from "react";
-import { authService } from "@/core/services/authService";
-import type { AuthUser } from "@/core/services/authService";
+import { useEffect, useCallback } from "react";
+import { trpc } from "@/core/services/trpc";
+import { useAuthStore } from "./useAuthStore";
+
+export interface AuthUser {
+  id: number | string;
+  username: string;
+  displayName?: string | null;
+  role: "user" | "admin" | string;
+}
 
 export function useLocalAuth() {
-  const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [loginError, setLoginError] = useState<string | null>(null);
-  const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const { user: currentUser, setUser, clearAuth } = useAuthStore();
 
-  // Cargar sesión al montar el componente
+  // Consulta por el usuario activo (lee las cookies que envían el JWT local)
+  const { data: user, isLoading, refetch } = trpc.localAuth.me.useQuery(undefined, {
+    retry: false,
+    refetchOnWindowFocus: false,
+  });
+
+  // Mantiene sincronizado el payload de la DB con el store de Zustand
   useEffect(() => {
-    let cancelled = false;
-    authService.me().then((user) => {
-      if (!cancelled) {
-        setCurrentUser(user);
-        setIsLoading(false);
-      }
-    });
-    return () => { cancelled = true; };
-  }, []);
+    if (!isLoading) {
+      setUser(user ? (user as AuthUser) : null);
+    }
+  }, [user, isLoading, setUser]);
+
+  const loginMutation = trpc.localAuth.login.useMutation();
+  const logoutMutation = trpc.localAuth.logout.useMutation();
 
   const login = useCallback(async (username: string, password: string) => {
-    setIsLoggingIn(true);
-    setLoginError(null);
     try {
-      const user = await authService.login({ username, password });
-      setCurrentUser(user);
-      return user;
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : "Error al iniciar sesión";
-      setLoginError(msg);
-      throw err;
-    } finally {
-      setIsLoggingIn(false);
+      const result = await loginMutation.mutateAsync({ username, password });
+      if (result.success && result.user) {
+        setUser(result.user as AuthUser);
+        await refetch();
+        return result.user as AuthUser;
+      }
+      throw new Error("Credenciales inválidas");
+    } catch (err: any) {
+      throw new Error(err.message || "Error al iniciar sesión");
     }
-  }, []);
+  }, [loginMutation, refetch, setUser]);
 
   const logout = useCallback(async () => {
-    await authService.logout();
-    setCurrentUser(null);
-  }, []);
+    try {
+      await logoutMutation.mutateAsync();
+    } catch (err) {
+      console.warn("Error al intentar cerrar sesión:", err);
+    }
+    clearAuth();
+    await refetch();
+  }, [logoutMutation, refetch, clearAuth]);
 
   return {
     currentUser,
@@ -65,7 +76,7 @@ export function useLocalAuth() {
     isLoading,
     login,
     logout,
-    loginError,
-    isLoggingIn,
+    loginError: loginMutation.error?.message || null,
+    isLoggingIn: loginMutation.isPending,
   };
 }

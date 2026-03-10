@@ -77,10 +77,13 @@ async function request<T>(
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
 
-  // 401 → limpiar token y redirigir a login
+  // 401 → limpiar Zustand store y redirigir
   if (response.status === 401) {
-    clearToken();
-    window.location.href = "/login";
+    // Dynamically import store to avoid circular deps with services
+    import("@/hooks/useAuthStore").then(({ useAuthStore }) => {
+      useAuthStore.getState().clearAuth();
+    });
+    // Triggers location redirect safely from router instead of force reload
     throw new ApiException(401, "Sesión expirada. Por favor inicia sesión nuevamente.");
   }
 

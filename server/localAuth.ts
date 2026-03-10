@@ -12,6 +12,7 @@
 
 import bcrypt from "bcryptjs";
 import * as jose from "jose";
+import type { Express } from "express";
 import { eq } from "drizzle-orm";
 import { getDb } from "./db";
 import { localUsers, type LocalUser, type InsertLocalUser } from "../drizzle/schema";
@@ -160,4 +161,71 @@ export async function seedDefaultUsers(): Promise<void> {
       console.log(`[LocalAuth] Created default user: ${u.username} (${u.role})`);
     }
   }
+}
+
+// ─── Rutas REST (para compatibilidad con cliente actual) ─────────────────────
+
+export function registerLocalAuthRoutes(app: Express) {
+  app.post("/api/auth/login", async (req, res) => {
+    try {
+      const { username, password } = req.body;
+      const user = await findLocalUserByUsername(username);
+      if (!user || user.isActive !== 1) {
+        res.status(401).json({ message: "Usuario o contraseña incorrectos" });
+        return;
+      }
+      const valid = await verifyPassword(password, user.passwordHash);
+      if (!valid) {
+        res.status(401).json({ message: "Usuario o contraseña incorrectos" });
+        return;
+      }
+      const token = await signLocalJWT({
+        id: user.id,
+        username: user.username,
+        displayName: user.displayName,
+        role: user.role as "user" | "admin",
+      });
+      res.json({
+        token,
+        user: { id: user.id, username: user.username, displayName: user.displayName, role: user.role }
+      });
+    } catch (err) {
+      console.error("[LocalAuth] Error in login:", err);
+      res.status(500).json({ message: "Error en el servidor" });
+    }
+  });
+
+  app.post("/api/auth/logout", (req, res) => {
+    res.json({ success: true });
+  });
+
+  app.get("/api/auth/me", async (req, res) => {
+    try {
+      const authHeader = req.headers.authorization;
+      if (!authHeader?.startsWith("Bearer ")) {
+        res.status(401).json({ message: "No autenticado" });
+        return;
+      }
+      const token = authHeader.substring(7);
+      const payload = await verifyLocalJWT(token);
+      if (!payload) {
+        res.status(401).json({ message: "Token inválido" });
+        return;
+      }
+      const dbUser = await findLocalUserById(payload.id);
+      if (!dbUser || dbUser.isActive !== 1) {
+         res.status(401).json({ message: "Usuario inactivo o no encontrado" });
+         return;
+      }
+      res.json({
+        id: dbUser.id,
+        username: dbUser.username,
+        displayName: dbUser.displayName,
+        role: dbUser.role
+      });
+    } catch (err) {
+      console.error("[LocalAuth] Error in me:", err);
+      res.status(500).json({ message: "Error en el servidor" });
+    }
+  });
 }

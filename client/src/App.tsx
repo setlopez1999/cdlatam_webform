@@ -27,11 +27,10 @@ function ProtectedRoute({
   component: Component,
   adminOnly = false,
 }: {
-  component: React.ComponentType;
+  component: React.ComponentType<any>;
   adminOnly?: boolean;
 }) {
   const { isAuthenticated, isAdmin, isLoading } = useLocalAuth();
-  const [location] = useLocation();
 
   if (isLoading) {
     return (

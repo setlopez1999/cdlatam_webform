@@ -78,10 +78,10 @@ export default function Usuarios() {
         <div>
           <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
             <Users className="w-6 h-6 text-primary" />
-            Gestión de Usuarios
+            Gestión dxde Usuarios
           </h1>
           <p className="text-muted-foreground text-sm mt-1">
-            Administra los usuarios del sistema y sus permisos
+            Administra dlos usuarios del sistema y sus permisos
           </p>
         </div>
         <div className="flex items-center gap-2">

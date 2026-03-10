@@ -15,6 +15,8 @@ import {
   getLocalUsers,
   createLocalUser,
   findLocalUserByUsername,
+  // Funciones genéricas del CRUD de Catálogos
+  getCatalogList, createCatalogRecord, updateCatalogRecord, deleteCatalogRecord,
   // Necesitaremos estas funciones de cifrado desde localAuth
 } from "./db";
 
@@ -405,6 +407,32 @@ export const appRouter = router({
 
   // ─── Catálogos desde Base de Datos (SQLite) ──────────────────────────────────
   catalogsDB: router({
+    // --- NUEVOS ENDPOINTS GENÉRICOS DE CRUD ---
+    list: protectedProcedure
+      .input(z.object({ tableName: z.string() }))
+      .query(async ({ input }) => {
+        return await getCatalogList(input.tableName);
+      }),
+
+    create: protectedProcedure
+      .input(z.object({ tableName: z.string(), data: z.any() }))
+      .mutation(async ({ input }) => {
+        return await createCatalogRecord(input.tableName, input.data);
+      }),
+
+    update: protectedProcedure
+      .input(z.object({ tableName: z.string(), id: z.number(), data: z.any() }))
+      .mutation(async ({ input }) => {
+        return await updateCatalogRecord(input.tableName, input.id, input.data);
+      }),
+
+    delete: protectedProcedure
+      .input(z.object({ tableName: z.string(), id: z.number() }))
+      .mutation(async ({ input }) => {
+        return await deleteCatalogRecord(input.tableName, input.id);
+      }),
+    // ------------------------------------------
+
     summary: protectedProcedure.query(async () => {
       const db = await getDb();
       if (!db) throw new Error("Base de datos no disponible");

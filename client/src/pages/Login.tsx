@@ -1,33 +1,36 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { useLocalAuth } from "@/hooks/useLocalAuth";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Loader2, Lock, User, ArrowRight, CheckCircle2 } from "lucide-react";
 
 export default function Login() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const { login, isLoggingIn } = useLocalAuth();
+  const [localError, setLocalError] = useState<string | null>(null);
+  
+  const { login, isLoggingIn, loginError } = useLocalAuth();
   const [, navigate] = useLocation();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError(null);
+    setLocalError(null);
     try {
       await login(username.trim(), password);
+      // La redirección ocurrirá naturalmente si `isAuthenticated` se vuelve true, 
+      // pero forzamos navigate para asegurar el flujo inmediato.
       navigate("/");
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Credenciales incorrectas.");
+    } catch (err: any) {
+      setLocalError(err.message || "Credenciales incorrectas.");
     }
   };
 
   const fillCredentials = (u: string, p: string) => {
     setUsername(u);
     setPassword(p);
-    setError(null);
+    setLocalError(null);
   };
+
 
   return (
     <div className="h-screen flex overflow-hidden" style={{ background: "#0A1628" }}>
@@ -126,13 +129,13 @@ export default function Login() {
           {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-5">
             {/* Error */}
-            {error && (
+            {localError && (
               <div
                 className="flex items-center gap-2.5 px-4 py-3 rounded-lg text-sm"
                 style={{ background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.2)", color: "#fca5a5" }}
               >
                 <div className="w-1.5 h-1.5 rounded-full bg-red-400 flex-shrink-0" />
-                {error}
+                {localError}
               </div>
             )}
 

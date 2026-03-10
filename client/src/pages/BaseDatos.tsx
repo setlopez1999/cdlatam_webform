@@ -7,8 +7,9 @@ import type {
 import { trpc } from "@/lib/trpc";
 import {
   Building2, Globe, DollarSign, Briefcase, Layers, Tag,
-  Clock, FileText, Hash, Users, Search, Database,
-  BarChart3, Package, Wrench, MapPin, TrendingUp,
+  Clock, Package, Wrench, MapPin,
+  FileText, Hash, Users, Search, Database,
+  BarChart3, TrendingUp,
   ChevronDown, ChevronUp, X, FileText as FileTextIcon,
   ClipboardList, RefreshCw, Filter, Eye, Trash2,
 } from "lucide-react";
@@ -20,6 +21,8 @@ import { toast } from "sonner";
 import { Link } from "wouter";
 import { loadActasList, loadEPList, deleteActa, deleteEP } from "@/hooks/useFormStore";
 import { formatCurrency, formatDate, getStatusColor, getStatusLabel } from "@/lib/formatters";
+import { CatalogCrudView } from "@/components/CatalogCrudView";
+import { catalogConfigs } from "@/core/config/catalogConfig";
 
 // ─── Tipos ───────────────────────────────────────────────────────────────────
 
@@ -38,27 +41,27 @@ interface TabDef {
 }
 
 const TABS: TabDef[] = [
-  { id: "resumen",    label: "Resumen",          icon: BarChart3,  color: "text-violet-400",  bgColor: "bg-violet-500/10",  group: "catalogs" },
-  { id: "cecos",      label: "CECOs",             icon: Hash,       color: "text-blue-400",    bgColor: "bg-blue-500/10",    group: "catalogs" },
-  { id: "soluciones", label: "Soluciones",        icon: Layers,     color: "text-emerald-400", bgColor: "bg-emerald-500/10", group: "catalogs" },
-  { id: "paises",     label: "Países",            icon: Globe,      color: "text-cyan-400",    bgColor: "bg-cyan-500/10",    group: "catalogs" },
-  { id: "monedas",    label: "Monedas",           icon: DollarSign, color: "text-yellow-400",  bgColor: "bg-yellow-500/10",  group: "catalogs" },
-  { id: "unidades",   label: "Unidades Negocio",  icon: Briefcase,  color: "text-orange-400",  bgColor: "bg-orange-500/10",  group: "catalogs" },
-  { id: "detalle",    label: "Detalle Servicio",  icon: Wrench,     color: "text-pink-400",    bgColor: "bg-pink-500/10",    group: "catalogs" },
-  { id: "tipos",      label: "Tipos de Venta",    icon: Tag,        color: "text-red-400",     bgColor: "bg-red-500/10",     group: "catalogs" },
-  { id: "plazos",     label: "Plazos",            icon: Clock,      color: "text-teal-400",    bgColor: "bg-teal-500/10",    group: "catalogs" },
-  { id: "documentos", label: "Documentos",        icon: FileText,   color: "text-indigo-400",  bgColor: "bg-indigo-500/10",  group: "catalogs" },
-  { id: "contactos",  label: "Contactos",         icon: Users,      color: "text-rose-400",    bgColor: "bg-rose-500/10",    group: "catalogs" },
-  { id: "actas",      label: "Actas",             icon: FileTextIcon, color: "text-slate-300", bgColor: "bg-slate-500/10",   group: "records" },
-  { id: "ep",         label: "Evaluaciones",      icon: ClipboardList, color: "text-slate-300", bgColor: "bg-slate-500/10", group: "records" },
+  { id: "resumen", label: "Resumen", icon: BarChart3, color: "text-violet-400", bgColor: "bg-violet-500/10", group: "catalogs" },
+  { id: "cecos", label: "CECOs", icon: Hash, color: "text-blue-400", bgColor: "bg-blue-500/10", group: "catalogs" },
+  { id: "soluciones", label: "Soluciones", icon: Layers, color: "text-emerald-400", bgColor: "bg-emerald-500/10", group: "catalogs" },
+  { id: "paises", label: "Países", icon: Globe, color: "text-cyan-400", bgColor: "bg-cyan-500/10", group: "catalogs" },
+  { id: "monedas", label: "Monedas", icon: DollarSign, color: "text-yellow-400", bgColor: "bg-yellow-500/10", group: "catalogs" },
+  { id: "unidades", label: "Unidades Negocio", icon: Briefcase, color: "text-orange-400", bgColor: "bg-orange-500/10", group: "catalogs" },
+  { id: "detalle", label: "Detalle Servicio", icon: Wrench, color: "text-pink-400", bgColor: "bg-pink-500/10", group: "catalogs" },
+  { id: "tipos", label: "Tipos de Venta", icon: Tag, color: "text-red-400", bgColor: "bg-red-500/10", group: "catalogs" },
+  { id: "plazos", label: "Plazos", icon: Clock, color: "text-teal-400", bgColor: "bg-teal-500/10", group: "catalogs" },
+  { id: "documentos", label: "Documentos", icon: FileText, color: "text-indigo-400", bgColor: "bg-indigo-500/10", group: "catalogs" },
+  { id: "contactos", label: "Contactos", icon: Users, color: "text-rose-400", bgColor: "bg-rose-500/10", group: "catalogs" },
+  { id: "actas", label: "Actas", icon: FileTextIcon, color: "text-slate-300", bgColor: "bg-slate-500/10", group: "records" },
+  { id: "ep", label: "Evaluaciones", icon: ClipboardList, color: "text-slate-300", bgColor: "bg-slate-500/10", group: "records" },
 ];
 
 const EMPRESA_INFO: Record<string, { label: string; color: string }> = {
-  GN:   { label: "Grupo Negocio", color: "bg-blue-500/20 text-blue-300 border-blue-500/30" },
-  TP:   { label: "Trapemn",       color: "bg-emerald-500/20 text-emerald-300 border-emerald-500/30" },
-  CD:   { label: "CDLatam",       color: "bg-orange-500/20 text-orange-300 border-orange-500/30" },
-  GIM:  { label: "GIM SAS",       color: "bg-violet-500/20 text-violet-300 border-violet-500/30" },
-  IPTV: { label: "IPTV",          color: "bg-cyan-500/20 text-cyan-300 border-cyan-500/30" },
+  GN: { label: "Grupo Negocio", color: "bg-blue-500/20 text-blue-300 border-blue-500/30" },
+  TP: { label: "Trapemn", color: "bg-emerald-500/20 text-emerald-300 border-emerald-500/30" },
+  CD: { label: "CDLatam", color: "bg-orange-500/20 text-orange-300 border-orange-500/30" },
+  GIM: { label: "GIM SAS", color: "bg-violet-500/20 text-violet-300 border-violet-500/30" },
+  IPTV: { label: "IPTV", color: "bg-cyan-500/20 text-cyan-300 border-cyan-500/30" },
 };
 
 // ─── Tipos de datos ─────────────────────────────────────────────────────────
@@ -111,16 +114,16 @@ function EmptyState({ icon: Icon, title, desc }: { icon: React.ComponentType<{ c
 
 function ResumenView({ data }: { data: SummaryData }) {
   const stats = [
-    { icon: Hash,       label: "CECOs",           value: data.cecos.length,      color: "text-blue-400",    bg: "bg-blue-500/10" },
-    { icon: Layers,     label: "Soluciones",       value: data.soluciones.length, color: "text-emerald-400", bg: "bg-emerald-500/10" },
-    { icon: Globe,      label: "Países",           value: data.paises.length,     color: "text-cyan-400",    bg: "bg-cyan-500/10" },
-    { icon: DollarSign, label: "Monedas",          value: data.monedas.length,    color: "text-yellow-400",  bg: "bg-yellow-500/10" },
-    { icon: Briefcase,  label: "Unidades Negocio", value: data.unidades.length,   color: "text-orange-400",  bg: "bg-orange-500/10" },
-    { icon: Wrench,     label: "Detalle Servicio", value: data.detalles.length,   color: "text-pink-400",    bg: "bg-pink-500/10" },
-    { icon: Tag,        label: "Tipos de Venta",   value: data.tipos.length,      color: "text-red-400",     bg: "bg-red-500/10" },
-    { icon: Clock,      label: "Plazos",           value: data.plazos.length,     color: "text-teal-400",    bg: "bg-teal-500/10" },
-    { icon: FileText,   label: "Documentos",       value: data.docs.length,       color: "text-indigo-400",  bg: "bg-indigo-500/10" },
-    { icon: Users,      label: "Contactos",        value: data.contactos.length,  color: "text-rose-400",    bg: "bg-rose-500/10" },
+    { icon: Hash, label: "CECOs", value: data.cecos.length, color: "text-blue-400", bg: "bg-blue-500/10" },
+    { icon: Layers, label: "Soluciones", value: data.soluciones.length, color: "text-emerald-400", bg: "bg-emerald-500/10" },
+    { icon: Globe, label: "Países", value: data.paises.length, color: "text-cyan-400", bg: "bg-cyan-500/10" },
+    { icon: DollarSign, label: "Monedas", value: data.monedas.length, color: "text-yellow-400", bg: "bg-yellow-500/10" },
+    { icon: Briefcase, label: "Unidades Negocio", value: data.unidades.length, color: "text-orange-400", bg: "bg-orange-500/10" },
+    { icon: Wrench, label: "Detalle Servicio", value: data.detalles.length, color: "text-pink-400", bg: "bg-pink-500/10" },
+    { icon: Tag, label: "Tipos de Venta", value: data.tipos.length, color: "text-red-400", bg: "bg-red-500/10" },
+    { icon: Clock, label: "Plazos", value: data.plazos.length, color: "text-teal-400", bg: "bg-teal-500/10" },
+    { icon: FileText, label: "Documentos", value: data.docs.length, color: "text-indigo-400", bg: "bg-indigo-500/10" },
+    { icon: Users, label: "Contactos", value: data.contactos.length, color: "text-rose-400", bg: "bg-rose-500/10" },
   ];
   const total = stats.reduce((a, s) => a + s.value, 0);
 
@@ -167,7 +170,7 @@ function ResumenView({ data }: { data: SummaryData }) {
           <Badge className="ml-auto text-xs bg-blue-500/10 text-blue-400 border-blue-500/20">{data.cecos.length} total</Badge>
         </div>
         <div className="space-y-3">
-          {Object.entries(empresasCount).sort(([,a],[,b]) => b - a).map(([emp, count]) => {
+          {Object.entries(empresasCount).sort(([, a], [, b]) => b - a).map(([emp, count]) => {
             const info = EMPRESA_INFO[emp] ?? { label: emp, color: "bg-slate-500/20 text-slate-300 border-slate-500/30" };
             const pct = Math.round((count / data.cecos.length) * 100);
             return (
@@ -510,12 +513,12 @@ export default function BaseDatos() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="p-6 max-w-4xl mx-auto space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-bold text-white flex items-center gap-2">
-            <Database className="w-5 h-5 text-blue-400" />
+          <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
+            <Database className="w-6 h-6 text-primary" />
             Base de Datos
           </h1>
           <p className="text-sm text-slate-400 mt-0.5">Catálogos del sistema y registros de documentos</p>
@@ -536,9 +539,8 @@ export default function BaseDatos() {
             const count = getCount(tab.id);
             return (
               <button key={tab.id} onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium whitespace-nowrap transition-all flex-shrink-0 ${
-                  isActive ? `${tab.bgColor} ${tab.color} border border-current/20` : "text-slate-400 hover:text-slate-200 hover:bg-white/5"
-                }`}>
+                className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium whitespace-nowrap transition-all flex-shrink-0 ${isActive ? `${tab.bgColor} ${tab.color} border border-current/20` : "text-slate-400 hover:text-slate-200 hover:bg-white/5"
+                  }`}>
                 <Icon className="w-3.5 h-3.5" />
                 {tab.label}
                 {count !== null && <span className={`ml-0.5 text-xs px-1.5 py-0.5 rounded-full ${isActive ? "bg-current/10" : "bg-white/5 text-slate-500"}`}>{count}</span>}
@@ -557,9 +559,8 @@ export default function BaseDatos() {
             const isActive = activeTab === tab.id;
             return (
               <button key={tab.id} onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium whitespace-nowrap transition-all flex-shrink-0 ${
-                  isActive ? "bg-slate-500/20 text-slate-200 border border-slate-500/30" : "text-slate-400 hover:text-slate-200 hover:bg-white/5"
-                }`}>
+                className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium whitespace-nowrap transition-all flex-shrink-0 ${isActive ? "bg-slate-500/20 text-slate-200 border border-slate-500/30" : "text-slate-400 hover:text-slate-200 hover:bg-white/5"
+                  }`}>
                 <Icon className="w-3.5 h-3.5" />
                 {tab.label}
               </button>
@@ -587,97 +588,13 @@ export default function BaseDatos() {
         ) : (
           <>
             {activeTab === "resumen" && data && <ResumenView data={data} />}
-            {activeTab === "cecos" && data && <CecosView cecos={data.cecos} />}
-            {activeTab === "soluciones" && data && <SimpleList items={data.soluciones.map((s: CatalogSolucion) => s.nombre)} dotColor="bg-emerald-400" />}
-            {activeTab === "paises" && data && (
-              <div className="space-y-3">
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
-                  {data.paises.map((p: CatalogPais) => (
-                    <div key={p.id} className="bg-[#1a1f2e] border border-white/5 rounded-lg px-3 py-2.5 flex items-center gap-2 hover:border-white/10 transition-colors">
-                      <MapPin className="w-3.5 h-3.5 text-cyan-400 flex-shrink-0" />
-                      <span className="text-sm text-slate-200">{p.nombre}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
+            
+            {/* CRUD GENÉRICO DE CATÁLOGOS */}
+            {activeTab !== "resumen" && activeTab !== "actas" && activeTab !== "ep" && catalogConfigs[activeTab] && (
+              <CatalogCrudView config={catalogConfigs[activeTab]} />
             )}
-            {activeTab === "monedas" && data && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                {data.monedas.map((m: CatalogMoneda) => {
-                  const flags: Record<string, string> = { USD: "🇺🇸", ARS: "🇦🇷", CLP: "🇨🇱", COP: "🇨🇴", SOL: "🇵🇪", UF: "🇨🇱" };
-                  return (
-                    <div key={m.id} className="bg-[#1a1f2e] border border-white/5 rounded-xl p-4 flex items-center gap-4 hover:border-white/10 transition-colors">
-                      <div className="w-12 h-12 rounded-xl bg-yellow-500/10 flex items-center justify-center text-2xl flex-shrink-0">{flags[m.codigo as string] ?? "💱"}</div>
-                      <div>
-                        <p className="text-base font-bold text-white font-mono">{m.codigo}</p>
-                        <p className="text-xs text-slate-400">{m.nombre}</p>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-            {activeTab === "unidades" && data && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                {data.unidades.map((u: CatalogUnidadNegocio) => (
-                  <div key={u.id} className="bg-[#1a1f2e] border border-white/5 rounded-xl p-4 flex items-center gap-3 hover:border-white/10 transition-colors">
-                    <div className="w-9 h-9 rounded-lg bg-orange-500/10 flex items-center justify-center flex-shrink-0">
-                      <Briefcase className="w-4 h-4 text-orange-400" />
-                    </div>
-                    <span className="text-sm font-medium text-slate-200">{u.nombre}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-            {activeTab === "detalle" && data && <SimpleList items={data.detalles.map((d: CatalogDetalleServicio) => d.nombre)} dotColor="bg-pink-400" />}
-            {activeTab === "tipos" && data && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                {data.tipos.map((t: CatalogTipoVenta) => (
-                  <div key={t.id} className="bg-[#1a1f2e] border border-white/5 rounded-xl p-4 flex items-center gap-3 hover:border-white/10 transition-colors">
-                    <div className="w-9 h-9 rounded-lg bg-red-500/10 flex items-center justify-center flex-shrink-0"><Tag className="w-4 h-4 text-red-400" /></div>
-                    <span className="text-sm font-medium text-slate-200">{t.nombre}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-            {activeTab === "plazos" && data && (
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                {data.plazos.map((p: CatalogPlazo) => (
-                  <div key={p.id} className="bg-[#1a1f2e] border border-white/5 rounded-xl p-4 text-center hover:border-white/10 transition-colors">
-                    <Clock className="w-5 h-5 text-teal-400 mx-auto mb-2" />
-                    <p className="text-sm font-semibold text-white">{p.nombre}</p>
-                  </div>
-                ))}
-              </div>
-            )}
-            {activeTab === "documentos" && data && (
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                {data.docs.map((d: CatalogDocumento) => (
-                  <div key={d.id} className="bg-[#1a1f2e] border border-white/5 rounded-xl p-5 text-center hover:border-white/10 transition-colors">
-                    <div className="w-12 h-12 rounded-xl bg-indigo-500/10 flex items-center justify-center mx-auto mb-3">
-                      <FileText className="w-6 h-6 text-indigo-400" />
-                    </div>
-                    <p className="text-lg font-bold text-white font-mono">{d.nombre}</p>
-                    <p className="text-xs text-slate-500 mt-1">Documento de identidad</p>
-                  </div>
-                ))}
-              </div>
-            )}
-            {activeTab === "contactos" && data && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                {data.contactos.map((c: CatalogContacto) => (
-                  <div key={c.id} className="bg-[#1a1f2e] border border-white/5 rounded-xl p-4 hover:border-white/10 transition-colors flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500/30 to-violet-500/30 flex items-center justify-center flex-shrink-0">
-                      <span className="text-sm font-semibold text-white">{c.nombre.charAt(0).toUpperCase()}</span>
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium text-white truncate">{c.nombre}</p>
-                      {c.empresa && <p className="text-xs text-slate-400 truncate">{c.empresa}</p>}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
+
+            {/* VISTAS PARTICULARES */}
             {activeTab === "actas" && <ActasView />}
             {activeTab === "ep" && <EPView />}
           </>

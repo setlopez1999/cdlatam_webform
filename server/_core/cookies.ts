@@ -42,7 +42,7 @@ export function getSessionCookieOptions(
   return {
     httpOnly: true,
     path: "/",
-    sameSite: "none",
-    secure: isSecureRequest(req),
+    sameSite: "lax", // Fix: 'none' requires 'secure: true' in modern browsers
+    secure: process.env.NODE_ENV === "production" ? isSecureRequest(req) : false, // Permite omitir HTTPS en local
   };
 }
