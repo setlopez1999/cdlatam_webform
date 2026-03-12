@@ -72,7 +72,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
 
   const visibleAdminItems = ADMIN_NAV_ITEMS.filter(item => !item.adminOnly || isAdmin);
 
-  const initials = (currentUser?.nombre ?? currentUser?.username ?? "U")
+  const initials = (currentUser?.displayName ?? currentUser?.username ?? "U")
     .split(" ").map((w: string) => w[0]).join("").toUpperCase().slice(0, 2);
 
   const NavItemRow = ({ item, indent = false }: { item: NavItem; indent?: boolean }) => {
@@ -199,7 +199,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
                 </Avatar>
                 <div className="flex-1 min-w-0 text-left">
                   <p className="text-xs font-medium text-sidebar-foreground truncate">
-                    {currentUser?.nombre ?? currentUser?.username ?? currentUser.username}
+                    {currentUser?.displayName ?? currentUser?.username ?? currentUser.username}
                   </p>
                   <div className="flex items-center gap-1">
                     {isAdmin
@@ -215,7 +215,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
             </DropdownMenuTrigger>
             <DropdownMenuContent side="top" align="start" className="w-48">
               <DropdownMenuLabel className="font-normal">
-                <p className="text-sm font-medium">{currentUser?.nombre ?? currentUser?.username ?? currentUser.username}</p>
+                <p className="text-sm font-medium">{currentUser?.displayName ?? currentUser?.username ?? currentUser.username}</p>
                 <p className="text-xs text-muted-foreground">@{currentUser.username}</p>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
@@ -245,7 +245,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
               </button>
             </TooltipTrigger>
             <TooltipContent side="right">
-              <p>{currentUser?.nombre ?? currentUser?.username ?? currentUser.username}</p>
+              <p>{currentUser?.displayName ?? currentUser?.username ?? currentUser.username}</p>
               <p className="text-xs text-muted-foreground">Cerrar sesión</p>
             </TooltipContent>
           </Tooltip>

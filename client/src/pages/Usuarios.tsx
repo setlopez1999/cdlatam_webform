@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { toast } from "sonner";
 import {
-  Users, Plus, Shield, User, Clock, Loader2, RefreshCw,
+  Users, Plus, Shield, User, Clock, Loader2, RefreshCw, Power
 } from "lucide-react";
 
 export default function Usuarios() {
@@ -37,6 +37,24 @@ export default function Usuarios() {
       toast.error(err.message);
     },
   });
+
+  const toggleStatusMutation = trpc.localAuth.toggleStatus.useMutation();
+
+  const handleToggleStatus = async (user: any) => {
+    const isActivo = Boolean(user.isActive);
+    const action = isActivo ? "desactivar" : "activar";
+    if (!confirm(`¿Seguro que deseas ${action} la cuenta de ${user.username}?`)) return;
+    try {
+      await toggleStatusMutation.mutateAsync({
+        id: user.id,
+        isActive: isActivo ? 0 : 1,
+      });
+      toast.success(`Cuenta ${isActivo ? 'inactivada' : 'activada'}`);
+      refetch();
+    } catch (error: any) {
+      toast.error(`Error al ${action}: ` + error.message);
+    }
+  };
 
   if (authLoading) {
     return (
@@ -193,6 +211,17 @@ export default function Usuarios() {
                         )}
                       </div>
                       <p className="text-xs text-muted-foreground">@{u.username}</p>
+                    </div>
+                    <div className="flex items-center gap-2 pr-4 pl-2">
+                       <Button 
+                         variant="ghost" 
+                         size="icon" 
+                         onClick={() => handleToggleStatus(u)} 
+                         disabled={toggleStatusMutation.isPending}
+                         title={u.isActive ? "Desactivar" : "Activar"} 
+                         className={`h-8 w-8 ${u.isActive ? 'text-orange-400 hover:text-orange-300 hover:bg-orange-500/10' : 'text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10'}`}>
+                         <Power className="w-4 h-4" />
+                       </Button>
                     </div>
                     <div className="text-right hidden sm:block">
                       <div className="flex items-center gap-1 text-xs text-muted-foreground">

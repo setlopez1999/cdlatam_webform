@@ -1,22 +1,53 @@
 // server/db.ts
-import { eq, desc, like, and, or } from "drizzle-orm";
+import { eq, like, or, and, sql, desc, sum, count, inArray } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import { migrate } from "drizzle-orm/better-sqlite3/migrator";
 import * as Database from 'better-sqlite3';
-import { join } from 'path';
+import { join, dirname } from 'path';
+import { existsSync, mkdirSync } from 'fs';
 // Importamos los esquemas (asegúrate de que esta ruta sea correcta)
 // --- MODIFICADO: Importar localUsers ---
 import {
   InsertUser, users, actas, evaluaciones, InsertActa, InsertEvaluacion,
   localUsers,
   // Catálogos
-  catalogMonedas, catalogPaises, catalogUnidadesNegocio, catalogSoluciones,
-  catalogDetalleServicio, catalogTipoVenta, catalogPlazos, catalogDocumentos,
-  catalogCecos, catalogContactos
+  catalogMonedas, catalogPaises, catalogEmpresas, catalogDocumentoIdentidad,
+  catalogUnidadesNegocio, catalogSoluciones, catalogDetalleServicio,
+  catalogTipoVenta, catalogPlazos, catalogDocumentos, catalogCecos,
+  catalogDepartamentos, catalogAreas, catalogNombres
 } from "../drizzle/schema";
 
 // 1. Inicializar conexión al archivo local "gestion.db"
-const sqlite = new Database.default(join(process.cwd(), 'gestion.db'));
+const LOCAL_DB_PATH = join(process.cwd(), 'gestion.db');
+
+// Soporte para variables de entorno para Docker
+let dbPath = LOCAL_DB_PATH;
+
+// Solo usamos DATABASE_URL si existe y no estamos en un entorno donde sea peligroso (ej: path de linux en windows)
+if (process.env.DATABASE_URL) {
+  const envPath = process.env.DATABASE_URL.replace("file:", "");
+  
+  // Si estamos en Windows y el path empieza con /app/ (Linux path de Docker), lo ignoramos para desarrollo local
+  const isLinuxPathOnWindows = process.platform === 'win32' && envPath.startsWith('/app/');
+  
+  if (!isLinuxPathOnWindows) {
+    dbPath = envPath;
+    
+    // Asegurar que el directorio existe (útil para Docker con volúmenes)
+    const dbDir = dirname(dbPath);
+    if (!existsSync(dbDir)) {
+      try {
+        mkdirSync(dbDir, { recursive: true });
+      } catch (err) {
+        console.warn(`[DB] No se pudo crear el directorio ${dbDir}, usando gestion.db local.`);
+        dbPath = LOCAL_DB_PATH;
+      }
+    }
+  }
+}
+
+console.log(`[DB] Conectando a base de datos en: ${dbPath}`);
+const sqlite = new Database.default(dbPath);
 const _db = drizzle(sqlite);
 
 export async function getDb() {
@@ -28,6 +59,8 @@ export async function getDb() {
 const catalogMap: Record<string, any> = {
   monedas: catalogMonedas,
   paises: catalogPaises,
+  empresas: catalogEmpresas,
+  doctos: catalogDocumentoIdentidad,
   unidades: catalogUnidadesNegocio,
   soluciones: catalogSoluciones,
   detalle: catalogDetalleServicio,
@@ -35,7 +68,9 @@ const catalogMap: Record<string, any> = {
   plazos: catalogPlazos,
   documentos: catalogDocumentos,
   cecos: catalogCecos,
-  contactos: catalogContactos,
+  deptos: catalogDepartamentos,
+  areas: catalogAreas,
+  nombres: catalogNombres,
 };
 
 function getCatalogTable(tableName: string) {
@@ -47,8 +82,8 @@ function getCatalogTable(tableName: string) {
 export async function getCatalogList(tableName: string) {
   const db = await getDb();
   const table = getCatalogTable(tableName);
-  // Solo devolvemos los activos
-  return await db.select().from(table).where(eq(table.activo, 1));
+  // Devolvemos todos para poder ver inactivos y reactivarlos desde el cliente
+  return await db.select().from(table);
 }
 
 export async function createCatalogRecord(tableName: string, data: any) {
@@ -66,8 +101,22 @@ export async function updateCatalogRecord(tableName: string, id: number, data: a
 export async function deleteCatalogRecord(tableName: string, id: number) {
   const db = await getDb();
   const table = getCatalogTable(tableName);
-  // Soft Delete cambiando activo = 0
-  return await db.update(table).set({ activo: 0 }).where(eq(table.id, id));
+  // Hard Delete
+  return await db.delete(table).where(eq(table.id, id));
+}
+
+export async function bulkUpdateCatalogRecords(tableName: string, ids: number[], data: any) {
+  if (!ids.length) return;
+  const db = await getDb();
+  const table = getCatalogTable(tableName);
+  return await db.update(table).set(data).where(inArray(table.id, ids));
+}
+
+export async function bulkDeleteCatalogRecords(tableName: string, ids: number[]) {
+  if (!ids.length) return;
+  const db = await getDb();
+  const table = getCatalogTable(tableName);
+  return await db.delete(table).where(inArray(table.id, ids));
 }
 
 export async function runMigrations() {
@@ -144,6 +193,11 @@ export async function findLocalUserById(id: number) {
   const db = await getDb();
   const result = await db.select().from(localUsers).where(eq(localUsers.id, id)).limit(1);
   return result[0];
+}
+
+export async function toggleLocalUserStatus(id: number, isActive: number) {
+  const db = await getDb();
+  return await db.update(localUsers).set({ isActive }).where(eq(localUsers.id, id));
 }
 
 // ─── Actas ────────────────────────────────────────────────────────────────────

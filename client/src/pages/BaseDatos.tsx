@@ -2,7 +2,8 @@ import { useState, useMemo } from "react";
 import type {
   CatalogCeco, CatalogSolucion, CatalogPais, CatalogMoneda,
   CatalogUnidadNegocio, CatalogDetalleServicio, CatalogTipoVenta,
-  CatalogPlazo, CatalogDocumento, CatalogContacto,
+  CatalogPlazo, CatalogDocumento,
+  CatalogEmpresa, CatalogDocumentoIdentidad, CatalogDepartamento, CatalogArea, CatalogNombre
 } from "../../../drizzle/schema";
 import { trpc } from "@/lib/trpc";
 import {
@@ -28,8 +29,8 @@ import { catalogConfigs } from "@/core/config/catalogConfig";
 
 type TabId =
   | "resumen" | "cecos" | "soluciones" | "paises" | "monedas"
-  | "unidades" | "detalle" | "tipos" | "plazos" | "documentos"
-  | "contactos" | "actas" | "ep";
+  | "unidades" | "detalle" | "tipos" | "plazos" | "documentos" | "empresas" | "doctos" | "deptos" | "areas" | "nombres"
+  | "actas" | "ep";
 
 interface TabDef {
   id: TabId;
@@ -42,41 +43,41 @@ interface TabDef {
 
 const TABS: TabDef[] = [
   { id: "resumen", label: "Resumen", icon: BarChart3, color: "text-violet-400", bgColor: "bg-violet-500/10", group: "catalogs" },
-  { id: "cecos", label: "CECOs", icon: Hash, color: "text-blue-400", bgColor: "bg-blue-500/10", group: "catalogs" },
-  { id: "soluciones", label: "Soluciones", icon: Layers, color: "text-emerald-400", bgColor: "bg-emerald-500/10", group: "catalogs" },
-  { id: "paises", label: "Países", icon: Globe, color: "text-cyan-400", bgColor: "bg-cyan-500/10", group: "catalogs" },
   { id: "monedas", label: "Monedas", icon: DollarSign, color: "text-yellow-400", bgColor: "bg-yellow-500/10", group: "catalogs" },
-  { id: "unidades", label: "Unidades Negocio", icon: Briefcase, color: "text-orange-400", bgColor: "bg-orange-500/10", group: "catalogs" },
-  { id: "detalle", label: "Detalle Servicio", icon: Wrench, color: "text-pink-400", bgColor: "bg-pink-500/10", group: "catalogs" },
+  { id: "paises", label: "Países", icon: Globe, color: "text-cyan-400", bgColor: "bg-cyan-500/10", group: "catalogs" },
+  { id: "empresas", label: "Empresas", icon: Building2, color: "text-blue-400", bgColor: "bg-blue-500/10", group: "catalogs" },
+  { id: "doctos", label: "Doc. Identidad", icon: FileText, color: "text-slate-400", bgColor: "bg-slate-500/10", group: "catalogs" },
+  { id: "unidades", label: "Unidades Neg.", icon: Briefcase, color: "text-orange-400", bgColor: "bg-orange-500/10", group: "catalogs" },
+  { id: "soluciones", label: "Soluciones", icon: Layers, color: "text-emerald-400", bgColor: "bg-emerald-500/10", group: "catalogs" },
+  { id: "detalle", label: "Detalle Serv.", icon: Wrench, color: "text-pink-400", bgColor: "bg-pink-500/10", group: "catalogs" },
   { id: "tipos", label: "Tipos de Venta", icon: Tag, color: "text-red-400", bgColor: "bg-red-500/10", group: "catalogs" },
   { id: "plazos", label: "Plazos", icon: Clock, color: "text-teal-400", bgColor: "bg-teal-500/10", group: "catalogs" },
-  { id: "documentos", label: "Documentos", icon: FileText, color: "text-indigo-400", bgColor: "bg-indigo-500/10", group: "catalogs" },
-  { id: "contactos", label: "Contactos", icon: Users, color: "text-rose-400", bgColor: "bg-rose-500/10", group: "catalogs" },
+  //{ id: "documentos", label: "Documentos", icon: FileTextIcon, color: "text-indigo-400", bgColor: "bg-indigo-500/10", group: "catalogs" },
+  { id: "cecos", label: "CECOs", icon: Hash, color: "text-blue-400", bgColor: "bg-blue-500/10", group: "catalogs" },
+  { id: "deptos", label: "Departamentos", icon: MapPin, color: "text-indigo-400", bgColor: "bg-indigo-500/10", group: "catalogs" },
+  { id: "areas", label: "Áreas", icon: Layers, color: "text-fuchsia-400", bgColor: "bg-fuchsia-500/10", group: "catalogs" },
+  { id: "nombres", label: "Nombres", icon: Users, color: "text-rose-400", bgColor: "bg-rose-500/10", group: "catalogs" },
   { id: "actas", label: "Actas", icon: FileTextIcon, color: "text-slate-300", bgColor: "bg-slate-500/10", group: "records" },
   { id: "ep", label: "Evaluaciones", icon: ClipboardList, color: "text-slate-300", bgColor: "bg-slate-500/10", group: "records" },
 ];
 
-const EMPRESA_INFO: Record<string, { label: string; color: string }> = {
-  GN: { label: "Grupo Negocio", color: "bg-blue-500/20 text-blue-300 border-blue-500/30" },
-  TP: { label: "Trapemn", color: "bg-emerald-500/20 text-emerald-300 border-emerald-500/30" },
-  CD: { label: "CDLatam", color: "bg-orange-500/20 text-orange-300 border-orange-500/30" },
-  GIM: { label: "GIM SAS", color: "bg-violet-500/20 text-violet-300 border-violet-500/30" },
-  IPTV: { label: "IPTV", color: "bg-cyan-500/20 text-cyan-300 border-cyan-500/30" },
-};
-
 // ─── Tipos de datos ─────────────────────────────────────────────────────────
 
 type SummaryData = {
-  cecos: CatalogCeco[];
-  soluciones: CatalogSolucion[];
-  paises: CatalogPais[];
   monedas: CatalogMoneda[];
+  paises: CatalogPais[];
+  empresas: CatalogEmpresa[];
+  doctos: CatalogDocumentoIdentidad[];
   unidades: CatalogUnidadNegocio[];
+  soluciones: CatalogSolucion[];
   detalles: CatalogDetalleServicio[];
   tipos: CatalogTipoVenta[];
   plazos: CatalogPlazo[];
   docs: CatalogDocumento[];
-  contactos: CatalogContacto[];
+  cecos: CatalogCeco[];
+  deptos: CatalogDepartamento[];
+  areas: CatalogArea[];
+  nombres: CatalogNombre[];
 };
 
 // ─── Helpers UI ─────────────────────────────────────────────────────────────────
@@ -118,20 +119,18 @@ function ResumenView({ data }: { data: SummaryData }) {
     { icon: Layers, label: "Soluciones", value: data.soluciones.length, color: "text-emerald-400", bg: "bg-emerald-500/10" },
     { icon: Globe, label: "Países", value: data.paises.length, color: "text-cyan-400", bg: "bg-cyan-500/10" },
     { icon: DollarSign, label: "Monedas", value: data.monedas.length, color: "text-yellow-400", bg: "bg-yellow-500/10" },
+    { icon: Building2, label: "Empresas", value: data.empresas.length, color: "text-blue-400", bg: "bg-blue-500/10" },
+    { icon: FileText, label: "Doc. Identidad", value: data.doctos.length, color: "text-slate-400", bg: "bg-slate-500/10" },
     { icon: Briefcase, label: "Unidades Negocio", value: data.unidades.length, color: "text-orange-400", bg: "bg-orange-500/10" },
     { icon: Wrench, label: "Detalle Servicio", value: data.detalles.length, color: "text-pink-400", bg: "bg-pink-500/10" },
     { icon: Tag, label: "Tipos de Venta", value: data.tipos.length, color: "text-red-400", bg: "bg-red-500/10" },
     { icon: Clock, label: "Plazos", value: data.plazos.length, color: "text-teal-400", bg: "bg-teal-500/10" },
     { icon: FileText, label: "Documentos", value: data.docs.length, color: "text-indigo-400", bg: "bg-indigo-500/10" },
-    { icon: Users, label: "Contactos", value: data.contactos.length, color: "text-rose-400", bg: "bg-rose-500/10" },
+    { icon: MapPin, label: "Departamentos", value: data.deptos.length, color: "text-indigo-400", bg: "bg-indigo-500/10" },
+    { icon: Layers, label: "Áreas", value: data.areas.length, color: "text-fuchsia-400", bg: "bg-fuchsia-500/10" },
+    { icon: Users, label: "Nombres", value: data.nombres.length, color: "text-rose-400", bg: "bg-rose-500/10" },
   ];
   const total = stats.reduce((a, s) => a + s.value, 0);
-
-  const empresasCount: Record<string, number> = {};
-  for (const c of data.cecos) {
-    const emp = c.empresa;
-    empresasCount[emp] = (empresasCount[emp] ?? 0) + 1;
-  }
 
   return (
     <div className="space-y-6">
@@ -162,32 +161,6 @@ function ResumenView({ data }: { data: SummaryData }) {
         ))}
       </div>
 
-      {/* CECOs por empresa */}
-      <div className="bg-[#1a1f2e] border border-white/5 rounded-xl p-5">
-        <div className="flex items-center gap-2 mb-5">
-          <TrendingUp className="w-4 h-4 text-blue-400" />
-          <h3 className="text-sm font-semibold text-white">Distribución de CECOs por Empresa</h3>
-          <Badge className="ml-auto text-xs bg-blue-500/10 text-blue-400 border-blue-500/20">{data.cecos.length} total</Badge>
-        </div>
-        <div className="space-y-3">
-          {Object.entries(empresasCount).sort(([, a], [, b]) => b - a).map(([emp, count]) => {
-            const info = EMPRESA_INFO[emp] ?? { label: emp, color: "bg-slate-500/20 text-slate-300 border-slate-500/30" };
-            const pct = Math.round((count / data.cecos.length) * 100);
-            return (
-              <div key={emp} className="flex items-center gap-3">
-                <div className="w-24 flex-shrink-0">
-                  <span className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${info.color}`}>{emp}</span>
-                </div>
-                <div className="flex-1 bg-white/5 rounded-full h-2">
-                  <div className="h-2 rounded-full bg-gradient-to-r from-blue-500 to-violet-500" style={{ width: `${pct}%` }} />
-                </div>
-                <span className="text-xs text-slate-400 w-20 text-right">{count} CECOs ({pct}%)</span>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
       {/* Soluciones preview */}
       <div className="bg-[#1a1f2e] border border-white/5 rounded-xl p-5">
         <div className="flex items-center gap-2 mb-4">
@@ -197,7 +170,7 @@ function ResumenView({ data }: { data: SummaryData }) {
         </div>
         <div className="flex flex-wrap gap-2">
           {data.soluciones.map((s: CatalogSolucion) => (
-            <span key={s.id} className="text-xs px-2.5 py-1 bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 rounded-full">{s.nombre}</span>
+            <span key={s.id} className="text-xs px-2.5 py-1 bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 rounded-full">{s.valor}</span>
           ))}
         </div>
       </div>
@@ -205,87 +178,7 @@ function ResumenView({ data }: { data: SummaryData }) {
   );
 }
 
-// ─── Vista CECOs ──────────────────────────────────────────────────────────────
-
-function CecosView({ cecos }: { cecos: CatalogCeco[] }) {
-  const [search, setSearch] = useState("");
-  const [empFilter, setEmpFilter] = useState("all");
-  const [expanded, setExpanded] = useState<Set<string>>(new Set(Object.keys(EMPRESA_INFO)));
-
-  const empresas = useMemo(() => Array.from(new Set(cecos.map(c => c.empresa))).sort(), [cecos]);
-
-  const filtered = useMemo(() => cecos.filter(c => {
-    const q = search.toLowerCase();
-    return (c.nombreCompleto.toLowerCase().includes(q) || c.codigo.includes(q)) &&
-      (empFilter === "all" || c.empresa === empFilter);
-  }), [cecos, search, empFilter]);
-
-  const grouped = useMemo(() => {
-    const g: Record<string, typeof filtered> = {};
-    for (const c of filtered) { if (!g[c.empresa]) g[c.empresa] = []; g[c.empresa].push(c); }
-    return g;
-  }, [filtered]);
-
-  const toggle = (e: string) => setExpanded(prev => { const n = new Set(prev); n.has(e) ? n.delete(e) : n.add(e); return n; });
-
-  return (
-    <div className="space-y-4">
-      <div className="flex gap-3 flex-wrap">
-        <div className="flex-1 min-w-48">
-          <SearchBar value={search} onChange={setSearch} placeholder="Buscar por código, empresa o departamento..." />
-        </div>
-        <div className="flex gap-1.5 flex-wrap">
-          {["all", ...empresas].map(emp => (
-            <button key={emp} onClick={() => setEmpFilter(emp)}
-              className={`text-xs px-3 py-1.5 rounded-lg border transition-all ${empFilter === emp ? "bg-blue-500/20 text-blue-300 border-blue-500/40" : "bg-white/5 text-slate-400 border-white/10 hover:border-white/20"}`}>
-              {emp === "all" ? `Todas (${cecos.length})` : `${emp} (${cecos.filter(c => c.empresa === emp).length})`}
-            </button>
-          ))}
-        </div>
-      </div>
-      <p className="text-xs text-slate-500">{filtered.length} de {cecos.length} CECOs</p>
-      <div className="space-y-2">
-        {Object.entries(grouped).map(([emp, items]) => {
-          const info = EMPRESA_INFO[emp] ?? { label: emp, color: "bg-slate-500/20 text-slate-300 border-slate-500/30" };
-          const isOpen = expanded.has(emp);
-          return (
-            <div key={emp} className="bg-[#1a1f2e] border border-white/5 rounded-xl overflow-hidden">
-              <button onClick={() => toggle(emp)} className="w-full flex items-center gap-3 px-4 py-3 hover:bg-white/3 transition-colors">
-                <span className={`text-xs font-semibold px-2.5 py-1 rounded-full border ${info.color}`}>{emp}</span>
-                <span className="text-sm font-medium text-white">{info.label}</span>
-                <Badge className="ml-auto text-xs bg-white/5 text-slate-400 border-white/10">{items.length} CECOs</Badge>
-                {isOpen ? <ChevronUp className="w-4 h-4 text-slate-500 ml-2" /> : <ChevronDown className="w-4 h-4 text-slate-500 ml-2" />}
-              </button>
-              {isOpen && (
-                <div className="border-t border-white/5">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="bg-white/3">
-                        <th className="text-left px-4 py-2 text-xs text-slate-500 font-medium w-28">Código</th>
-                        <th className="text-left px-4 py-2 text-xs text-slate-500 font-medium">Departamento</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {items.map((c, i) => (
-                        <tr key={c.id} className={`border-t border-white/3 hover:bg-white/3 transition-colors ${i % 2 === 0 ? "" : "bg-white/1"}`}>
-                          <td className="px-4 py-2.5">
-                            <span className="font-mono text-xs text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded">{c.codigo}</span>
-                          </td>
-                          <td className="px-4 py-2.5 text-slate-300 text-sm">{c.departamento}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
-      {filtered.length === 0 && <EmptyState icon={Hash} title="Sin resultados" desc={`No hay CECOs que coincidan con "${search}"`} />}
-    </div>
-  );
-}
+// ─── ESPACIO PARA OTRAS VISTAS (SI APLICA) ───────────────────────────────────
 
 // ─── Vista simple lista ───────────────────────────────────────────────────────
 
@@ -507,7 +400,9 @@ export default function BaseDatos() {
       paises: data.paises.length, monedas: data.monedas.length,
       unidades: data.unidades.length, detalle: data.detalles.length,
       tipos: data.tipos.length, plazos: data.plazos.length,
-      documentos: data.docs.length, contactos: data.contactos.length,
+      documentos: data.docs.length,
+      empresas: data.empresas.length, doctos: data.doctos.length,
+      deptos: data.deptos.length, areas: data.areas.length, nombres: data.nombres.length,
     };
     return map[id] ?? null;
   };
@@ -550,7 +445,7 @@ export default function BaseDatos() {
         </div>
       </div>
 
-      {/* Grupo Registros */}
+      {/* Grupo Registros 
       <div>
         <p className="text-xs text-slate-500 font-medium uppercase tracking-wider mb-2 px-1">Registros de Documentos</p>
         <div className="flex gap-1 overflow-x-auto pb-1 scrollbar-none">
@@ -568,6 +463,7 @@ export default function BaseDatos() {
           })}
         </div>
       </div>
+      */}
 
       {/* Contenido */}
       <div className="min-h-64">
@@ -588,7 +484,7 @@ export default function BaseDatos() {
         ) : (
           <>
             {activeTab === "resumen" && data && <ResumenView data={data} />}
-            
+
             {/* CRUD GENÉRICO DE CATÁLOGOS */}
             {activeTab !== "resumen" && activeTab !== "actas" && activeTab !== "ep" && catalogConfigs[activeTab] && (
               <CatalogCrudView config={catalogConfigs[activeTab]} />

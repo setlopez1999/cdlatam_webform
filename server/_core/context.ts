@@ -45,6 +45,7 @@ export async function createContext(
           createdAt: dbUser.createdAt,
           updatedAt: dbUser.updatedAt,
           lastSignedIn: dbUser.lastSignedIn ?? dbUser.createdAt,
+          activo: 1,
         };
       }
     }

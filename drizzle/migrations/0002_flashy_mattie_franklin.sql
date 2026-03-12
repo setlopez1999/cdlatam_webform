@@ -1,0 +1,1 @@
+ALTER TABLE `users` ADD `activo` integer DEFAULT 1 NOT NULL;

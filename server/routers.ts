@@ -15,15 +15,20 @@ import {
   getLocalUsers,
   createLocalUser,
   findLocalUserByUsername,
+  toggleLocalUserStatus,
   // Funciones genéricas del CRUD de Catálogos
-  getCatalogList, createCatalogRecord, updateCatalogRecord, deleteCatalogRecord,
+  getCatalogList, createCatalogRecord, updateCatalogRecord,
+  deleteCatalogRecord,
+  bulkUpdateCatalogRecords,
+  bulkDeleteCatalogRecords,
   // Necesitaremos estas funciones de cifrado desde localAuth
 } from "./db";
 
 import {
-  catalogMonedas, catalogPaises, catalogUnidadesNegocio, catalogSoluciones,
-  catalogDetalleServicio, catalogTipoVenta, catalogPlazos, catalogDocumentos,
-  catalogCecos, catalogContactos,
+  catalogMonedas, catalogPaises, catalogEmpresas, catalogDocumentoIdentidad, 
+  catalogUnidadesNegocio, catalogSoluciones, catalogDetalleServicio, 
+  catalogTipoVenta, catalogPlazos, catalogDocumentos, catalogCecos, 
+  catalogDepartamentos, catalogAreas, catalogNombres
 } from "../drizzle/schema";
 
 import {
@@ -264,6 +269,19 @@ export const appRouter = router({
         });
         return { success: true };
       }),
+
+    toggleStatus: protectedProcedure
+      .input(z.object({
+        id: z.number(),
+        isActive: z.number().min(0).max(1),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user?.role !== "admin") {
+          throw new Error("Acceso denegado: se requiere rol admin");
+        }
+        await toggleLocalUserStatus(input.id, input.isActive);
+        return { success: true };
+      }),
   }),
 
   // ─── Catálogos (se mantienen iguales) ──────────────────────────────────
@@ -357,14 +375,14 @@ export const appRouter = router({
           materiales: input.materiales ?? [],
           rrhh: input.rrhh ?? [],
           otrosGastos: input.otrosGastos ?? [],
-          montoProyecto: input.montoProyecto?.toString(),
-          tipoCambio: input.tipoCambio?.toString(),
-          totalClp: input.totalClp?.toString(),
-          totalHardware: input.totalHardware?.toString(),
-          totalMateriales: input.totalMateriales?.toString(),
-          totalRrhh: input.totalRrhh?.toString(),
-          totalOtros: input.totalOtros?.toString(),
-          totalGastos: input.totalGastos?.toString(),
+          montoProyecto: input.montoProyecto,
+          tipoCambio: input.tipoCambio,
+          totalClp: input.totalClp,
+          totalHardware: input.totalHardware,
+          totalMateriales: input.totalMateriales,
+          totalRrhh: input.totalRrhh,
+          totalOtros: input.totalOtros,
+          totalGastos: input.totalGastos,
         });
       }),
 
@@ -376,14 +394,14 @@ export const appRouter = router({
         return updateEvaluacion(input.id, {
           ...input.data,
           fechaEntrega: input.data.fechaEntrega ? new Date(input.data.fechaEntrega) : undefined,
-          montoProyecto: input.data.montoProyecto?.toString(),
-          tipoCambio: input.data.tipoCambio?.toString(),
-          totalClp: input.data.totalClp?.toString(),
-          totalHardware: input.data.totalHardware?.toString(),
-          totalMateriales: input.data.totalMateriales?.toString(),
-          totalRrhh: input.data.totalRrhh?.toString(),
-          totalOtros: input.data.totalOtros?.toString(),
-          totalGastos: input.data.totalGastos?.toString(),
+          montoProyecto: input.data.montoProyecto,
+          tipoCambio: input.data.tipoCambio,
+          totalClp: input.data.totalClp,
+          totalHardware: input.data.totalHardware,
+          totalMateriales: input.data.totalMateriales,
+          totalRrhh: input.data.totalRrhh,
+          totalOtros: input.data.totalOtros,
+          totalGastos: input.data.totalGastos,
         });
       }),
 
@@ -431,14 +449,31 @@ export const appRouter = router({
       .mutation(async ({ input }) => {
         return await deleteCatalogRecord(input.tableName, input.id);
       }),
+
+    bulkUpdate: protectedProcedure
+      .input(z.object({ tableName: z.string(), ids: z.array(z.number()), data: z.any() }))
+      .mutation(async ({ input }) => {
+        return await bulkUpdateCatalogRecords(input.tableName, input.ids, input.data);
+      }),
+
+    bulkDelete: protectedProcedure
+      .input(z.object({ tableName: z.string(), ids: z.array(z.number()) }))
+      .mutation(async ({ input }) => {
+        return await bulkDeleteCatalogRecords(input.tableName, input.ids);
+      }),
     // ------------------------------------------
 
     summary: protectedProcedure.query(async () => {
       const db = await getDb();
       if (!db) throw new Error("Base de datos no disponible");
-      const [monedas, paises, unidades, soluciones, detalles, tipos, plazos, docs, cecos, contactos] = await Promise.all([
+      const [
+        monedas, paises, empresas, doctos, unidades, soluciones, 
+        detalles, tipos, plazos, docs, cecos, deptos, areas, nombres
+      ] = await Promise.all([
         db.select().from(catalogMonedas).where(eq(catalogMonedas.activo, 1)),
         db.select().from(catalogPaises).where(eq(catalogPaises.activo, 1)),
+        db.select().from(catalogEmpresas).where(eq(catalogEmpresas.activo, 1)),
+        db.select().from(catalogDocumentoIdentidad).where(eq(catalogDocumentoIdentidad.activo, 1)),
         db.select().from(catalogUnidadesNegocio).where(eq(catalogUnidadesNegocio.activo, 1)),
         db.select().from(catalogSoluciones).where(eq(catalogSoluciones.activo, 1)),
         db.select().from(catalogDetalleServicio).where(eq(catalogDetalleServicio.activo, 1)),
@@ -446,21 +481,14 @@ export const appRouter = router({
         db.select().from(catalogPlazos).where(eq(catalogPlazos.activo, 1)),
         db.select().from(catalogDocumentos).where(eq(catalogDocumentos.activo, 1)),
         db.select().from(catalogCecos).where(eq(catalogCecos.activo, 1)),
-        db.select().from(catalogContactos).where(eq(catalogContactos.activo, 1)),
+        db.select().from(catalogDepartamentos).where(eq(catalogDepartamentos.activo, 1)),
+        db.select().from(catalogAreas).where(eq(catalogAreas.activo, 1)),
+        db.select().from(catalogNombres).where(eq(catalogNombres.activo, 1)),
       ]);
-      return { monedas, paises, unidades, soluciones, detalles, tipos, plazos, docs, cecos, contactos };
-    }),
-
-    cecosByEmpresa: protectedProcedure.query(async () => {
-      const db = await getDb();
-      if (!db) throw new Error("Base de datos no disponible");
-      const all = await db.select().from(catalogCecos).where(eq(catalogCecos.activo, 1));
-      const grouped: Record<string, typeof all> = {};
-      for (const c of all) {
-        if (!grouped[c.empresa]) grouped[c.empresa] = [];
-        grouped[c.empresa].push(c);
-      }
-      return grouped;
+      return { 
+        monedas, paises, empresas, doctos, unidades, soluciones, 
+        detalles, tipos, plazos, docs, cecos, deptos, areas, nombres 
+      };
     }),
 
     search: protectedProcedure
@@ -470,9 +498,9 @@ export const appRouter = router({
         if (!db) throw new Error("Base de datos no disponible");
         const q = `%${input.query}%`;
         const [cecos, soluciones, detalles] = await Promise.all([
-          db.select().from(catalogCecos).where(like(catalogCecos.nombreCompleto, q)),
-          db.select().from(catalogSoluciones).where(like(catalogSoluciones.nombre, q)),
-          db.select().from(catalogDetalleServicio).where(like(catalogDetalleServicio.nombre, q)),
+          db.select().from(catalogCecos).where(like(catalogCecos.valor, q)),
+          db.select().from(catalogSoluciones).where(like(catalogSoluciones.valor, q)),
+          db.select().from(catalogDetalleServicio).where(like(catalogDetalleServicio.valor, q)),
         ]);
         return { cecos, soluciones, detalles };
       }),

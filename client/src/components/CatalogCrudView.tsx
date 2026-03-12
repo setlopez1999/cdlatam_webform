@@ -6,7 +6,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { Search, Plus, Edit2, Trash2, ArrowUpDown } from "lucide-react";
+import { Search, Plus, Edit2, Trash2, ArrowUpDown, Power } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 import { CatalogConfig } from "../core/config/catalogConfig";
 import { toast } from "sonner";
 
@@ -15,12 +16,15 @@ export function CatalogCrudView({ config }: { config: CatalogConfig }) {
   const [modalOpen, setModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [formData, setFormData] = useState<Record<string, any>>({});
+  const [selectedIds, setSelectedIds] = useState<number[]>([]);
 
   // ─── Consultas a la API ──────────────────────────────
   const { data: records = [], isLoading, refetch } = trpc.catalogsDB.list.useQuery({ tableName: config.tableName });
   const createMutation = trpc.catalogsDB.create.useMutation();
   const updateMutation = trpc.catalogsDB.update.useMutation();
   const deleteMutation = trpc.catalogsDB.delete.useMutation();
+  const bulkUpdateMutation = trpc.catalogsDB.bulkUpdate.useMutation();
+  const bulkDeleteMutation = trpc.catalogsDB.bulkDelete.useMutation();
 
   // ─── Filtros de Tabla ────────────────────────────────
   const filteredRecords = useMemo(() => {
@@ -38,7 +42,7 @@ export function CatalogCrudView({ config }: { config: CatalogConfig }) {
   // ─── Manejadores de Modal ────────────────────────────
   const openNew = () => {
     setEditingId(null);
-    setFormData(config.fields.reduce((acc, f) => ({ ...acc, [f.key]: f.type === "boolean" ? true : "" }), {}));
+    setFormData(config.fields.reduce((acc, f) => ({ ...acc, [f.key]: f.type === "boolean" ? 1 : "" }), {}));
     setModalOpen(true);
   };
 
@@ -64,17 +68,31 @@ export function CatalogCrudView({ config }: { config: CatalogConfig }) {
     }
 
     try {
+      // Sanitizar el payload para SQLite (evitar bindings inválidos como booleanos o strings vacíos en IDs)
+      const payload = { ...formData };
+      if (!editingId && "id" in payload) {
+        delete payload.id; // Evitar enviar id vacío "" que rompe el autoIncrement
+      }
+
+      for (const field of config.fields) {
+        if (field.type === "boolean") {
+          payload[field.key] = payload[field.key] ? 1 : 0;
+        } else if (field.type === "number" && payload[field.key] === "") {
+          delete payload[field.key];
+        }
+      }
+
       if (editingId) {
         await updateMutation.mutateAsync({
           tableName: config.tableName,
           id: editingId,
-          data: formData
+          data: payload
         });
         toast.success("Registro actualizado exitosamente");
       } else {
         await createMutation.mutateAsync({
           tableName: config.tableName,
-          data: formData
+          data: payload
         });
         toast.success("Registro creado exitosamente");
       }
@@ -85,14 +103,64 @@ export function CatalogCrudView({ config }: { config: CatalogConfig }) {
     }
   };
 
+  const toggleStatus = async (record: any) => {
+    const isActivo = Boolean(record.activo);
+    const action = isActivo ? "desactivar" : "activar";
+    if (!confirm(`¿Seguro que deseas ${action} este registro?`)) return;
+    try {
+      await updateMutation.mutateAsync({
+        tableName: config.tableName,
+        id: record.id,
+        data: { activo: isActivo ? 0 : 1 }
+      });
+      toast.success(`Registro ${isActivo ? 'inactivado' : 'activado'}`);
+      refetch();
+    } catch (error: any) {
+      toast.error(`Error al ${action}: ` + error.message);
+    }
+  };
+
   const handleDelete = async (id: number) => {
-    if (!confirm("¿Seguro que deseas eliminar este registro? (Se marcará como inactivo)")) return;
+    if (!confirm("¿Seguro que deseas ELIMINAR permanentemente este registro? Esta acción no se puede deshacer.")) return;
     try {
       await deleteMutation.mutateAsync({ tableName: config.tableName, id });
       toast.success("Registro eliminado");
       refetch();
     } catch (error: any) {
       toast.error("Error eliminando: " + error.message);
+    }
+  };
+
+  const handleSelectAll = (checked: boolean) => {
+    if (checked) setSelectedIds(filteredRecords.map((r: any) => r.id));
+    else setSelectedIds([]);
+  };
+
+  const handleSelectOne = (id: number, checked: boolean) => {
+    if (checked) setSelectedIds([...selectedIds, id]);
+    else setSelectedIds(selectedIds.filter(x => x !== id));
+  };
+
+  const handleBulkAction = async (action: 'activar' | 'desactivar' | 'borrar') => {
+    if (!selectedIds.length) return;
+    const isDelete = action === 'borrar';
+    if (!confirm(`¿Seguro que deseas ${action} los ${selectedIds.length} registros seleccionados?${isDelete ? ' Esta acción no se puede deshacer.' : ''}`)) return;
+    
+    try {
+      if (isDelete) {
+        await bulkDeleteMutation.mutateAsync({ tableName: config.tableName, ids: selectedIds });
+      } else {
+        await bulkUpdateMutation.mutateAsync({
+          tableName: config.tableName,
+          ids: selectedIds,
+          data: { activo: action === 'activar' ? 1 : 0 }
+        });
+      }
+      toast.success(`${selectedIds.length} Registros ${action === 'borrar' ? 'eliminados' : (action === 'activar' ? 'activados' : 'inactivados')}`);
+      setSelectedIds([]);
+      refetch();
+    } catch (error: any) {
+      toast.error(`Error al ${action} masivamente: ` + error.message);
     }
   };
 
@@ -180,6 +248,26 @@ export function CatalogCrudView({ config }: { config: CatalogConfig }) {
         </Button>
       </div>
 
+      {/* Bulk Actions Header */}
+      {selectedIds.length > 0 && (
+        <div className="flex flex-col sm:flex-row gap-3 items-center justify-between bg-blue-500/10 border border-blue-500/20 p-3 rounded-xl animate-in fade-in slide-in-from-top-2">
+          <span className="text-sm font-medium text-blue-400">
+            {selectedIds.length} registro{selectedIds.length !== 1 ? 's' : ''} seleccionado{selectedIds.length !== 1 ? 's' : ''}
+          </span>
+          <div className="flex gap-2 w-full sm:w-auto">
+            <Button size="sm" variant="ghost" className="flex-1 sm:flex-none h-9 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10" onClick={() => handleBulkAction('activar')}>
+              <Power className="w-4 h-4 mr-1.5" /> Activar
+            </Button>
+            <Button size="sm" variant="ghost" className="flex-1 sm:flex-none h-9 text-orange-400 hover:text-orange-300 hover:bg-orange-500/10" onClick={() => handleBulkAction('desactivar')}>
+              <Power className="w-4 h-4 mr-1.5" /> Desactivar
+            </Button>
+            <Button size="sm" variant="ghost" className="flex-1 sm:flex-none h-9 text-red-400 hover:text-red-300 hover:bg-red-500/10" onClick={() => handleBulkAction('borrar')}>
+              <Trash2 className="w-4 h-4 mr-1.5" /> Eliminar
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* Table Data Wrapper */}
       <div className="bg-[#1a1f2e] border border-white/5 rounded-xl overflow-x-auto shadow-sm">
         {filteredRecords.length === 0 ? (
@@ -192,6 +280,14 @@ export function CatalogCrudView({ config }: { config: CatalogConfig }) {
           <table className="w-full text-sm text-left">
             <thead className="bg-[#242b3d] text-xs uppercase text-slate-400 border-b border-white/10">
               <tr>
+                <th className="px-5 py-3.5 w-12 text-center">
+                  <Checkbox 
+                    checked={filteredRecords.length > 0 && selectedIds.length === filteredRecords.length}
+                    onCheckedChange={handleSelectAll}
+                    aria-label="Seleccionar todos"
+                    className="border-white/30 data-[state=checked]:bg-blue-500 data-[state=checked]:border-blue-500"
+                  />
+                </th>
                 {displayFields.map((field) => (
                   <th key={field.key} className="px-5 py-3.5 font-semibold tracking-wider">
                     <div className="flex items-center gap-1.5 cursor-pointer hover:text-white transition-colors">
@@ -205,7 +301,15 @@ export function CatalogCrudView({ config }: { config: CatalogConfig }) {
             </thead>
             <tbody className="divide-y divide-white/5">
               {filteredRecords.map((record: any, idx: number) => (
-                <tr key={record.id} className="hover:bg-white/[0.02] transition-colors group">
+                <tr key={record.id} className={`hover:bg-white/[0.04] transition-colors group ${selectedIds.includes(record.id) ? 'bg-blue-500/[0.08]' : ''}`}>
+                  <td className="px-5 py-3 text-center">
+                    <Checkbox
+                      checked={selectedIds.includes(record.id)}
+                      onCheckedChange={(c) => handleSelectOne(record.id, Boolean(c))}
+                      aria-label={`Seleccionar fila ${idx}`}
+                      className="border-white/30 data-[state=checked]:bg-blue-500 data-[state=checked]:border-blue-500"
+                    />
+                  </td>
                   {displayFields.map((field) => (
                     <td key={field.key} className="px-5 py-3 whitespace-nowrap text-slate-300 font-medium">
                       {field.type === "boolean" ? (
@@ -220,7 +324,10 @@ export function CatalogCrudView({ config }: { config: CatalogConfig }) {
                       <Button variant="ghost" size="icon" onClick={() => openEdit(record)} className="h-8 w-8 text-blue-400 hover:text-blue-300 hover:bg-blue-500/10">
                         <Edit2 className="w-4 h-4" />
                       </Button>
-                      <Button variant="ghost" size="icon" onClick={() => handleDelete(record.id)} className="h-8 w-8 text-red-400 hover:text-red-300 hover:bg-red-500/10">
+                      <Button variant="ghost" size="icon" onClick={() => toggleStatus(record)} title={record.activo ? "Desactivar" : "Activar"} className={`h-8 w-8 ${record.activo ? 'text-orange-400 hover:text-orange-300 hover:bg-orange-500/10' : 'text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10'}`}>
+                        <Power className="w-4 h-4" />
+                      </Button>
+                      <Button variant="ghost" size="icon" onClick={() => handleDelete(record.id)} title="Eliminar permanentemente" className="h-8 w-8 text-red-500 hover:text-red-400 hover:bg-red-500/10">
                         <Trash2 className="w-4 h-4" />
                       </Button>
                     </div>

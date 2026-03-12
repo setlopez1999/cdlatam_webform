@@ -17,6 +17,7 @@ export const users = sqliteTable("users", {
   createdAt: integer("createdAt", { mode: "timestamp" }).default(sql`(strftime('%s', 'now'))`).notNull(),
   updatedAt: integer("updatedAt", { mode: "timestamp" }).default(sql`(strftime('%s', 'now'))`).notNull(),
   lastSignedIn: integer("lastSignedIn", { mode: "timestamp" }).default(sql`(strftime('%s', 'now'))`).notNull(),
+  activo: integer("activo").default(1).notNull(),
 });
 
 export type User = typeof users.$inferSelect;
@@ -208,72 +209,93 @@ export interface FilaOtros {
 
 export const catalogMonedas = sqliteTable("catalog_monedas", {
   id: integer("id").primaryKey({ autoIncrement: true }),
-  codigo: text("codigo").notNull().unique(),
-  nombre: text("nombre").notNull(),
+  valor: text("valor").notNull().unique(),
   activo: integer("activo").default(1).notNull(),
 });
 
 export const catalogPaises = sqliteTable("catalog_paises", {
   id: integer("id").primaryKey({ autoIncrement: true }),
-  nombre: text("nombre").notNull().unique(),
+  valor: text("valor").notNull().unique(),
+  activo: integer("activo").default(1).notNull(),
+});
+
+export const catalogEmpresas = sqliteTable("catalog_empresas", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  valor: text("valor").notNull().unique(),
+  activo: integer("activo").default(1).notNull(),
+});
+
+export const catalogDocumentoIdentidad = sqliteTable("catalog_documento_identidad", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  valor: text("valor").notNull().unique(),
   activo: integer("activo").default(1).notNull(),
 });
 
 export const catalogUnidadesNegocio = sqliteTable("catalog_unidades_negocio", {
   id: integer("id").primaryKey({ autoIncrement: true }),
-  nombre: text("nombre").notNull().unique(),
+  valor: text("valor").notNull().unique(),
   activo: integer("activo").default(1).notNull(),
 });
 
 export const catalogSoluciones = sqliteTable("catalog_soluciones", {
   id: integer("id").primaryKey({ autoIncrement: true }),
-  nombre: text("nombre").notNull().unique(),
+  valor: text("valor").notNull().unique(),
   activo: integer("activo").default(1).notNull(),
 });
 
 export const catalogDetalleServicio = sqliteTable("catalog_detalle_servicio", {
   id: integer("id").primaryKey({ autoIncrement: true }),
-  nombre: text("nombre").notNull().unique(),
+  valor: text("valor").notNull().unique(),
   activo: integer("activo").default(1).notNull(),
 });
 
 export const catalogTipoVenta = sqliteTable("catalog_tipo_venta", {
   id: integer("id").primaryKey({ autoIncrement: true }),
-  nombre: text("nombre").notNull().unique(),
+  valor: text("valor").notNull().unique(),
   activo: integer("activo").default(1).notNull(),
 });
 
 export const catalogPlazos = sqliteTable("catalog_plazos", {
   id: integer("id").primaryKey({ autoIncrement: true }),
-  nombre: text("nombre").notNull().unique(),
+  valor: text("valor").notNull().unique(),
   activo: integer("activo").default(1).notNull(),
 });
 
 export const catalogDocumentos = sqliteTable("catalog_documentos", {
   id: integer("id").primaryKey({ autoIncrement: true }),
-  nombre: text("nombre").notNull().unique(),
+  valor: text("valor").notNull().unique(),
   activo: integer("activo").default(1).notNull(),
 });
 
 export const catalogCecos = sqliteTable("catalog_cecos", {
   id: integer("id").primaryKey({ autoIncrement: true }),
-  codigo: text("codigo").notNull().unique(),
-  empresa: text("empresa").notNull(),
-  departamento: text("departamento").notNull(),
-  nombreCompleto: text("nombreCompleto").notNull(),
+  valor: text("valor").notNull().unique(),
   activo: integer("activo").default(1).notNull(),
 });
 
-export const catalogContactos = sqliteTable("catalog_contactos", {
+export const catalogDepartamentos = sqliteTable("catalog_departamentos", {
   id: integer("id").primaryKey({ autoIncrement: true }),
-  nombre: text("nombre").notNull(),
-  empresa: text("empresa"),
+  valor: text("valor").notNull().unique(),
+  activo: integer("activo").default(1).notNull(),
+});
+
+export const catalogAreas = sqliteTable("catalog_areas", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  valor: text("valor").notNull().unique(),
+  activo: integer("activo").default(1).notNull(),
+});
+
+export const catalogNombres = sqliteTable("catalog_nombres", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  valor: text("valor").notNull(),
   activo: integer("activo").default(1).notNull(),
 });
 
 // Tipos de catálogo
 export type CatalogMoneda = typeof catalogMonedas.$inferSelect;
 export type CatalogPais = typeof catalogPaises.$inferSelect;
+export type CatalogEmpresa = typeof catalogEmpresas.$inferSelect;
+export type CatalogDocumentoIdentidad = typeof catalogDocumentoIdentidad.$inferSelect;
 export type CatalogUnidadNegocio = typeof catalogUnidadesNegocio.$inferSelect;
 export type CatalogSolucion = typeof catalogSoluciones.$inferSelect;
 export type CatalogDetalleServicio = typeof catalogDetalleServicio.$inferSelect;
@@ -281,4 +303,6 @@ export type CatalogTipoVenta = typeof catalogTipoVenta.$inferSelect;
 export type CatalogPlazo = typeof catalogPlazos.$inferSelect;
 export type CatalogDocumento = typeof catalogDocumentos.$inferSelect;
 export type CatalogCeco = typeof catalogCecos.$inferSelect;
-export type CatalogContacto = typeof catalogContactos.$inferSelect;
+export type CatalogDepartamento = typeof catalogDepartamentos.$inferSelect;
+export type CatalogArea = typeof catalogAreas.$inferSelect;
+export type CatalogNombre = typeof catalogNombres.$inferSelect;

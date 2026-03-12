@@ -27,9 +27,8 @@ export const catalogConfigs: Record<string, CatalogConfig> = {
     color: "text-yellow-400",
     bgColor: "bg-yellow-500/10",
     fields: [
-      { key: "codigo", label: "Código", type: "text", required: true },
-      { key: "nombre", label: "Nombre Corto", type: "text", required: true },
-      { key: "activo", label: "Activo", type: "boolean", hiddenInTable: true },
+      { key: "valor", label: "Valor", type: "text", required: true },
+      { key: "activo", label: "Activo", type: "boolean",  },
     ],
   },
   paises: {
@@ -38,8 +37,28 @@ export const catalogConfigs: Record<string, CatalogConfig> = {
     color: "text-cyan-400",
     bgColor: "bg-cyan-500/10",
     fields: [
-      { key: "nombre", label: "Nombre", type: "text", required: true },
-      { key: "activo", label: "Activo", type: "boolean", hiddenInTable: true },
+      { key: "valor", label: "Valor", type: "text", required: true },
+      { key: "activo", label: "Activo", type: "boolean",  },
+    ],
+  },
+  empresas: {
+    tableName: "empresas",
+    title: "Empresas",
+    color: "text-blue-400",
+    bgColor: "bg-blue-500/10",
+    fields: [
+      { key: "valor", label: "Valor", type: "text", required: true },
+      { key: "activo", label: "Activo", type: "boolean",  },
+    ],
+  },
+  doctos: {
+    tableName: "doctos",
+    title: "Documento de Identidad",
+    color: "text-slate-400",
+    bgColor: "bg-slate-500/10",
+    fields: [
+      { key: "valor", label: "Valor", type: "text", required: true },
+      { key: "activo", label: "Activo", type: "boolean",  },
     ],
   },
   unidades: {
@@ -48,8 +67,8 @@ export const catalogConfigs: Record<string, CatalogConfig> = {
     color: "text-orange-400",
     bgColor: "bg-orange-500/10",
     fields: [
-      { key: "nombre", label: "Nombre", type: "text", required: true },
-      { key: "activo", label: "Activo", type: "boolean", hiddenInTable: true },
+      { key: "valor", label: "Valor", type: "text", required: true },
+      { key: "activo", label: "Activo", type: "boolean",  },
     ],
   },
   soluciones: {
@@ -58,8 +77,8 @@ export const catalogConfigs: Record<string, CatalogConfig> = {
     color: "text-emerald-400",
     bgColor: "bg-emerald-500/10",
     fields: [
-      { key: "nombre", label: "Nombre", type: "text", required: true },
-      { key: "activo", label: "Activo", type: "boolean", hiddenInTable: true },
+      { key: "valor", label: "Valor", type: "text", required: true },
+      { key: "activo", label: "Activo", type: "boolean",  },
     ],
   },
   detalle: {
@@ -68,8 +87,8 @@ export const catalogConfigs: Record<string, CatalogConfig> = {
     color: "text-pink-400",
     bgColor: "bg-pink-500/10",
     fields: [
-      { key: "nombre", label: "Nombre", type: "text", required: true },
-      { key: "activo", label: "Activo", type: "boolean", hiddenInTable: true },
+      { key: "valor", label: "Valor", type: "text", required: true },
+      { key: "activo", label: "Activo", type: "boolean",  },
     ],
   },
   tipos: {
@@ -78,54 +97,59 @@ export const catalogConfigs: Record<string, CatalogConfig> = {
     color: "text-red-400",
     bgColor: "bg-red-500/10",
     fields: [
-      { key: "nombre", label: "Nombre", type: "text", required: true },
-      { key: "activo", label: "Activo", type: "boolean", hiddenInTable: true },
+      { key: "valor", label: "Valor", type: "text", required: true },
+      { key: "activo", label: "Activo", type: "boolean",  },
     ],
   },
   plazos: {
     tableName: "plazos",
-    title: "Plazos Habilitados",
+    title: "Plazos",
     color: "text-teal-400",
     bgColor: "bg-teal-500/10",
     fields: [
-      { key: "nombre", label: "Nombre de Plazo", type: "text", required: true },
-      { key: "activo", label: "Activo", type: "boolean", hiddenInTable: true },
+      { key: "valor", label: "Valor", type: "text", required: true },
+      { key: "activo", label: "Activo", type: "boolean",  },
     ],
   },
-  documentos: {
-    tableName: "documentos",
-    title: "Documentos",
-    color: "text-indigo-400",
-    bgColor: "bg-indigo-500/10",
-    fields: [
-      { key: "nombre", label: "Nombre de Documento", type: "text", required: true },
-      { key: "activo", label: "Activo", type: "boolean", hiddenInTable: true },
-    ],
-  },
-  // CECOs y Contactos tienen columnas particulares
   cecos: {
     tableName: "cecos",
     title: "CECOs",
-    description: "Centros de Costo de cada empresa",
+    description: "Centros de Costo",
     color: "text-blue-400",
     bgColor: "bg-blue-500/10",
     fields: [
-      { key: "codigo", label: "Código CECO", type: "text", required: true },
-      { key: "empresa", label: "Empresa", type: "text", required: true },
-      { key: "departamento", label: "Departamento", type: "text", required: true },
-      { key: "nombreCompleto", label: "Nombre Completo", type: "text", required: true },
-      { key: "activo", label: "Activo", type: "boolean", hiddenInTable: true },
+      { key: "valor", label: "Valor", type: "text", required: true },
+      { key: "activo", label: "Activo", type: "boolean",  },
     ],
   },
-  contactos: {
-    tableName: "contactos",
-    title: "Contactos Recurrentes",
+  deptos: {
+    tableName: "deptos",
+    title: "Departamentos",
+    color: "text-indigo-400",
+    bgColor: "bg-indigo-500/10",
+    fields: [
+      { key: "valor", label: "Valor", type: "text", required: true },
+      { key: "activo", label: "Activo", type: "boolean",  },
+    ],
+  },
+  areas: {
+    tableName: "areas",
+    title: "Áreas",
+    color: "text-fuchsia-400",
+    bgColor: "bg-fuchsia-500/10",
+    fields: [
+      { key: "valor", label: "Valor", type: "text", required: true },
+      { key: "activo", label: "Activo", type: "boolean",  },
+    ],
+  },
+  nombres: {
+    tableName: "nombres",
+    title: "Nombres",
     color: "text-rose-400",
     bgColor: "bg-rose-500/10",
     fields: [
-      { key: "nombre", label: "Nombre Completo", type: "text", required: true },
-      { key: "empresa", label: "Empresa Relacionada", type: "text", required: false },
-      { key: "activo", label: "Activo", type: "boolean", hiddenInTable: true },
+      { key: "valor", label: "Valor", type: "text", required: true },
+      { key: "activo", label: "Activo", type: "boolean",  },
     ],
   },
 };
