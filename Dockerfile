@@ -14,8 +14,9 @@ COPY package*.json ./
 # instalamos dependencias
 RUN npm install --legacy-peer-deps
 
-# copiamos la carpeta drizzle con las migraciones
+# copiamos la carpeta drizzle y el config (IMPORTANTE para que npx drizzle trabaje)
 COPY drizzle ./drizzle 
+COPY drizzle.config.ts ./
 
 # copiamos la carpeta compilada
 COPY --from=builder /app/dist ./dist 

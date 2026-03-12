@@ -1,4 +1,5 @@
 version: '3.8'
+
 services:
   web:
     build: .
@@ -9,6 +10,7 @@ services:
       - NODE_ENV=production
       - JWT_SECRET="mi_clave_secreta_jijijaja_escubitrakatelas_cdlatam_123!"
       - DATABASE_URL="file:/app/data/gestion.db"
+
   nginx:
     image: nginx:latest
     container_name: webserver_nginx_3002
