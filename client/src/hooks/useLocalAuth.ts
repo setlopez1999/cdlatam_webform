@@ -16,7 +16,7 @@
  */
 
 import { useEffect, useCallback } from "react";
-import { trpc } from "@/core/services/trpc";
+import { trpc } from "@/lib/trpc";
 import { useAuthStore } from "./useAuthStore";
 
 export interface AuthUser {

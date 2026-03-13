@@ -1,6 +1,5 @@
 import type { CreateExpressContextOptions } from "@trpc/server/adapters/express";
 import type { User } from "../../drizzle/schema";
-import { sdk } from "./sdk";
 import { verifyLocalJWT, findLocalUserById, LOCAL_AUTH_COOKIE, type LocalAuthPayload } from "../localAuth";
 
 export type TrpcContext = {
@@ -48,15 +47,6 @@ export async function createContext(
           activo: 1,
         };
       }
-    }
-  }
-
-  // 2. Si no hay sesión local, intentar OAuth de Manus (compatibilidad)
-  if (!user) {
-    try {
-      user = await sdk.authenticateRequest(opts.req);
-    } catch {
-      user = null;
     }
   }
 

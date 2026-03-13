@@ -24,7 +24,7 @@ import { Link } from "wouter";
 import { loadActasList, loadEPList, deleteActa, deleteEP } from "@/hooks/useFormStore";
 import { formatCurrency, formatDate, getStatusColor, getStatusLabel } from "@/lib/formatters";
 import { CatalogCrudView } from "@/components/CatalogCrudView";
-import { catalogConfigs } from "@/core/config/catalogConfig";
+import { catalogConfigs } from "@/config/catalogConfig";
 
 // ─── Tipos ───────────────────────────────────────────────────────────────────
 

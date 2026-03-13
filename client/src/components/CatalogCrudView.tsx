@@ -8,7 +8,7 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Search, Plus, Edit2, Trash2, ArrowUpDown, Power } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
-import { CatalogConfig } from "../core/config/catalogConfig";
+import { CatalogConfig } from "@/config/catalogConfig";
 import { toast } from "sonner";
 
 export function CatalogCrudView({ config }: { config: CatalogConfig }) {
