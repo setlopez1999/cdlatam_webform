@@ -9,6 +9,7 @@ import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import { seedDefaultUsers, registerLocalAuthRoutes } from "../localAuth";
 import { runMigrations } from "../db";
+import { registerDbManagementRoutes } from "./dbManagement";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -35,18 +36,22 @@ async function startServer() {
   // Configure body parser with larger size limit for file uploads
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
-  
+
   // Run DB migrations
   await runMigrations();
 
   // Seed default users (admin/1234 and usuario/5678)
   await seedDefaultUsers().catch(err => console.error("[Seed] Failed:", err));
-  
+
   // Custom REST auth routes
   registerLocalAuthRoutes(app);
 
   // OAuth callback under /api/oauth/callback
-  registerOAuthRoutes(app);
+  // español
+  //registerOAuthRoutes(app);
+
+  // DB Management Routes (Export/Import)
+  registerDbManagementRoutes(app);
   // tRPC API
   app.use(
     "/api/trpc",

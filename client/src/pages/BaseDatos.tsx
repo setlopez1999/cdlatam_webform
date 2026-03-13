@@ -13,6 +13,7 @@ import {
   BarChart3, TrendingUp,
   ChevronDown, ChevronUp, X, FileText as FileTextIcon,
   ClipboardList, RefreshCw, Filter, Eye, Trash2,
+  Download, Upload, Settings2
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -387,6 +388,7 @@ function EPView() {
 
 export default function BaseDatos() {
   const [activeTab, setActiveTab] = useState<TabId>("resumen");
+  const [showAdminDb, setShowAdminDb] = useState(false);
   const { data: rawData, isLoading, error } = trpc.catalogsDB.summary.useQuery();
   const data = rawData as SummaryData | undefined;
 
@@ -495,6 +497,84 @@ export default function BaseDatos() {
             {activeTab === "ep" && <EPView />}
           </>
         )}
+      </div>
+
+      {/* Admin DB Management (Hidden Trigger) */}
+      <div className="fixed bottom-4 right-4 z-50 flex flex-col items-end gap-2">
+        {showAdminDb && (
+          <div className="flex flex-col gap-2 bg-[#1a1f2e] border border-white/10 p-2 rounded-xl shadow-2xl animate-in fade-in slide-in-from-bottom-2">
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="h-9 border-white/5 bg-white/5 text-slate-300 hover:text-white"
+              onClick={() => {
+                window.location.href = "/api/db/export";
+                toast.success("Iniciando descarga de base de datos...");
+              }}
+            >
+              <Download className="w-4 h-4 mr-2" />
+              Exportar BD
+            </Button>
+            
+            <div className="relative">
+              <input
+                type="file"
+                className="absolute inset-0 opacity-0 cursor-pointer"
+                accept=".db"
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  
+                  if (!confirm("¿Estás seguro de que deseas sobrescribir la base de datos actual? Esta acción no se puede deshacer.")) return;
+                  
+                  const toastId = toast.loading("Importando base de datos...");
+                  try {
+                    const response = await fetch("/api/db/import", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/octet-stream" },
+                      body: await file.arrayBuffer(),
+                    });
+                    
+                    if (response.ok) {
+                      toast.success("Base de datos importada con éxito. Recargando...", { id: toastId });
+                      setTimeout(() => window.location.reload(), 1500);
+                    } else {
+                      toast.error("Error al importar la base de datos.", { id: toastId });
+                    }
+                  } catch (err) {
+                    console.error(err);
+                    toast.error("Error de conexión al importar.", { id: toastId });
+                  }
+                }}
+              />
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="h-9 border-white/5 bg-white/5 text-slate-300 hover:text-white w-full"
+              >
+                <Upload className="w-4 h-4 mr-2" />
+                Importar BD
+              </Button>
+            </div>
+            
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              className="h-6 w-6 self-end text-slate-500 hover:text-white"
+              onClick={() => setShowAdminDb(false)}
+            >
+              <X className="w-3 h-3" />
+            </Button>
+          </div>
+        )}
+        
+        <button 
+          onClick={() => setShowAdminDb(!showAdminDb)}
+          className="w-4 h-4 rounded-full bg-white/5 hover:bg-white/10 transition-colors flex items-center justify-center opacity-20 hover:opacity-100"
+          title="Admin DB"
+        >
+          <Settings2 className="w-2.5 h-2.5 text-slate-500" />
+        </button>
       </div>
     </div>
   );
