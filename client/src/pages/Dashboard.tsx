@@ -86,7 +86,7 @@ export default function Dashboard() {
             <div className="flex items-center justify-between px-4 py-3 border-b border-border">
               <h2 className="text-sm font-medium text-foreground">Últimas Actas</h2>
               <Button variant="ghost" size="sm" className="h-7 text-xs" asChild>
-                <Link href="/acta">Ver todo <ArrowRight className="w-3 h-3 ml-1" /></Link>
+                <Link href="/historial">Ver todo <ArrowRight className="w-3 h-3 ml-1" /></Link>
               </Button>
             </div>
             {recentActas.length === 0 ? (
@@ -122,7 +122,7 @@ export default function Dashboard() {
             <div className="flex items-center justify-between px-4 py-3 border-b border-border">
               <h2 className="text-sm font-medium text-foreground">Últimas Evaluaciones EP</h2>
               <Button variant="ghost" size="sm" className="h-7 text-xs" asChild>
-                <Link href="/ep">Ver todo <ArrowRight className="w-3 h-3 ml-1" /></Link>
+                <Link href="/historial">Ver todo <ArrowRight className="w-3 h-3 ml-1" /></Link>
               </Button>
             </div>
             {recentEP.length === 0 ? (
@@ -196,7 +196,7 @@ export default function Dashboard() {
 
           {/* Tarjeta 3: Historial */}
           <div
-            onClick={() => navigate("/acta")}
+            onClick={() => navigate("/historial")}
             className="group p-5 rounded-xl border border-border bg-card hover:border-primary/50 hover:shadow-md transition-all cursor-pointer"
           >
             <div className="flex items-center gap-4">

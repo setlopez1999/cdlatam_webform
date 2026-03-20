@@ -1,40 +1,33 @@
 import { z } from "zod";
-import { eq, like } from "drizzle-orm";
 import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
 
-// 1. IMPORTACIONES CORREGIDAS (DB y LocalAuth)
+// 1. IMPORTACIONES (actas/evaluaciones/búsqueda — siempre SQLite)
 import {
   getActasByUserId, getActaById, createActa, updateActa, deleteActa,
   getEvaluacionesByUserId, getEvaluacionById, createEvaluacion, updateEvaluacion, deleteEvaluacion,
   searchRegistros,
-  getDb,
-  // Estas funciones deben existir en server/db.ts
-  getLocalUsers,
-  createLocalUser,
   findLocalUserByUsername,
-  toggleLocalUserStatus,
-  // Funciones genéricas del CRUD de Catálogos
-  getCatalogList, createCatalogRecord, updateCatalogRecord,
-  deleteCatalogRecord,
-  bulkUpdateCatalogRecords,
-  bulkDeleteCatalogRecords,
-  // Necesitaremos estas funciones de cifrado desde localAuth
 } from "./db";
 
+// dataSource — abstracción SQLite / API externa (controlado por USE_API en .env)
 import {
-  catalogMonedas, catalogPaises, catalogEmpresas, catalogDocumentoIdentidad, 
-  catalogUnidadesNegocio, catalogSoluciones, catalogDetalleServicio, 
-  catalogTipoVenta, catalogPlazos, catalogDocumentos, catalogCecos, 
-  catalogDepartamentos, catalogAreas, catalogNombres
-} from "../drizzle/schema";
-
-import {
-  MONEDAS, PAISES, UNIDADES_NEGOCIO, SOLUCIONES, DETALLE_SERVICIO,
-  TIPO_VENTA, PLAZOS, DOCUMENTO_IDENTIDAD, CECOS, EMPRESAS_REFERENCIA, NOMBRES_REFERENCIA, MESES,
-} from "../shared/catalogs";
+  ds_getCatalogOptions,
+  ds_getCatalogSummary,
+  ds_searchCatalogs,
+  ds_getCatalogList,
+  ds_createCatalogRecord,
+  ds_updateCatalogRecord,
+  ds_deleteCatalogRecord,
+  ds_bulkUpdateCatalogRecords,
+  ds_bulkDeleteCatalogRecords,
+  ds_getLocalUsers,
+  ds_findLocalUserByUsername,
+  ds_createLocalUser,
+  ds_toggleLocalUserStatus,
+} from "./dataSource";
 
 // 2. IMPORTACIONES DE LOCALAUTH (Solo para cifrado/tokens, NO BD)
 import {
@@ -43,12 +36,8 @@ import {
 } from "./localAuth";
 import { getSessionCookieOptions as getCookieOpts } from "./_core/cookies";
 
-// 3. IMPORTAR ESQUEMAS DE DRIZZLE
-//import { insertLocalUserSchema } from "../../drizzle/schema";
-
 // ─── Zod Schemas ──────────────────────────────────────────────────────────────
 
-// Zod schemas para los campos JSON de la BD
 const ServicioContratadoSchema = z.object({
   item: z.number(),
   unidadNegocio: z.string(),
@@ -117,11 +106,10 @@ const FilaOtrosSchema = z.object({
   mes: z.union([z.literal(1), z.literal(2), z.literal(3)]),
 });
 
-// Zod schemas para los formularios (entrada de datos)
 const ActaInputSchema = z.object({
   noActa: z.string().optional(),
   atencion: z.string().optional(),
-  fecha: z.string().optional(), // Recibimos string del input date, luego lo convertimos a Date
+  fecha: z.string().optional(),
   razonSocial: z.string().optional(),
   nombreFantasia: z.string().optional(),
   rucDniRut: z.string().optional(),
@@ -171,7 +159,6 @@ const EvaluacionInputSchema = z.object({
   totalGastos: z.number().optional(),
   status: z.enum(["borrador", "completado", "exportado"]).optional(),
 });
-// ─── Router ───────────────────────────────────────────────────────────────────
 
 // ─── Router ───────────────────────────────────────────────────────────────────
 export const appRouter = router({
@@ -186,7 +173,7 @@ export const appRouter = router({
     }),
   }),
 
-  // ─── Autenticación Local (username/password) ──────────────────────────────────
+  // ─── Autenticación Local ──────────────────────────────────────────────────
   localAuth: router({
     login: publicProcedure
       .input(z.object({
@@ -194,8 +181,7 @@ export const appRouter = router({
         password: z.string().min(1),
       }))
       .mutation(async ({ ctx, input }) => {
-        // --- MODIFICADO: Uso de db.ts ---
-        const user = await findLocalUserByUsername(input.username);
+        const user = await ds_findLocalUserByUsername(input.username);
         if (!user || user.isActive !== 1) {
           throw new Error("Usuario o contraseña incorrectos");
         }
@@ -212,7 +198,7 @@ export const appRouter = router({
         const cookieOpts = getCookieOpts(ctx.req);
         ctx.res.cookie(LOCAL_AUTH_COOKIE, token, {
           ...cookieOpts,
-          maxAge: 8 * 60 * 60 * 1000, // 8 horas
+          maxAge: 8 * 60 * 60 * 1000,
         });
         return {
           success: true,
@@ -235,15 +221,13 @@ export const appRouter = router({
       return ctx.localUser ?? null;
     }),
 
-    // --- MODIFICADO: Uso de db.ts ---
     listUsers: protectedProcedure.query(async ({ ctx }) => {
       if (ctx.user?.role !== "admin") {
         throw new Error("Acceso denegado: se requiere rol admin");
       }
-      return await getLocalUsers();
+      return await ds_getLocalUsers();
     }),
 
-    // --- MODIFICADO: Uso de db.ts ---
     createUser: protectedProcedure
       .input(z.object({
         username: z.string().min(3).max(64),
@@ -255,17 +239,16 @@ export const appRouter = router({
         if (ctx.user?.role !== "admin") {
           throw new Error("Acceso denegado: se requiere rol admin");
         }
-        const existing = await findLocalUserByUsername(input.username);
+        const existing = await ds_findLocalUserByUsername(input.username);
         if (existing) throw new Error("El nombre de usuario ya existe");
 
         const passwordHash = await hashPassword(input.password);
 
-        await createLocalUser({
+        await ds_createLocalUser({
           username: input.username,
           passwordHash,
-          displayName: input.displayName ?? input.username,
+          displayName: input.displayName,
           role: input.role,
-          isActive: 1,
         });
         return { success: true };
       }),
@@ -279,30 +262,19 @@ export const appRouter = router({
         if (ctx.user?.role !== "admin") {
           throw new Error("Acceso denegado: se requiere rol admin");
         }
-        await toggleLocalUserStatus(input.id, input.isActive);
+        await ds_toggleLocalUserStatus(input.id, input.isActive);
         return { success: true };
       }),
   }),
 
-  // ─── Catálogos (se mantienen iguales) ──────────────────────────────────
+  // ─── Catálogos — opciones para comboboxes (fuente controlada por USE_API) ──
   catalogs: router({
-    getAll: publicProcedure.query(() => ({
-      monedas: MONEDAS,
-      paises: PAISES,
-      unidadesNegocio: UNIDADES_NEGOCIO,
-      soluciones: SOLUCIONES,
-      detalleServicio: DETALLE_SERVICIO,
-      tipoVenta: TIPO_VENTA,
-      plazos: PLAZOS,
-      documentoIdentidad: DOCUMENTO_IDENTIDAD,
-      cecos: CECOS,
-      empresas: EMPRESAS_REFERENCIA,
-      nombres: NOMBRES_REFERENCIA,
-      meses: MESES,
-    })),
+    getAll: publicProcedure.query(async () => {
+      return ds_getCatalogOptions();
+    }),
   }),
 
-  // ─── Actas (Se mantienen igual) ──────────────────────────────────────────────────
+  // ─── Actas (siempre SQLite) ───────────────────────────────────────────────
   actas: router({
     list: protectedProcedure.query(async ({ ctx }) => {
       return getActasByUserId(ctx.user.id);
@@ -350,7 +322,7 @@ export const appRouter = router({
       }),
   }),
 
-  // ─── Evaluaciones de Proyecto (Se mantienen igual) ──────────────────────────────
+  // ─── Evaluaciones (siempre SQLite) ───────────────────────────────────────
   evaluaciones: router({
     list: protectedProcedure.query(async ({ ctx }) => {
       return getEvaluacionesByUserId(ctx.user.id);
@@ -414,7 +386,7 @@ export const appRouter = router({
       }),
   }),
 
-  // ─── Búsqueda global ──────────────────────────────────────────────────────
+  // ─── Búsqueda global (siempre SQLite) ────────────────────────────────────
   search: router({
     global: protectedProcedure
       .input(z.object({ query: z.string().min(1) }))
@@ -423,90 +395,56 @@ export const appRouter = router({
       }),
   }),
 
-  // ─── Catálogos desde Base de Datos (SQLite) ──────────────────────────────────
+  // ─── Catálogos CRUD (fuente controlada por USE_API) ──────────────────────
   catalogsDB: router({
-    // --- NUEVOS ENDPOINTS GENÉRICOS DE CRUD ---
     list: protectedProcedure
       .input(z.object({ tableName: z.string() }))
       .query(async ({ input }) => {
-        return await getCatalogList(input.tableName);
+        return await ds_getCatalogList(input.tableName);
       }),
 
     create: protectedProcedure
       .input(z.object({ tableName: z.string(), data: z.any() }))
       .mutation(async ({ input }) => {
-        return await createCatalogRecord(input.tableName, input.data);
+        return await ds_createCatalogRecord(input.tableName, input.data);
       }),
 
     update: protectedProcedure
       .input(z.object({ tableName: z.string(), id: z.number(), data: z.any() }))
       .mutation(async ({ input }) => {
-        return await updateCatalogRecord(input.tableName, input.id, input.data);
+        return await ds_updateCatalogRecord(input.tableName, input.id, input.data);
       }),
 
     delete: protectedProcedure
       .input(z.object({ tableName: z.string(), id: z.number() }))
       .mutation(async ({ input }) => {
-        return await deleteCatalogRecord(input.tableName, input.id);
+        return await ds_deleteCatalogRecord(input.tableName, input.id);
       }),
 
     bulkUpdate: protectedProcedure
       .input(z.object({ tableName: z.string(), ids: z.array(z.number()), data: z.any() }))
       .mutation(async ({ input }) => {
-        return await bulkUpdateCatalogRecords(input.tableName, input.ids, input.data);
+        return await ds_bulkUpdateCatalogRecords(input.tableName, input.ids, input.data);
       }),
 
     bulkDelete: protectedProcedure
       .input(z.object({ tableName: z.string(), ids: z.array(z.number()) }))
       .mutation(async ({ input }) => {
-        return await bulkDeleteCatalogRecords(input.tableName, input.ids);
+        return await ds_bulkDeleteCatalogRecords(input.tableName, input.ids);
       }),
-    // ------------------------------------------
 
     summary: protectedProcedure.query(async () => {
-      const db = await getDb();
-      if (!db) throw new Error("Base de datos no disponible");
-      const [
-        monedas, paises, empresas, doctos, unidades, soluciones, 
-        detalles, tipos, plazos, docs, cecos, deptos, areas, nombres
-      ] = await Promise.all([
-        db.select().from(catalogMonedas).where(eq(catalogMonedas.activo, 1)),
-        db.select().from(catalogPaises).where(eq(catalogPaises.activo, 1)),
-        db.select().from(catalogEmpresas).where(eq(catalogEmpresas.activo, 1)),
-        db.select().from(catalogDocumentoIdentidad).where(eq(catalogDocumentoIdentidad.activo, 1)),
-        db.select().from(catalogUnidadesNegocio).where(eq(catalogUnidadesNegocio.activo, 1)),
-        db.select().from(catalogSoluciones).where(eq(catalogSoluciones.activo, 1)),
-        db.select().from(catalogDetalleServicio).where(eq(catalogDetalleServicio.activo, 1)),
-        db.select().from(catalogTipoVenta).where(eq(catalogTipoVenta.activo, 1)),
-        db.select().from(catalogPlazos).where(eq(catalogPlazos.activo, 1)),
-        db.select().from(catalogDocumentos).where(eq(catalogDocumentos.activo, 1)),
-        db.select().from(catalogCecos).where(eq(catalogCecos.activo, 1)),
-        db.select().from(catalogDepartamentos).where(eq(catalogDepartamentos.activo, 1)),
-        db.select().from(catalogAreas).where(eq(catalogAreas.activo, 1)),
-        db.select().from(catalogNombres).where(eq(catalogNombres.activo, 1)),
-      ]);
-      return { 
-        monedas, paises, empresas, doctos, unidades, soluciones, 
-        detalles, tipos, plazos, docs, cecos, deptos, areas, nombres 
-      };
+      return ds_getCatalogSummary();
     }),
 
     search: protectedProcedure
       .input(z.object({ query: z.string(), catalog: z.string().optional() }))
       .query(async ({ input }) => {
-        const db = await getDb();
-        if (!db) throw new Error("Base de datos no disponible");
-        const q = `%${input.query}%`;
-        const [cecos, soluciones, detalles] = await Promise.all([
-          db.select().from(catalogCecos).where(like(catalogCecos.valor, q)),
-          db.select().from(catalogSoluciones).where(like(catalogSoluciones.valor, q)),
-          db.select().from(catalogDetalleServicio).where(like(catalogDetalleServicio.valor, q)),
-        ]);
-        return { cecos, soluciones, detalles };
+        return ds_searchCatalogs(input.query);
       }),
   }),
 
-  // ─── Dashboard Stats (Se mantienen igual) ───────────────────────────────────────
+  // ─── Dashboard Stats (siempre SQLite) ────────────────────────────────────
   dashboard: router({
     stats: protectedProcedure.query(async ({ ctx }) => {
       const [userActas, userEvaluaciones] = await Promise.all([

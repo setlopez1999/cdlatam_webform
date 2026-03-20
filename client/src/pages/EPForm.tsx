@@ -226,7 +226,7 @@ export default function EPForm() {
             <Select value={ep.unidadNegocios} onValueChange={v => updateEP({ unidadNegocios: v })}>
               <SelectTrigger><SelectValue placeholder="Seleccionar..." /></SelectTrigger>
               <SelectContent position="popper" sideOffset={4} className="z-[200]">
-                {catalogs?.unidadesNegocio.map(u => (
+                {catalogs?.unidadesNegocio.map((u: { value: string; label: string }) => (
                   <SelectItem key={u.value} value={u.value}>{u.label}</SelectItem>
                 ))}
               </SelectContent>
@@ -236,7 +236,7 @@ export default function EPForm() {
             <Select value={ep.empresa} onValueChange={v => updateEP({ empresa: v })}>
               <SelectTrigger><SelectValue placeholder="Seleccionar empresa..." /></SelectTrigger>
               <SelectContent position="popper" sideOffset={4} className="z-[200]">
-                {catalogs?.empresas.map(e => (
+                {catalogs?.empresas.map((e: { value: string; label: string }) => (
                   <SelectItem key={e.value} value={e.value}>{e.label}</SelectItem>
                 ))}
               </SelectContent>
@@ -246,7 +246,7 @@ export default function EPForm() {
             <Select value={ep.solucion} onValueChange={v => updateEP({ solucion: v })}>
               <SelectTrigger><SelectValue placeholder="Seleccionar..." /></SelectTrigger>
               <SelectContent position="popper" sideOffset={4} className="z-[200]">
-                {catalogs?.soluciones.map(s => (
+                {catalogs?.soluciones.map((s: { value: string; label: string }) => (
                   <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
                 ))}
               </SelectContent>
@@ -277,7 +277,7 @@ export default function EPForm() {
             <Select value={ep.tipoMoneda} onValueChange={v => updateEP({ tipoMoneda: v })}>
               <SelectTrigger><SelectValue placeholder="Moneda..." /></SelectTrigger>
               <SelectContent position="popper" sideOffset={4} className="z-[200]">
-                {catalogs?.monedas.map(m => (
+                {catalogs?.monedas.map((m: { value: string; label: string }) => (
                   <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
                 ))}
               </SelectContent>
@@ -312,7 +312,7 @@ export default function EPForm() {
             <Select value={ep.paisImplementacion} onValueChange={v => updateEP({ paisImplementacion: v })}>
               <SelectTrigger><SelectValue placeholder="País..." /></SelectTrigger>
               <SelectContent position="popper" sideOffset={4} className="z-[200]">
-                {catalogs?.paises.map(p => (
+                {catalogs?.paises.map((p: { value: string; label: string }) => (
                   <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>
                 ))}
               </SelectContent>
@@ -322,7 +322,7 @@ export default function EPForm() {
             <Select value={ep.plazoImplementacion} onValueChange={v => updateEP({ plazoImplementacion: v })}>
               <SelectTrigger><SelectValue placeholder="Plazo..." /></SelectTrigger>
               <SelectContent position="popper" sideOffset={4} className="z-[200]">
-                {catalogs?.plazos.map(p => (
+                {catalogs?.plazos.map((p: { value: string; label: string }) => (
                   <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>
                 ))}
               </SelectContent>

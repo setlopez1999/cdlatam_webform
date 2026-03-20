@@ -16,6 +16,7 @@ import NuevoExpediente from "./pages/NuevoExpediente";
 import ExpedienteActa from "./pages/ExpedienteActa";
 import ExpedienteEP from "./pages/ExpedienteEP";
 import ExpedienteResultados from "./pages/ExpedienteResultados";
+import SpreadsheetView from "./pages/SpreadsheetView";
 import { useLocalAuth } from "./hooks/useLocalAuth";
 import { Loader2 } from "lucide-react";
 
@@ -26,9 +27,11 @@ import { Loader2 } from "lucide-react";
 function ProtectedRoute({
   component: Component,
   adminOnly = false,
+  fullscreen = false,
 }: {
   component: React.ComponentType<any>;
   adminOnly?: boolean;
+  fullscreen?: boolean;
 }) {
   const { isAuthenticated, isAdmin, isLoading } = useLocalAuth();
 
@@ -45,8 +48,11 @@ function ProtectedRoute({
   }
 
   if (adminOnly && !isAdmin) {
-    // Usuario normal intenta acceder a ruta de admin → redirigir a Inicio
     return <Redirect to="/home" />;
+  }
+
+  if (fullscreen) {
+    return <Component />;
   }
 
   return (
@@ -89,6 +95,9 @@ function Router() {
       </Route>
       <Route path="/resultado">
         {() => <ProtectedRoute component={ResultadoView} adminOnly />}
+      </Route>
+      <Route path="/base-datos/spreadsheet">
+        {() => <ProtectedRoute component={SpreadsheetView} adminOnly fullscreen />}
       </Route>
       <Route path="/base-datos">
         {() => <ProtectedRoute component={BaseDatos} adminOnly />}

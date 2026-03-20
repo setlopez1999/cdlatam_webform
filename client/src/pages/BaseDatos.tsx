@@ -21,6 +21,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { Link } from "wouter";
+import { Table2 } from "lucide-react";
 import { loadActasList, loadEPList, deleteActa, deleteEP } from "@/hooks/useFormStore";
 import { formatCurrency, formatDate, getStatusColor, getStatusLabel } from "@/lib/formatters";
 import { CatalogCrudView } from "@/components/CatalogCrudView";
@@ -273,7 +274,7 @@ function ActasView() {
                       <td className="px-4 py-3">
                         <div className="flex gap-1">
                           <Button asChild variant="ghost" size="icon" className="h-7 w-7 text-slate-400 hover:text-white">
-                            <Link href="/acta"><Eye className="w-3.5 h-3.5" /></Link>
+                            <Link href="/historial"><Eye className="w-3.5 h-3.5" /></Link>
                           </Button>
                           <Button variant="ghost" size="icon" className="h-7 w-7 text-slate-400 hover:text-red-400" onClick={() => handleDelete(String(acta.id ?? ""))}>
                             <Trash2 className="w-3.5 h-3.5" />
@@ -363,7 +364,7 @@ function EPView() {
                     <td className="px-4 py-3">
                       <div className="flex gap-1">
                         <Button asChild variant="ghost" size="icon" className="h-7 w-7 text-slate-400 hover:text-white">
-                          <Link href="/ep"><Eye className="w-3.5 h-3.5" /></Link>
+                          <Link href="/historial"><Eye className="w-3.5 h-3.5" /></Link>
                         </Button>
                         <Button variant="ghost" size="icon" className="h-7 w-7 text-slate-400 hover:text-red-400" onClick={() => handleDelete(String(ep.id ?? ""))}>
                           <Trash2 className="w-3.5 h-3.5" />
@@ -420,9 +421,17 @@ export default function BaseDatos() {
           </h1>
           <p className="text-sm text-slate-400 mt-0.5">Catálogos del sistema y registros de documentos</p>
         </div>
-        <div className="flex items-center gap-2 text-xs text-slate-500 bg-white/5 border border-white/10 rounded-lg px-3 py-1.5">
-          <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-          MySQL conectado
+        <div className="flex items-center gap-3">
+          <Link href="/base-datos/spreadsheet">
+            <Button size="sm" className="h-9 bg-emerald-600 hover:bg-emerald-700 text-white shadow-md shadow-emerald-500/20 gap-1.5">
+              <Table2 className="w-4 h-4" />
+              Vista Spreadsheet
+            </Button>
+          </Link>
+          <div className="flex items-center gap-2 text-xs text-slate-500 bg-white/5 border border-white/10 rounded-lg px-3 py-1.5">
+            <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+            MySQL conectado
+          </div>
         </div>
       </div>
 
@@ -507,10 +516,8 @@ export default function BaseDatos() {
               variant="outline" 
               size="sm" 
               className="h-9 border-white/5 bg-white/5 text-slate-300 hover:text-white"
-              onClick={() => {
-                window.location.href = "/api/db/export";
-                toast.success("Iniciando descarga de base de datos...");
-              }}
+              disabled
+              title="Función no disponible"
             >
               <Download className="w-4 h-4 mr-2" />
               Exportar BD

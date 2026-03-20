@@ -69,7 +69,7 @@ export default function Usuarios() {
       <div className="flex flex-col items-center justify-center h-64 gap-4">
         <Shield className="w-12 h-12 text-muted-foreground/30" />
         <p className="text-muted-foreground">Acceso restringido a administradores</p>
-        <Button variant="outline" onClick={() => navigate("/acta")}>Ir a Formularios</Button>
+        <Button variant="outline" onClick={() => navigate("/nuevo-expediente")}>Ir a Formularios</Button>
       </div>
     );
   }
@@ -173,7 +173,7 @@ export default function Usuarios() {
             <div className="space-y-2">
               {users.map((u) => {
                 const initials = (u.displayName ?? u.username)
-                  .split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 2);
+                  .split(" ").map((w: string) => w[0]).join("").toUpperCase().slice(0, 2);
                 return (
                   <div
                     key={u.id}

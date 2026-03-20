@@ -57,7 +57,7 @@ export default function ResultadoView() {
               {getStatusLabel(ep.status)}
             </Badge>
             <Button asChild variant="outline" size="sm">
-              <Link href="/ep">
+              <Link href="/historial">
                 <ArrowRight className="w-3.5 h-3.5 mr-1.5 rotate-180" /> Editar EP
               </Link>
             </Button>
@@ -98,7 +98,7 @@ export default function ResultadoView() {
             Completa el Formulario 2 (EP) con los costos del proyecto para ver el resultado calculado automáticamente.
           </p>
           <Button asChild>
-            <Link href="/ep">
+            <Link href="/historial">
               <ArrowRight className="w-4 h-4 mr-2 rotate-180" /> Ir al Formulario 2
             </Link>
           </Button>
@@ -225,7 +225,7 @@ export default function ResultadoView() {
           {/* ── Export Footer ─────────────────────────────────────────────────── */}
           <div className="flex justify-end gap-3 pb-6">
             <Button asChild variant="outline">
-              <Link href="/ep">
+              <Link href="/historial">
                 <ArrowRight className="w-4 h-4 mr-2 rotate-180" /> Volver al EP
               </Link>
             </Button>

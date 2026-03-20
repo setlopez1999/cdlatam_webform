@@ -3,13 +3,11 @@ version: '3.8'
 services:
   web:
     build: .
+    env_file:
+      - .env
     volumes:
       - ./data:/app/data
-    environment:
-      - OAUTH_SERVER_URL=tu_valor_aqui
-      - NODE_ENV=production
-      - JWT_SECRET="mi_clave_secreta_jijijaja_escubitrakatelas_cdlatam_123!"
-      - DATABASE_URL="file:/app/data/gestion.db"
+    restart: always
 
   nginx:
     image: nginx:latest

@@ -58,7 +58,7 @@ export default function UserHome() {
       subtitulo: a.noActa ? `N° ${a.noActa}` : "Sin número",
       fecha: a.updatedAt,
       status: a.status,
-      path: "/acta",
+      path: "/historial",
       icon: FileText,
       color: "text-indigo-500",
       bgColor: "bg-indigo-50",
@@ -70,7 +70,7 @@ export default function UserHome() {
       subtitulo: e.tipoMoneda ? `${e.tipoMoneda} ${formatCurrency(e.montoProyecto)}` : "Sin monto",
       fecha: e.updatedAt,
       status: e.status,
-      path: "/ep",
+      path: "/historial",
       icon: BarChart2,
       color: "text-emerald-500",
       bgColor: "bg-emerald-50",
@@ -145,7 +145,7 @@ export default function UserHome() {
       {/* ── Sub-accesos del expediente ───────────────────────────────────────── 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <button
-          onClick={() => navigate("/acta")}
+          onClick={() => navigate("/nuevo-expediente")}
           className="group flex items-center gap-3 p-4 rounded-xl border border-indigo-200 hover:border-indigo-400 bg-indigo-50/50 dark:bg-indigo-950/10 transition-all"
         >
           <div className="w-8 h-8 rounded-lg bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center flex-shrink-0">
@@ -159,7 +159,7 @@ export default function UserHome() {
         </button>
 
         <button
-          onClick={() => navigate("/ep")}
+          onClick={() => navigate("/nuevo-expediente")}
           className="group flex items-center gap-3 p-4 rounded-xl border border-emerald-200 hover:border-emerald-400 bg-emerald-50/50 dark:bg-emerald-950/10 transition-all"
         >
           <div className="w-8 h-8 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center flex-shrink-0">
