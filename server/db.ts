@@ -121,11 +121,84 @@ export async function bulkDeleteCatalogRecords(tableName: string, ids: number[])
 
 export async function runMigrations() {
   try {
+    // Intentar migración estándar de Drizzle primero
     const db = await getDb();
     migrate(db, { migrationsFolder: join(process.cwd(), "drizzle", "migrations") });
     console.log("[DB] Migrations applied successfully");
-  } catch (error) {
-    console.error("[DB] Migration failed:", error);
+  } catch (error: any) {
+    // Si la migración falla (ej: BD parcialmente migrada), aplicar schema manualmente
+    console.warn("[DB] Migration via Drizzle failed, applying schema manually:", error?.message ?? error);
+    try {
+      const rawDb = sqlite;
+      rawDb.exec(`
+        CREATE TABLE IF NOT EXISTS localUsers (
+          id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+          username TEXT NOT NULL UNIQUE,
+          passwordHash TEXT NOT NULL,
+          displayName TEXT,
+          role TEXT DEFAULT 'user' NOT NULL,
+          isActive INTEGER DEFAULT 1 NOT NULL,
+          createdAt INTEGER DEFAULT (strftime('%s', 'now')) NOT NULL,
+          updatedAt INTEGER DEFAULT (strftime('%s', 'now')) NOT NULL,
+          lastSignedIn INTEGER
+        );
+        CREATE TABLE IF NOT EXISTS users (
+          id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+          openId TEXT NOT NULL UNIQUE,
+          name TEXT,
+          email TEXT,
+          loginMethod TEXT,
+          role TEXT DEFAULT 'user' NOT NULL,
+          createdAt INTEGER DEFAULT (strftime('%s', 'now')) NOT NULL,
+          updatedAt INTEGER DEFAULT (strftime('%s', 'now')) NOT NULL,
+          lastSignedIn INTEGER DEFAULT (strftime('%s', 'now')) NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS actas (
+          id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+          userId INTEGER NOT NULL,
+          noActa TEXT, atencion TEXT, fecha INTEGER,
+          razonSocial TEXT, nombreFantasia TEXT, rucDniRut TEXT, direccionComercial TEXT,
+          representanteLegal TEXT, representanteDni TEXT, representanteEmail TEXT, representanteFono TEXT,
+          contactoTecnico TEXT, contactoTecnicoEmail TEXT, contactoTecnicoFono TEXT,
+          contactoFacturacion TEXT, contactoFacturacionEmail TEXT, contactoFacturacionFono TEXT,
+          serviciosContratados TEXT, formasPagoImplementacion TEXT, formasPagoMantencion TEXT,
+          status TEXT DEFAULT 'borrador' NOT NULL,
+          createdAt INTEGER DEFAULT (strftime('%s', 'now')) NOT NULL,
+          updatedAt INTEGER DEFAULT (strftime('%s', 'now')) NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS evaluaciones (
+          id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+          userId INTEGER NOT NULL, actaId INTEGER,
+          unidadNegocios TEXT, empresa TEXT, solucion TEXT, tipoMoneda TEXT,
+          montoProyecto REAL, tipoCambio REAL, totalClp REAL,
+          descripcion TEXT, preventa TEXT, fechaEntrega INTEGER, ejecutivoComercial TEXT,
+          plazoImplementacion TEXT, propuestaNumero TEXT, paisImplementacion TEXT,
+          rut TEXT, nombreCliente TEXT,
+          hardware TEXT, materiales TEXT, rrhh TEXT, otrosGastos TEXT,
+          totalHardware REAL, totalMateriales REAL, totalRrhh REAL, totalOtros REAL, totalGastos REAL,
+          status TEXT DEFAULT 'borrador' NOT NULL,
+          createdAt INTEGER DEFAULT (strftime('%s', 'now')) NOT NULL,
+          updatedAt INTEGER DEFAULT (strftime('%s', 'now')) NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS catalog_monedas (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, valor TEXT NOT NULL UNIQUE, activo INTEGER DEFAULT 1 NOT NULL);
+        CREATE TABLE IF NOT EXISTS catalog_paises (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, valor TEXT NOT NULL UNIQUE, activo INTEGER DEFAULT 1 NOT NULL);
+        CREATE TABLE IF NOT EXISTS catalog_empresas (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, valor TEXT NOT NULL UNIQUE, activo INTEGER DEFAULT 1 NOT NULL);
+        CREATE TABLE IF NOT EXISTS catalog_documento_identidad (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, valor TEXT NOT NULL UNIQUE, activo INTEGER DEFAULT 1 NOT NULL);
+        CREATE TABLE IF NOT EXISTS catalog_unidades_negocio (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, valor TEXT NOT NULL UNIQUE, activo INTEGER DEFAULT 1 NOT NULL);
+        CREATE TABLE IF NOT EXISTS catalog_soluciones (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, valor TEXT NOT NULL UNIQUE, activo INTEGER DEFAULT 1 NOT NULL);
+        CREATE TABLE IF NOT EXISTS catalog_detalle_servicio (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, valor TEXT NOT NULL UNIQUE, activo INTEGER DEFAULT 1 NOT NULL);
+        CREATE TABLE IF NOT EXISTS catalog_tipo_venta (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, valor TEXT NOT NULL UNIQUE, activo INTEGER DEFAULT 1 NOT NULL);
+        CREATE TABLE IF NOT EXISTS catalog_plazos (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, valor TEXT NOT NULL UNIQUE, activo INTEGER DEFAULT 1 NOT NULL);
+        CREATE TABLE IF NOT EXISTS catalog_documentos (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, valor TEXT NOT NULL UNIQUE, activo INTEGER DEFAULT 1 NOT NULL);
+        CREATE TABLE IF NOT EXISTS catalog_cecos (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, valor TEXT NOT NULL UNIQUE, activo INTEGER DEFAULT 1 NOT NULL);
+        CREATE TABLE IF NOT EXISTS catalog_departamentos (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, valor TEXT NOT NULL UNIQUE, activo INTEGER DEFAULT 1 NOT NULL);
+        CREATE TABLE IF NOT EXISTS catalog_areas (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, valor TEXT NOT NULL UNIQUE, activo INTEGER DEFAULT 1 NOT NULL);
+        CREATE TABLE IF NOT EXISTS catalog_nombres (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, valor TEXT NOT NULL, activo INTEGER DEFAULT 1 NOT NULL);
+      `);
+      console.log("[DB] Schema applied manually (fallback)");
+    } catch (fallbackError) {
+      console.error("[DB] Fallback schema creation also failed:", fallbackError);
+    }
   }
 }
 
