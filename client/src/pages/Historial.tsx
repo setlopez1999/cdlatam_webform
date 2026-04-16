@@ -18,6 +18,7 @@ import {
 } from "@/hooks/useFormStore";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { PageLayout } from "@/components/PageLayout";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -356,33 +357,27 @@ export default function Historial() {
     );
   }, [expedientes, search]);
 
+  const subtitle = expedientes.length === 0
+    ? "No hay expedientes aún."
+    : `${expedientes.length} expediente${expedientes.length !== 1 ? "s" : ""} registrado${expedientes.length !== 1 ? "s" : ""}`;
+
   return (
-    <div className="p-6 max-w-5xl mx-auto">
-      <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
-        <div>
-          <h1 className="text-2xl font-bold">Expedientes</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            {expedientes.length === 0
-              ? "No hay expedientes aún."
-              : `${expedientes.length} expediente${expedientes.length !== 1 ? "s" : ""} registrado${expedientes.length !== 1 ? "s" : ""}`}
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
+    <PageLayout
+      title="Expedientes"
+      subtitle={subtitle}
+      icon={<FolderOpen className="w-6 h-6 text-primary" />}
+      actions={
+        <>
           <div className="relative">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-            <Input
-              placeholder="Buscar expediente..."
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              className="pl-8 h-8 text-sm w-48"
-            />
+            <Input placeholder="Buscar expediente..." value={search} onChange={e => setSearch(e.target.value)} className="pl-8 h-8 text-sm w-48" />
           </div>
           <Button className="gap-2 h-8 text-sm" onClick={() => navigate("/nuevo-expediente")}>
-            <Plus className="w-4 h-4" />
-            Nuevo
+            <Plus className="w-4 h-4" />Nuevo
           </Button>
-        </div>
-      </div>
+        </>
+      }
+    >
 
       {filtrados.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 gap-4 text-center">
@@ -406,6 +401,6 @@ export default function Historial() {
           ))}
         </div>
       )}
-    </div>
+    </PageLayout>
   );
 }

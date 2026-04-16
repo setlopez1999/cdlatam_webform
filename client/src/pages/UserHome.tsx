@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { formatCurrency } from "@/lib/formatters";
+import { PageLayout } from "@/components/PageLayout";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -83,19 +84,10 @@ export default function UserHome() {
   const totalExpedientes = Math.max(actas.length, eps.length);
 
   return (
-    <div className="p-6 max-w-4xl mx-auto space-y-8">
-      {/* ── Saludo ──────────────────────────────────────────────────────────── */}
-      <div>
-        <h1 className="text-2xl font-semibold text-foreground">
-          {saludo}, {nombre} 👋
-        </h1>
-        <p className="text-muted-foreground mt-1 text-sm">
-          ¿Qué deseas hacer hoy?
-        </p>
-      </div>
-      <div>
-        📄 Expedientes
-      </div>
+    <PageLayout
+      title={`${saludo}, ${nombre} 👋`}
+      subtitle="¿Qué deseas hacer hoy?"
+    >
 
       {/* ── Acciones principales ─────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -222,6 +214,6 @@ export default function UserHome() {
           </div>
         )}
       </div>
-    </div>
+    </PageLayout>
   );
 }
