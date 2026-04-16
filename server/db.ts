@@ -9,7 +9,7 @@ import { existsSync, mkdirSync } from 'fs';
 // --- MODIFICADO: Importar localUsers ---
 import {
   InsertUser, users, actas, evaluaciones, InsertActa, InsertEvaluacion,
-  localUsers,
+  localUsers, catalogMeta,
   // Catálogos
   catalogMonedas, catalogPaises, catalogEmpresas, catalogDocumentoIdentidad,
   catalogUnidadesNegocio, catalogSoluciones, catalogDetalleServicio,
@@ -54,6 +54,77 @@ export async function getDb() {
   return _db;
 }
 
+// ─── METADATOS DE CATÁLOGOS ──────────────────────────────────────────────────
+
+// Tablas fijas del sistema (no eliminables)
+const FIXED_CATALOGS = [
+  { tableName: "monedas",    realTable: "catalog_monedas",             title: "Monedas" },
+  { tableName: "paises",     realTable: "catalog_paises",              title: "Países" },
+  { tableName: "empresas",   realTable: "catalog_empresas",            title: "Empresas" },
+  { tableName: "doctos",     realTable: "catalog_documento_identidad", title: "Doc. Identidad" },
+  { tableName: "unidades",   realTable: "catalog_unidades_negocio",    title: "Unidades de Negocio" },
+  { tableName: "soluciones", realTable: "catalog_soluciones",          title: "Soluciones" },
+  { tableName: "detalle",    realTable: "catalog_detalle_servicio",    title: "Detalle Servicio" },
+  { tableName: "tipos",      realTable: "catalog_tipo_venta",          title: "Tipos de Venta" },
+  { tableName: "plazos",     realTable: "catalog_plazos",              title: "Plazos" },
+  { tableName: "documentos", realTable: "catalog_documentos",          title: "Documentos" },
+  { tableName: "cecos",      realTable: "catalog_cecos",               title: "CECOs" },
+  { tableName: "deptos",     realTable: "catalog_departamentos",       title: "Departamentos" },
+  { tableName: "areas",      realTable: "catalog_areas",               title: "Áreas" },
+  { tableName: "nombres",    realTable: "catalog_nombres",             title: "Nombres" },
+];
+
+// Seed de catalog_meta al arrancar
+export function seedCatalogMeta() {
+  const rawDb = sqlite;
+  rawDb.exec(`
+    CREATE TABLE IF NOT EXISTS catalog_meta (
+      id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+      table_name TEXT NOT NULL UNIQUE,
+      title TEXT NOT NULL,
+      is_custom INTEGER DEFAULT 0 NOT NULL,
+      linked_field TEXT,
+      created_at INTEGER DEFAULT (strftime('%s', 'now')) NOT NULL
+    );
+  `);
+  const upsert = rawDb.prepare(
+    `INSERT INTO catalog_meta (table_name, title, is_custom) VALUES (?, ?, 0)
+     ON CONFLICT(table_name) DO NOTHING`
+  );
+  for (const c of FIXED_CATALOGS) upsert.run(c.tableName, c.title);
+}
+
+export async function listCatalogMeta() {
+  const db = await getDb();
+  return db.select().from(catalogMeta).orderBy(catalogMeta.id);
+}
+
+export async function createCatalogTable(tableName: string, title: string) {
+  // Validar nombre: solo letras, números y guiones bajos
+  if (!/^[a-z0-9_]+$/.test(tableName)) throw new Error("Nombre inválido: solo letras minúsculas, números y guiones bajos");
+  const realTable = `catalog_custom_${tableName}`;
+  const rawDb = sqlite;
+  rawDb.exec(`CREATE TABLE IF NOT EXISTS ${realTable} (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, valor TEXT NOT NULL, activo INTEGER DEFAULT 1 NOT NULL)`);
+  const db = await getDb();
+  await db.insert(catalogMeta).values({ tableName, title, isCustom: 1 });
+  return { tableName, title, isCustom: 1 };
+}
+
+export async function renameCatalogTable(tableName: string, newTitle: string) {
+  const db = await getDb();
+  await db.update(catalogMeta).set({ title: newTitle }).where(eq(catalogMeta.tableName, tableName));
+}
+
+export async function deleteCatalogTable(tableName: string) {
+  const db = await getDb();
+  const rows = await db.select().from(catalogMeta).where(eq(catalogMeta.tableName, tableName)).limit(1);
+  if (!rows.length) throw new Error("Catálogo no encontrado");
+  if (!rows[0].isCustom) throw new Error("No se pueden eliminar catálogos del sistema");
+  const realTable = `catalog_custom_${tableName}`;
+  sqlite.exec(`DROP TABLE IF EXISTS ${realTable}`);
+  await db.delete(catalogMeta).where(eq(catalogMeta.tableName, tableName));
+}
+
 // ─── HELPER GENÉRICO PARA CATÁLOGOS ──────────────────────────────────────────
 
 const catalogMap: Record<string, any> = {
@@ -75,8 +146,66 @@ const catalogMap: Record<string, any> = {
 
 function getCatalogTable(tableName: string) {
   const table = catalogMap[tableName];
-  if (!table) throw new Error(`Catálogo no encontrado: ${tableName}`);
-  return table;
+  if (table) return table;
+  // Tablas dinámicas: usar SQL raw
+  return null;
+}
+
+// CRUD genérico que soporta tablas fijas (Drizzle) y dinámicas (SQL raw)
+export async function getCatalogListGeneric(tableName: string) {
+  const table = catalogMap[tableName];
+  if (table) {
+    const db = await getDb();
+    return db.select().from(table);
+  }
+  // Tabla dinámica
+  const realTable = `catalog_custom_${tableName}`;
+  return sqlite.prepare(`SELECT * FROM ${realTable} ORDER BY id`).all();
+}
+
+export async function createCatalogRecordGeneric(tableName: string, data: any) {
+  const table = catalogMap[tableName];
+  if (table) {
+    const db = await getDb();
+    return db.insert(table).values(data).returning();
+  }
+  const realTable = `catalog_custom_${tableName}`;
+  const stmt = sqlite.prepare(`INSERT INTO ${realTable} (valor, activo) VALUES (?, ?) RETURNING *`);
+  return [stmt.get(data.valor ?? 'Nuevo', data.activo ?? 1)];
+}
+
+export async function updateCatalogRecordGeneric(tableName: string, id: number, data: any) {
+  const table = catalogMap[tableName];
+  if (table) {
+    const db = await getDb();
+    return db.update(table).set(data).where(eq(table.id, id));
+  }
+  const realTable = `catalog_custom_${tableName}`;
+  const sets = Object.keys(data).map(k => `${k} = ?`).join(', ');
+  const vals = [...Object.values(data), id];
+  sqlite.prepare(`UPDATE ${realTable} SET ${sets} WHERE id = ?`).run(...vals);
+}
+
+export async function deleteCatalogRecordGeneric(tableName: string, id: number) {
+  const table = catalogMap[tableName];
+  if (table) {
+    const db = await getDb();
+    return db.delete(table).where(eq(table.id, id));
+  }
+  const realTable = `catalog_custom_${tableName}`;
+  sqlite.prepare(`DELETE FROM ${realTable} WHERE id = ?`).run(id);
+}
+
+export async function bulkDeleteCatalogRecordsGeneric(tableName: string, ids: number[]) {
+  if (!ids.length) return;
+  const table = catalogMap[tableName];
+  if (table) {
+    const db = await getDb();
+    return db.delete(table).where(inArray(table.id, ids));
+  }
+  const realTable = `catalog_custom_${tableName}`;
+  const placeholders = ids.map(() => '?').join(',');
+  sqlite.prepare(`DELETE FROM ${realTable} WHERE id IN (${placeholders})`).run(...ids);
 }
 
 export async function getCatalogList(tableName: string) {

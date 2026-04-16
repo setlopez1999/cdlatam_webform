@@ -291,6 +291,19 @@ export const catalogNombres = sqliteTable("catalog_nombres", {
   activo: integer("activo").default(1).notNull(),
 });
 
+// ─── Metadatos de catálogos (fijos + dinámicos) ─────────────────────────────
+export const catalogMeta = sqliteTable("catalog_meta", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  tableName: text("table_name").notNull().unique(),
+  title: text("title").notNull(),
+  isCustom: integer("is_custom").default(0).notNull(),
+  linkedField: text("linked_field"),
+  createdAt: integer("created_at", { mode: "timestamp" }).default(sql`(strftime('%s', 'now'))`).notNull(),
+});
+
+export type CatalogMetaRow = typeof catalogMeta.$inferSelect;
+export type InsertCatalogMeta = typeof catalogMeta.$inferInsert;
+
 // Tipos de catálogo
 export type CatalogMoneda = typeof catalogMonedas.$inferSelect;
 export type CatalogPais = typeof catalogPaises.$inferSelect;

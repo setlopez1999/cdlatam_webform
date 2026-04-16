@@ -7,7 +7,7 @@ import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import { seedDefaultUsers, registerLocalAuthRoutes } from "../localAuth";
-import { runMigrations } from "../db";
+import { runMigrations, seedCatalogMeta } from "../db";
 import { registerDbManagementRoutes } from "./dbManagement";
 
 function isPortAvailable(port: number): Promise<boolean> {
@@ -38,6 +38,9 @@ async function startServer() {
 
   // Run DB migrations
   await runMigrations();
+
+  // Seed catalog_meta (tablas fijas del sistema)
+  seedCatalogMeta();
 
   // Seed default users (admin/1234 and usuario/5678)
   await seedDefaultUsers().catch(err => console.error("[Seed] Failed:", err));

@@ -19,11 +19,9 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Link } from "wouter";
 import { toast } from "sonner";
+import { Link } from "wouter";
 import { Table2 } from "lucide-react";
-import { PageLayout } from "@/components/PageLayout";
-import { ManageCatalogsModal } from "@/components/ManageCatalogsModal";
 import { loadActasList, loadEPList, deleteActa, deleteEP } from "@/hooks/useFormStore";
 import { formatCurrency, formatDate, getStatusColor, getStatusLabel } from "@/lib/formatters";
 import { CatalogCrudView } from "@/components/CatalogCrudView";
@@ -392,7 +390,6 @@ function EPView() {
 export default function BaseDatos() {
   const [activeTab, setActiveTab] = useState<TabId>("resumen");
   const [showAdminDb, setShowAdminDb] = useState(false);
-  const [showManageCatalogs, setShowManageCatalogs] = useState(false);
   const { data: rawData, isLoading, error } = trpc.catalogsDB.summary.useQuery();
   const data = rawData as SummaryData | undefined;
 
@@ -414,21 +411,17 @@ export default function BaseDatos() {
   };
 
   return (
-    <PageLayout
-      title="Base de Datos"
-      subtitle="Catálogos del sistema y registros de documentos"
-      icon={<Database className="w-6 h-6 text-primary" />}
-      actions={
-        <>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => setShowManageCatalogs(true)}
-            className="h-9 border-white/10 bg-white/5 text-slate-300 hover:text-white gap-1.5"
-          >
-            <Settings2 className="w-4 h-4" />
-            Administrar
-          </Button>
+    <div className="p-6 max-w-4xl mx-auto space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
+            <Database className="w-6 h-6 text-primary" />
+            Base de Datos
+          </h1>
+          <p className="text-sm text-slate-400 mt-0.5">Catálogos del sistema y registros de documentos</p>
+        </div>
+        <div className="flex items-center gap-3">
           <Link href="/base-datos/spreadsheet">
             <Button size="sm" className="h-9 bg-emerald-600 hover:bg-emerald-700 text-white shadow-md shadow-emerald-500/20 gap-1.5">
               <Table2 className="w-4 h-4" />
@@ -439,9 +432,8 @@ export default function BaseDatos() {
             <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
             MySQL conectado
           </div>
-        </>
-      }
-    >
+        </div>
+      </div>
 
       {/* Grupo Catálogos */}
       <div>
@@ -595,11 +587,6 @@ export default function BaseDatos() {
           <Settings2 className="w-2.5 h-2.5 text-slate-500" />
         </button>
       </div>
-      <ManageCatalogsModal
-        open={showManageCatalogs}
-        onClose={() => setShowManageCatalogs(false)}
-        onChanged={() => refetch()}
-      />
-    </PageLayout>
+    </div>
   );
 }

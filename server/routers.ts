@@ -29,6 +29,18 @@ import {
   ds_toggleLocalUserStatus,
 } from "./dataSource";
 
+import {
+  listCatalogMeta,
+  createCatalogTable,
+  renameCatalogTable,
+  deleteCatalogTable,
+  getCatalogListGeneric,
+  createCatalogRecordGeneric,
+  updateCatalogRecordGeneric,
+  deleteCatalogRecordGeneric,
+  bulkDeleteCatalogRecordsGeneric,
+} from "./db";
+
 // 2. IMPORTACIONES DE LOCALAUTH (Solo para cifrado/tokens, NO BD)
 import {
   verifyPassword, signLocalJWT,
@@ -441,6 +453,60 @@ export const appRouter = router({
       .input(z.object({ query: z.string(), catalog: z.string().optional() }))
       .query(async ({ input }) => {
         return ds_searchCatalogs(input.query);
+      }),
+
+    // ─── Gestión de tablas dinámicas ───
+    listTables: protectedProcedure.query(async () => {
+      return listCatalogMeta();
+    }),
+
+    createTable: protectedProcedure
+      .input(z.object({ tableName: z.string(), title: z.string() }))
+      .mutation(async ({ input }) => {
+        return createCatalogTable(input.tableName, input.title);
+      }),
+
+    renameTable: protectedProcedure
+      .input(z.object({ tableName: z.string(), newTitle: z.string() }))
+      .mutation(async ({ input }) => {
+        return renameCatalogTable(input.tableName, input.newTitle);
+      }),
+
+    deleteTable: protectedProcedure
+      .input(z.object({ tableName: z.string() }))
+      .mutation(async ({ input }) => {
+        return deleteCatalogTable(input.tableName);
+      }),
+
+    // CRUD genérico que soporta tablas fijas y dinámicas
+    listGeneric: protectedProcedure
+      .input(z.object({ tableName: z.string() }))
+      .query(async ({ input }) => {
+        return getCatalogListGeneric(input.tableName);
+      }),
+
+    createGeneric: protectedProcedure
+      .input(z.object({ tableName: z.string(), data: z.any() }))
+      .mutation(async ({ input }) => {
+        return createCatalogRecordGeneric(input.tableName, input.data);
+      }),
+
+    updateGeneric: protectedProcedure
+      .input(z.object({ tableName: z.string(), id: z.number(), data: z.any() }))
+      .mutation(async ({ input }) => {
+        return updateCatalogRecordGeneric(input.tableName, input.id, input.data);
+      }),
+
+    deleteGeneric: protectedProcedure
+      .input(z.object({ tableName: z.string(), id: z.number() }))
+      .mutation(async ({ input }) => {
+        return deleteCatalogRecordGeneric(input.tableName, input.id);
+      }),
+
+    bulkDeleteGeneric: protectedProcedure
+      .input(z.object({ tableName: z.string(), ids: z.array(z.number()) }))
+      .mutation(async ({ input }) => {
+        return bulkDeleteCatalogRecordsGeneric(input.tableName, input.ids);
       }),
   }),
 

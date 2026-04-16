@@ -8,141 +8,81 @@ import { Plus, Trash2, RefreshCw, ArrowLeft, Table2, Hash, CheckSquare, Sigma, P
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
 
-// Registrar todos los módulos community de AG Grid
 ModuleRegistry.registerModules([AllCommunityModule]);
 
-// ─── Definición de tablas de catálogos ───────────────────────────────────────
-const CATALOG_TABS = [
-  { tableName: "monedas",    title: "Monedas" },
-  { tableName: "paises",     title: "Países" },
-  { tableName: "empresas",   title: "Empresas" },
-  { tableName: "doctos",     title: "Doc. Identidad" },
-  { tableName: "unidades",   title: "Unidades" },
-  { tableName: "soluciones", title: "Soluciones" },
-  { tableName: "detalle",    title: "Detalle Servicio" },
-  { tableName: "tipos",      title: "Tipos Venta" },
-  { tableName: "plazos",     title: "Plazos" },
-  { tableName: "cecos",      title: "CECOs" },
-  { tableName: "deptos",     title: "Departamentos" },
-  { tableName: "areas",      title: "Áreas" },
-  { tableName: "nombres",    title: "Nombres" },
-] as const;
-
-type TableName = typeof CATALOG_TABS[number]["tableName"];
-
-// ─── Colores predefinidos para el picker ─────────────────────────────────────
+// ─── Colores predefinidos ─────────────────────────────────────────────────────
 const PRESET_COLORS = [
-  { label: "Blanco",       value: "#e2e8f0" },
-  { label: "Negro",        value: "#0f172a" },
-  { label: "Gris",         value: "#94a3b8" },
-  { label: "Azul",         value: "#60a5fa" },
-  { label: "Verde",        value: "#4ade80" },
-  { label: "Amarillo",     value: "#facc15" },
-  { label: "Naranja",      value: "#fb923c" },
-  { label: "Rojo",         value: "#f87171" },
+  { label: "Blanco",   value: "#e2e8f0" },
+  { label: "Negro",    value: "#0f172a" },
+  { label: "Gris",     value: "#94a3b8" },
+  { label: "Azul",     value: "#60a5fa" },
+  { label: "Verde",    value: "#4ade80" },
+  { label: "Amarillo", value: "#facc15" },
+  { label: "Naranja",  value: "#fb923c" },
+  { label: "Rojo",     value: "#f87171" },
 ];
 
 // ─── Componente de grilla por tabla ──────────────────────────────────────────
-function CatalogSheet({ tableName, textColor }: { tableName: TableName; textColor: string }) {
+function CatalogSheet({ tableName, textColor }: { tableName: string; textColor: string }) {
   const gridRef = useRef<AgGridReact>(null);
   const [selectedRows, setSelectedRows] = useState<any[]>([]);
 
-  const { data: rows = [], isLoading, refetch } = trpc.catalogsDB.list.useQuery(
+  const { data: rows = [], isLoading, refetch } = trpc.catalogsDB.listGeneric.useQuery(
     { tableName },
     { refetchOnWindowFocus: false }
   );
 
-  const createMutation = trpc.catalogsDB.create.useMutation();
-  const updateMutation = trpc.catalogsDB.update.useMutation();
-  const deleteMutation = trpc.catalogsDB.delete.useMutation();
+  const createMutation    = trpc.catalogsDB.createGeneric.useMutation();
+  const updateMutation    = trpc.catalogsDB.updateGeneric.useMutation();
+  const bulkDeleteMutation = trpc.catalogsDB.bulkDeleteGeneric.useMutation();
 
-  // Columnas con color dinámico
   const colDefs: ColDef[] = useMemo(() => [
+    { field: "id",     headerName: "ID",    width: 80, editable: false, pinned: "left" as const, cellStyle: { color: "#64748b", fontWeight: 600 } },
+    { field: "valor",  headerName: "Valor", flex: 1, editable: true, cellEditor: "agTextCellEditor", cellStyle: { color: textColor, fontWeight: 400 } },
     {
-      field: "id",
-      headerName: "ID",
-      width: 80,
-      editable: false,
-      pinned: "left" as const,
-      cellStyle: { color: "#64748b", fontWeight: 600 },
-    },
-    {
-      field: "valor",
-      headerName: "Valor",
-      flex: 1,
-      editable: true,
-      cellEditor: "agTextCellEditor",
-      cellStyle: { color: textColor, fontWeight: 400 },
-    },
-    {
-      field: "activo",
-      headerName: "Activo",
-      width: 110,
-      editable: true,
-      cellEditor: "agSelectCellEditor",
-      cellEditorParams: { values: [1, 0] },
+      field: "activo", headerName: "Activo", width: 110, editable: true,
+      cellEditor: "agSelectCellEditor", cellEditorParams: { values: [1, 0] },
       valueFormatter: (p: any) => (p.value === 1 || p.value === true ? "✓ Sí" : "✗ No"),
-      cellStyle: (p: any) => ({
-        color: p.value === 1 || p.value === true ? "#4ade80" : "#f87171",
-        fontWeight: 600,
-      }),
+      cellStyle: (p: any) => ({ color: p.value === 1 || p.value === true ? "#4ade80" : "#f87171", fontWeight: 600 }),
     },
   ], [textColor]);
 
-  // ─── Edición inline: guarda al cambiar celda ─────────────────────────────
-  const onCellValueChanged = useCallback(
-    async (event: CellValueChangedEvent) => {
-      const { data, colDef, newValue } = event;
-      if (!data?.id || colDef.field === "id") return;
-      try {
-        await updateMutation.mutateAsync({
-          tableName,
-          id: data.id,
-          data: { [colDef.field as string]: newValue },
-        });
-        toast.success("Guardado");
-      } catch (err: any) {
-        toast.error("Error al guardar: " + err.message);
-        refetch();
-      }
-    },
-    [tableName, updateMutation, refetch]
-  );
+  const onCellValueChanged = useCallback(async (event: CellValueChangedEvent) => {
+    const { data, colDef, newValue } = event;
+    if (!data?.id || colDef.field === "id") return;
+    try {
+      await updateMutation.mutateAsync({ tableName, id: data.id, data: { [colDef.field as string]: newValue } });
+      toast.success("Guardado");
+    } catch (err: any) {
+      toast.error("Error al guardar: " + err.message);
+      refetch();
+    }
+  }, [tableName, updateMutation, refetch]);
 
-  // ─── Agregar fila nueva ───────────────────────────────────────────────────
   const handleAddRow = useCallback(async () => {
     try {
-      await createMutation.mutateAsync({
-        tableName,
-        data: { valor: "Nuevo", activo: 1 },
-      });
+      await createMutation.mutateAsync({ tableName, data: { valor: "Nuevo", activo: 1 } });
       toast.success("Fila agregada");
       await refetch();
-      setTimeout(() => {
-        gridRef.current?.api?.ensureIndexVisible((rows.length ?? 0), "bottom");
-      }, 200);
+      setTimeout(() => gridRef.current?.api?.ensureIndexVisible(rows.length ?? 0, "bottom"), 200);
     } catch (err: any) {
       toast.error("Error al agregar: " + err.message);
     }
   }, [tableName, createMutation, refetch, rows.length]);
 
-  // ─── Borrar filas seleccionadas ───────────────────────────────────────────
   const handleDeleteSelected = useCallback(async () => {
     if (!selectedRows.length) return toast.warning("Selecciona al menos una fila");
     if (!confirm(`¿Eliminar ${selectedRows.length} registro(s)?`)) return;
     try {
-      for (const row of selectedRows) {
-        await deleteMutation.mutateAsync({ tableName, id: row.id });
-      }
+      await bulkDeleteMutation.mutateAsync({ tableName, ids: selectedRows.map(r => r.id) });
       toast.success(`${selectedRows.length} registro(s) eliminado(s)`);
       setSelectedRows([]);
       refetch();
     } catch (err: any) {
       toast.error("Error al eliminar: " + err.message);
     }
-  }, [selectedRows, tableName, deleteMutation, refetch]);
+  }, [selectedRows, tableName, bulkDeleteMutation, refetch]);
 
-  // ─── Estadísticas rápidas ─────────────────────────────────────────────────
   const stats = useMemo(() => {
     const total = rows.length;
     const activos = rows.filter((r: any) => r.activo === 1).length;
@@ -155,52 +95,28 @@ function CatalogSheet({ tableName, textColor }: { tableName: TableName; textColo
 
   return (
     <div className="flex flex-col h-full gap-3">
-      {/* Toolbar */}
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-4 text-sm text-slate-400">
-          <span className="flex items-center gap-1.5">
-            <Hash className="w-3.5 h-3.5" /> <strong className="text-slate-200">{stats.total}</strong> registros
-          </span>
-          <span className="flex items-center gap-1.5">
-            <CheckSquare className="w-3.5 h-3.5 text-green-400" /> <strong className="text-green-400">{stats.activos}</strong> activos
-          </span>
-          <span className="flex items-center gap-1.5">
-            <Sigma className="w-3.5 h-3.5 text-slate-500" /> <strong className="text-red-400">{stats.inactivos}</strong> inactivos
-          </span>
-          {selectedRows.length > 0 && (
-            <span className="text-blue-400 font-medium">{selectedRows.length} seleccionado(s)</span>
-          )}
+          <span className="flex items-center gap-1.5"><Hash className="w-3.5 h-3.5" /> <strong className="text-slate-200">{stats.total}</strong> registros</span>
+          <span className="flex items-center gap-1.5"><CheckSquare className="w-3.5 h-3.5 text-green-400" /> <strong className="text-green-400">{stats.activos}</strong> activos</span>
+          <span className="flex items-center gap-1.5"><Sigma className="w-3.5 h-3.5 text-slate-500" /> <strong className="text-red-400">{stats.inactivos}</strong> inactivos</span>
+          {selectedRows.length > 0 && <span className="text-blue-400 font-medium">{selectedRows.length} seleccionado(s)</span>}
         </div>
         <div className="flex items-center gap-2">
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={() => refetch()}
-            className="h-8 text-slate-400 hover:text-white"
-          >
+          <Button size="sm" variant="ghost" onClick={() => refetch()} className="h-8 text-slate-400 hover:text-white">
             <RefreshCw className="w-3.5 h-3.5 mr-1.5" /> Recargar
           </Button>
           {selectedRows.length > 0 && (
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={handleDeleteSelected}
-              className="h-8 text-red-400 hover:text-red-300 hover:bg-red-500/10"
-            >
+            <Button size="sm" variant="ghost" onClick={handleDeleteSelected} className="h-8 text-red-400 hover:text-red-300 hover:bg-red-500/10">
               <Trash2 className="w-3.5 h-3.5 mr-1.5" /> Eliminar ({selectedRows.length})
             </Button>
           )}
-          <Button
-            size="sm"
-            onClick={handleAddRow}
-            className="h-8 bg-blue-600 hover:bg-blue-700 text-white shadow-md shadow-blue-500/20"
-          >
+          <Button size="sm" onClick={handleAddRow} className="h-8 bg-blue-600 hover:bg-blue-700 text-white shadow-md shadow-blue-500/20">
             <Plus className="w-3.5 h-3.5 mr-1.5" /> Agregar fila
           </Button>
         </div>
       </div>
 
-      {/* AG Grid */}
       <div className="flex-1 ag-theme-quartz-dark rounded-xl overflow-hidden border border-white/5 min-h-0">
         {isLoading ? (
           <div className="flex items-center justify-center h-full text-slate-400">
@@ -221,16 +137,11 @@ function CatalogSheet({ tableName, textColor }: { tableName: TableName; textColo
             enterNavigatesVerticallyAfterEdit={true}
             enterNavigatesVertically={true}
             suppressMovableColumns={false}
-            defaultColDef={{
-              resizable: true,
-              sortable: true,
-              filter: true,
-            }}
+            defaultColDef={{ resizable: true, sortable: true, filter: true }}
           />
         )}
       </div>
 
-      {/* Hint edición */}
       <p className="text-xs text-slate-600 text-right">
         Doble clic en una celda para editar · Enter para confirmar · Esc para cancelar
       </p>
@@ -240,10 +151,23 @@ function CatalogSheet({ tableName, textColor }: { tableName: TableName; textColo
 
 // ─── Página principal ─────────────────────────────────────────────────────────
 export default function SpreadsheetView() {
-  const [activeTab, setActiveTab] = useState<TableName>("monedas");
-  const [textColor, setTextColor] = useState("#e2e8f0");
+  const [activeTab, setActiveTab] = useState<string>("");
+  const [textColor, setTextColor] = useState(() => localStorage.getItem("spreadsheet_text_color") ?? "#e2e8f0");
   const [showColorPicker, setShowColorPicker] = useState(false);
   const colorInputRef = useRef<HTMLInputElement>(null);
+
+  // Cargar tabs dinámicamente desde catalog_meta
+  const { data: tables = [] } = trpc.catalogsDB.listTables.useQuery(undefined, {
+    onSuccess: (data) => {
+      if (!activeTab && data.length > 0) setActiveTab(data[0].tableName);
+    },
+  } as any);
+
+  const handleColorChange = (color: string) => {
+    setTextColor(color);
+    localStorage.setItem("spreadsheet_text_color", color);
+    setShowColorPicker(false);
+  };
 
   return (
     <div className="h-screen bg-[#0f1117] flex flex-col overflow-hidden">
@@ -269,10 +193,7 @@ export default function SpreadsheetView() {
           >
             <Palette className="w-3.5 h-3.5" />
             <span>Color texto</span>
-            <span
-              className="w-4 h-4 rounded-full border border-white/20 inline-block"
-              style={{ backgroundColor: textColor }}
-            />
+            <span className="w-4 h-4 rounded-full border border-white/20 inline-block" style={{ backgroundColor: textColor }} />
           </button>
 
           {showColorPicker && (
@@ -283,12 +204,9 @@ export default function SpreadsheetView() {
                   <button
                     key={c.value}
                     title={c.label}
-                    onClick={() => { setTextColor(c.value); setShowColorPicker(false); }}
+                    onClick={() => handleColorChange(c.value)}
                     className="w-8 h-8 rounded-lg border-2 transition-transform hover:scale-110"
-                    style={{
-                      backgroundColor: c.value,
-                      borderColor: textColor === c.value ? "#60a5fa" : "transparent",
-                    }}
+                    style={{ backgroundColor: c.value, borderColor: textColor === c.value ? "#60a5fa" : "transparent" }}
                   />
                 ))}
               </div>
@@ -298,7 +216,7 @@ export default function SpreadsheetView() {
                   ref={colorInputRef}
                   type="color"
                   value={textColor}
-                  onChange={(e) => setTextColor(e.target.value)}
+                  onChange={(e) => handleColorChange(e.target.value)}
                   className="w-8 h-8 rounded cursor-pointer border-0 bg-transparent"
                 />
               </div>
@@ -307,10 +225,10 @@ export default function SpreadsheetView() {
         </div>
       </div>
 
-      {/* Pestañas de tablas */}
+      {/* Pestañas dinámicas */}
       <div className="border-b border-white/5 bg-[#13161f] px-4 shrink-0 overflow-x-auto">
         <div className="flex gap-0.5 min-w-max">
-          {CATALOG_TABS.map((tab) => (
+          {tables.map((tab) => (
             <button
               key={tab.tableName}
               onClick={() => setActiveTab(tab.tableName)}
@@ -326,9 +244,9 @@ export default function SpreadsheetView() {
         </div>
       </div>
 
-      {/* Contenido de la hoja activa */}
+      {/* Contenido */}
       <div className="flex-1 p-5 min-h-0 flex flex-col" onClick={() => setShowColorPicker(false)}>
-        <CatalogSheet key={activeTab} tableName={activeTab} textColor={textColor} />
+        {activeTab && <CatalogSheet key={activeTab} tableName={activeTab} textColor={textColor} />}
       </div>
     </div>
   );
