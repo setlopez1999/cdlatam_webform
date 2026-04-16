@@ -516,8 +516,12 @@ export default function BaseDatos() {
               variant="outline" 
               size="sm" 
               className="h-9 border-white/5 bg-white/5 text-slate-300 hover:text-white"
-              disabled
-              title="Función no disponible"
+              onClick={() => {
+                const a = document.createElement("a");
+                a.href = "/api/db/export";
+                a.download = "gestion_backup.db";
+                a.click();
+              }}
             >
               <Download className="w-4 h-4 mr-2" />
               Exportar BD
