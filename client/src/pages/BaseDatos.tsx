@@ -449,7 +449,7 @@ export default function BaseDatos() {
           </Link>
           <div className="flex items-center gap-2 text-xs text-slate-500 bg-white/5 border border-white/10 rounded-lg px-3 py-1.5">
             <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-            MySQL conectado
+            SQLite conectado
           </div>
         </>
       }
@@ -457,7 +457,7 @@ export default function BaseDatos() {
 
       {/* Grid de bloques de catálogos */}
       <CatalogTabGrid
-        tables={catalogMetaList}
+        tables={catalogMetaList.map(t => ({ ...t, isCustom: Boolean(t.isCustom) }))}
         activeTab={activeTab}
         onSelect={setActiveTab}
       />

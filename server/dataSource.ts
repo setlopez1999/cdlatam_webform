@@ -213,7 +213,7 @@ export async function ds_findUserById(id: number) {
 /** @deprecated Usar ds_findUserById */
 export const ds_findLocalUserById = ds_findUserById;
 
-export async function ds_createUser(user: { username: string; passwordHash: string; displayName?: string; role: string }) {
+export async function ds_createUser(user: { username: string; passwordHash: string; displayName?: string; role: string; roleId?: number | null }) {
   if (USE_API) return apiFetch<any>(`/users`, { method: "POST", body: JSON.stringify(user) });
   return createUser(user);
 }
