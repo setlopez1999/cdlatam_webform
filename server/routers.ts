@@ -508,6 +508,17 @@ export const appRouter = router({
       .mutation(async ({ input }) => {
         return bulkDeleteCatalogRecordsGeneric(input.tableName, input.ids);
       }),
+
+    // Conteo de registros activos para todas las tablas (fijas + dinámicas)
+    allCounts: protectedProcedure.query(async () => {
+      const metas = await listCatalogMeta();
+      const counts: Record<string, number> = {};
+      for (const m of metas) {
+        const rows = await getCatalogListGeneric(m.tableName);
+        counts[m.tableName] = (rows as any[]).filter((r: any) => r.activo !== 0).length;
+      }
+      return counts;
+    }),
   }),
 
   // ─── Dashboard Stats (siempre SQLite) ────────────────────────────────────

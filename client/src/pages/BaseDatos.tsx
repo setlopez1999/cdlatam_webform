@@ -118,24 +118,16 @@ function EmptyState({ icon: Icon, title, desc }: { icon: React.ComponentType<{ c
 
 // ─── Vista Resumen ────────────────────────────────────────────────────────────
 
-function ResumenView({ data }: { data: SummaryData }) {
-  const stats = [
-    { icon: Hash, label: "CECOs", value: data.cecos.length, color: "text-blue-400", bg: "bg-blue-500/10" },
-    { icon: Layers, label: "Soluciones", value: data.soluciones.length, color: "text-emerald-400", bg: "bg-emerald-500/10" },
-    { icon: Globe, label: "Países", value: data.paises.length, color: "text-cyan-400", bg: "bg-cyan-500/10" },
-    { icon: DollarSign, label: "Monedas", value: data.monedas.length, color: "text-yellow-400", bg: "bg-yellow-500/10" },
-    { icon: Building2, label: "Empresas", value: data.empresas.length, color: "text-blue-400", bg: "bg-blue-500/10" },
-    { icon: FileText, label: "Doc. Identidad", value: data.doctos.length, color: "text-slate-400", bg: "bg-slate-500/10" },
-    { icon: Briefcase, label: "Unidades Negocio", value: data.unidades.length, color: "text-orange-400", bg: "bg-orange-500/10" },
-    { icon: Wrench, label: "Detalle Servicio", value: data.detalles.length, color: "text-pink-400", bg: "bg-pink-500/10" },
-    { icon: Tag, label: "Tipos de Venta", value: data.tipos.length, color: "text-red-400", bg: "bg-red-500/10" },
-    { icon: Clock, label: "Plazos", value: data.plazos.length, color: "text-teal-400", bg: "bg-teal-500/10" },
-    { icon: FileText, label: "Documentos", value: data.docs.length, color: "text-indigo-400", bg: "bg-indigo-500/10" },
-    { icon: MapPin, label: "Departamentos", value: data.deptos.length, color: "text-indigo-400", bg: "bg-indigo-500/10" },
-    { icon: Layers, label: "Áreas", value: data.areas.length, color: "text-fuchsia-400", bg: "bg-fuchsia-500/10" },
-    { icon: Users, label: "Nombres", value: data.nombres.length, color: "text-rose-400", bg: "bg-rose-500/10" },
-  ];
-  const total = stats.reduce((a, s) => a + s.value, 0);
+function ResumenView({ data, catalogMeta, onSelectTab }: {
+  data: SummaryData;
+  catalogMeta: { tableName: string; title: string; isCustom: number }[];
+  onSelectTab: (tab: string) => void;
+}) {
+  const { data: counts = {} } = trpc.catalogsDB.allCounts.useQuery();
+
+  const total = Object.values(counts).reduce((a, v) => a + v, 0);
+  const empty = catalogMeta.filter(m => (counts[m.tableName] ?? 0) === 0);
+  const filled = catalogMeta.filter(m => (counts[m.tableName] ?? 0) > 0);
 
   return (
     <div className="space-y-6">
@@ -144,27 +136,61 @@ function ResumenView({ data }: { data: SummaryData }) {
         <div className="w-14 h-14 rounded-xl bg-blue-500/20 flex items-center justify-center flex-shrink-0">
           <Database className="w-7 h-7 text-blue-400" />
         </div>
-        <div>
+        <div className="flex-1">
           <p className="text-4xl font-bold text-white">{total}</p>
           <p className="text-slate-400 text-sm">registros totales en la base de datos</p>
-          <p className="text-xs text-slate-500 mt-0.5">Importados desde Excel — Hoja "Base de datos"</p>
+        </div>
+        {empty.length > 0 && (
+          <div className="flex items-center gap-2 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
+            <div className="w-2 h-2 rounded-full bg-amber-400" />
+            <span className="text-xs text-amber-300 font-medium">{empty.length} tabla{empty.length !== 1 ? 's' : ''} vacía{empty.length !== 1 ? 's' : ''}</span>
+          </div>
+        )}
+      </div>
+
+      {/* Tablas con datos */}
+      <div>
+        <p className="text-xs text-slate-500 font-medium uppercase tracking-wider mb-3">Catálogos con datos</p>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+          {filled.map(m => (
+            <button
+              key={m.tableName}
+              onClick={() => onSelectTab(m.tableName)}
+              className="bg-[#1a1f2e] border border-white/5 rounded-xl p-4 flex items-center gap-3 hover:border-blue-500/30 hover:bg-blue-500/5 transition-colors text-left"
+            >
+              <div className="w-9 h-9 rounded-lg bg-emerald-500/10 flex items-center justify-center flex-shrink-0">
+                <Database className="w-4 h-4 text-emerald-400" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-xl font-bold text-white">{counts[m.tableName] ?? 0}</p>
+                <p className="text-xs text-slate-500 truncate">{m.title}</p>
+              </div>
+            </button>
+          ))}
         </div>
       </div>
 
-      {/* Stats grid */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-        {stats.map(s => (
-          <div key={s.label} className="bg-[#1a1f2e] border border-white/5 rounded-xl p-4 flex items-center gap-3 hover:border-white/10 transition-colors">
-            <div className={`w-9 h-9 rounded-lg ${s.bg} flex items-center justify-center flex-shrink-0`}>
-              <s.icon className={`w-4 h-4 ${s.color}`} />
-            </div>
-            <div className="min-w-0">
-              <p className="text-xl font-bold text-white">{s.value}</p>
-              <p className="text-xs text-slate-500 truncate">{s.label}</p>
-            </div>
+      {/* Tablas vacías */}
+      {empty.length > 0 && (
+        <div>
+          <p className="text-xs text-slate-500 font-medium uppercase tracking-wider mb-3 flex items-center gap-2">
+            <span className="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block" />
+            Catálogos vacíos
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {empty.map(m => (
+              <button
+                key={m.tableName}
+                onClick={() => onSelectTab(m.tableName)}
+                className="flex items-center gap-2 px-3 py-2 bg-amber-500/5 border border-amber-500/20 rounded-lg text-xs text-amber-300 hover:bg-amber-500/10 hover:border-amber-500/40 transition-colors"
+              >
+                <div className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+                {m.title}
+              </button>
+            ))}
           </div>
-        ))}
-      </div>
+        </div>
+      )}
 
       {/* Soluciones preview */}
       <div className="bg-[#1a1f2e] border border-white/5 rounded-xl p-5">
@@ -473,7 +499,7 @@ export default function BaseDatos() {
           </div>
         ) : (
           <>
-            {activeTab === "resumen" && data && <ResumenView data={data} />}
+            {activeTab === "resumen" && data && <ResumenView data={data} catalogMeta={catalogMetaList as any} onSelectTab={setActiveTab} />}
 
             {/* CRUD GENÉRICO DE CATÁLOGOS - dinámico desde catalog_meta */}
             {activeTab !== "resumen" && activeTab !== "actas" && activeTab !== "ep" && (() => {
