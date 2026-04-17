@@ -9,7 +9,6 @@ import {
   getActasByUserId, getActaById, createActa, updateActa, deleteActa,
   getEvaluacionesByUserId, getEvaluacionById, createEvaluacion, updateEvaluacion, deleteEvaluacion,
   searchRegistros,
-  findLocalUserByUsername,
 } from "./db";
 
 // dataSource — abstracción SQLite / API externa (controlado por USE_API en .env)
@@ -27,19 +26,18 @@ import {
   ds_findLocalUserByUsername,
   ds_createLocalUser,
   ds_toggleLocalUserStatus,
+  // Catálogos dinámicos y meta — ahora también pasan por dataSource
+  ds_listCatalogMeta,
+  ds_createCatalogTable,
+  ds_renameCatalogTable,
+  ds_deleteCatalogTable,
+  ds_getCatalogListGeneric,
+  ds_createCatalogRecordGeneric,
+  ds_updateCatalogRecordGeneric,
+  ds_deleteCatalogRecordGeneric,
+  ds_bulkDeleteCatalogRecordsGeneric,
+  ds_allCounts,
 } from "./dataSource";
-
-import {
-  listCatalogMeta,
-  createCatalogTable,
-  renameCatalogTable,
-  deleteCatalogTable,
-  getCatalogListGeneric,
-  createCatalogRecordGeneric,
-  updateCatalogRecordGeneric,
-  deleteCatalogRecordGeneric,
-  bulkDeleteCatalogRecordsGeneric,
-} from "./db";
 
 // 2. IMPORTACIONES DE LOCALAUTH (Solo para cifrado/tokens, NO BD)
 import {
@@ -457,67 +455,61 @@ export const appRouter = router({
 
     // ─── Gestión de tablas dinámicas ───
     listTables: protectedProcedure.query(async () => {
-      return listCatalogMeta();
+      return ds_listCatalogMeta();
     }),
 
     createTable: protectedProcedure
       .input(z.object({ tableName: z.string(), title: z.string() }))
       .mutation(async ({ input }) => {
-        return createCatalogTable(input.tableName, input.title);
+        return ds_createCatalogTable(input.tableName, input.title);
       }),
 
     renameTable: protectedProcedure
       .input(z.object({ tableName: z.string(), newTitle: z.string() }))
       .mutation(async ({ input }) => {
-        return renameCatalogTable(input.tableName, input.newTitle);
+        return ds_renameCatalogTable(input.tableName, input.newTitle);
       }),
 
     deleteTable: protectedProcedure
       .input(z.object({ tableName: z.string() }))
       .mutation(async ({ input }) => {
-        return deleteCatalogTable(input.tableName);
+        return ds_deleteCatalogTable(input.tableName);
       }),
 
     // CRUD genérico que soporta tablas fijas y dinámicas
     listGeneric: protectedProcedure
       .input(z.object({ tableName: z.string() }))
       .query(async ({ input }) => {
-        return getCatalogListGeneric(input.tableName);
+        return ds_getCatalogListGeneric(input.tableName);
       }),
 
     createGeneric: protectedProcedure
       .input(z.object({ tableName: z.string(), data: z.any() }))
       .mutation(async ({ input }) => {
-        return createCatalogRecordGeneric(input.tableName, input.data);
+        return ds_createCatalogRecordGeneric(input.tableName, input.data);
       }),
 
     updateGeneric: protectedProcedure
       .input(z.object({ tableName: z.string(), id: z.number(), data: z.any() }))
       .mutation(async ({ input }) => {
-        return updateCatalogRecordGeneric(input.tableName, input.id, input.data);
+        return ds_updateCatalogRecordGeneric(input.tableName, input.id, input.data);
       }),
 
     deleteGeneric: protectedProcedure
       .input(z.object({ tableName: z.string(), id: z.number() }))
       .mutation(async ({ input }) => {
-        return deleteCatalogRecordGeneric(input.tableName, input.id);
+        return ds_deleteCatalogRecordGeneric(input.tableName, input.id);
       }),
 
     bulkDeleteGeneric: protectedProcedure
       .input(z.object({ tableName: z.string(), ids: z.array(z.number()) }))
       .mutation(async ({ input }) => {
-        return bulkDeleteCatalogRecordsGeneric(input.tableName, input.ids);
+        return ds_bulkDeleteCatalogRecordsGeneric(input.tableName, input.ids);
       }),
 
     // Conteo de registros activos para todas las tablas (fijas + dinámicas)
     allCounts: protectedProcedure.query(async () => {
-      const metas = await listCatalogMeta();
-      const counts: Record<string, number> = {};
-      for (const m of metas) {
-        const rows = await getCatalogListGeneric(m.tableName);
-        counts[m.tableName] = (rows as any[]).filter((r: any) => r.activo !== 0).length;
-      }
-      return counts;
+      return ds_allCounts();
     }),
   }),
 
