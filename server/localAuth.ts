@@ -15,7 +15,7 @@ import * as jose from "jose";
 import type { Express } from "express";
 import { eq } from "drizzle-orm";
 import { getDb } from "./db";
-import { localUsers, type LocalUser, type InsertLocalUser } from "../drizzle/schema";
+import { users, type User, type InsertUser } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 
 const SALT_ROUNDS = 12;
@@ -68,60 +68,73 @@ export { LOCAL_AUTH_COOKIE };
 
 // ─── DB helpers ───────────────────────────────────────────────────────────────
 
-export async function findLocalUserByUsername(username: string): Promise<LocalUser | undefined> {
+export async function findUserByUsername(username: string): Promise<User | undefined> {
   const db = await getDb();
   if (!db) return undefined;
   const result = await db
     .select()
-    .from(localUsers)
-    .where(eq(localUsers.username, username))
+    .from(users)
+    .where(eq(users.username, username))
     .limit(1);
   return result[0];
 }
 
-export async function findLocalUserById(id: number): Promise<LocalUser | undefined> {
+/** @deprecated Usar findUserByUsername */
+export const findLocalUserByUsername = findUserByUsername;
+
+export async function findUserById(id: number): Promise<User | undefined> {
   const db = await getDb();
   if (!db) return undefined;
   const result = await db
     .select()
-    .from(localUsers)
-    .where(eq(localUsers.id, id))
+    .from(users)
+    .where(eq(users.id, id))
     .limit(1);
   return result[0];
 }
 
-export async function createLocalUser(data: InsertLocalUser): Promise<void> {
+/** @deprecated Usar findUserById */
+export const findLocalUserById = findUserById;
+
+export async function createUser(data: InsertUser): Promise<void> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  await db.insert(localUsers).values(data);
+  await db.insert(users).values(data);
 }
+
+/** @deprecated Usar createUser */
+export const createLocalUser = createUser;
 
 export async function updateLastSignedIn(id: number): Promise<void> {
   const db = await getDb();
   if (!db) return;
   await db
-    .update(localUsers)
+    .update(users)
     .set({ lastSignedIn: new Date() })
-    .where(eq(localUsers.id, id));
+    .where(eq(users.id, id));
 }
 
-export async function getAllLocalUsers(): Promise<Omit<LocalUser, "passwordHash">[]> {
+export async function getAllUsers(): Promise<Omit<User, "passwordHash">[]> {
   const db = await getDb();
   if (!db) return [];
   const result = await db
     .select({
-      id: localUsers.id,
-      username: localUsers.username,
-      displayName: localUsers.displayName,
-      role: localUsers.role,
-      isActive: localUsers.isActive,
-      createdAt: localUsers.createdAt,
-      updatedAt: localUsers.updatedAt,
-      lastSignedIn: localUsers.lastSignedIn,
+      id: users.id,
+      username: users.username,
+      displayName: users.displayName,
+      role: users.role,
+      roleId: users.roleId,
+      isActive: users.isActive,
+      createdAt: users.createdAt,
+      updatedAt: users.updatedAt,
+      lastSignedIn: users.lastSignedIn,
     })
-    .from(localUsers);
+    .from(users);
   return result;
 }
+
+/** @deprecated Usar getAllUsers */
+export const getAllLocalUsers = getAllUsers;
 
 // ─── Seed de usuarios predefinidos ───────────────────────────────────────────
 
@@ -148,10 +161,10 @@ export async function seedDefaultUsers(): Promise<void> {
   ];
 
   for (const u of defaultUsers) {
-    const existing = await findLocalUserByUsername(u.username);
+    const existing = await findUserByUsername(u.username);
     if (!existing) {
       const passwordHash = await hashPassword(u.password);
-      await createLocalUser({
+      await createUser({
         username: u.username,
         passwordHash,
         displayName: u.displayName,
@@ -166,7 +179,7 @@ export async function seedDefaultUsers(): Promise<void> {
 // ─── Rutas REST (eliminadas — el cliente usa tRPC exclusivamente) ─────────────
 // Los endpoints /api/auth/login, /api/auth/logout y /api/auth/me fueron eliminados.
 // Toda la autenticación pasa por el router tRPC `localAuth` en server/routers.ts,
-// que usa ds_findLocalUserByUsername de dataSource.ts como única fuente de verdad.
+// que usa ds_findUserByUsername de dataSource.ts como única fuente de verdad.
 
 export function registerLocalAuthRoutes(_app: Express) {
   // No-op: rutas REST eliminadas. Toda la auth pasa por tRPC.

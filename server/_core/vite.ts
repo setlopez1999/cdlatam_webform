@@ -5,6 +5,7 @@ import { nanoid } from "nanoid";
 import path from "path";
 import { createServer as createViteServer } from "vite";
 import viteConfig from "../../vite.config";
+import { ENV } from "./env";
 
 export async function setupVite(app: Express, server: Server) {
   const serverOptions = {
@@ -38,6 +39,9 @@ export async function setupVite(app: Express, server: Server) {
         `src="/src/main.tsx"`,
         `src="/src/main.tsx?v=${nanoid()}"`
       );
+      // Inyectar window.__ENV__ directamente en el HTML (runtime config sin rebuild)
+      const runtimeConfig = `<script>window.__ENV__ = ${JSON.stringify({ APP_DEBUG: ENV.appDebug })};</script>`;
+      template = template.replace(`</head>`, `${runtimeConfig}\n  </head>`);
       const page = await vite.transformIndexHtml(url, template);
       res.status(200).set({ "Content-Type": "text/html" }).end(page);
     } catch (e) {
@@ -59,6 +63,13 @@ export function serveStatic(app: Express) {
   }
 
   app.use(express.static(distPath));
+
+  // Endpoint /config.js para producción (modo static)
+  app.get("/config.js", (_req, res) => {
+    res.setHeader("Content-Type", "application/javascript");
+    res.setHeader("Cache-Control", "no-store");
+    res.send(`window.__ENV__ = ${JSON.stringify({ APP_DEBUG: ENV.appDebug })};`);
+  });
 
   // fall through to index.html if the file doesn't exist
   app.use("*", (_req, res) => {
