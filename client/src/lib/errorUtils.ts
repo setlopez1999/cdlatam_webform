@@ -18,16 +18,16 @@ declare global {
 }
 
 /**
- * Lee APP_DEBUG desde window.__ENV__ (runtime) con fallback a import.meta.env (build-time).
- * Esto permite cambiar el modo debug sin rebuild.
+ * Lee APP_DEBUG desde window.__ENV__ (inyectado por el servidor en runtime).
+ * Siempre lee desde el servidor — nunca desde el build.
+ * Para cambiar: editar APP_DEBUG en .env y hacer docker-compose down && up (sin --build).
  */
 export function getAppDebug(): boolean {
-  // Primero intenta leer desde runtime config (window.__ENV__)
   if (typeof window !== "undefined" && window.__ENV__?.APP_DEBUG !== undefined) {
     return window.__ENV__.APP_DEBUG === true;
   }
-  // Fallback a variable de build-time (útil en desarrollo local con Vite HMR)
-  return import.meta.env.VITE_APP_DEBUG === "true";
+  // Solo en SSR o entornos sin window, default false (seguro)
+  return false;
 }
 
 export const APP_DEBUG = getAppDebug();
