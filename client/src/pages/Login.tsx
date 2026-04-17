@@ -3,6 +3,7 @@ import { useLocation } from "wouter";
 import { useLocalAuth } from "@/hooks/useLocalAuth";
 import { Label } from "@/components/ui/label";
 import { Loader2, Lock, User, ArrowRight, CheckCircle2 } from "lucide-react";
+import { getAppDebug } from "@/lib/errorUtils";
 
 export default function Login() {
   const [username, setUsername] = useState("");
@@ -108,7 +109,8 @@ export default function Login() {
       </div>
 
       {/* ── Panel derecho: Formulario ── */}
-      <div className="flex-1 flex flex-col items-center justify-center px-6 py-12 relative">
+      {/* translate="no" previene el error NotFoundError de React cuando el navegador traduce la página */}
+      <div className="flex-1 flex flex-col items-center justify-center px-6 py-12 relative" translate="no">
 
         {/* Mobile logo */}
         <div className="lg:hidden mb-8">
@@ -135,7 +137,7 @@ export default function Login() {
                 style={{ background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.2)", color: "#fca5a5" }}
               >
                 <div className="w-1.5 h-1.5 rounded-full bg-red-400 flex-shrink-0" />
-                {localError}
+                <span>{localError}</span>
               </div>
             )}
 
@@ -218,15 +220,15 @@ export default function Login() {
               }}
             >
               {isLoggingIn ? (
-                <><Loader2 className="w-4 h-4 animate-spin" />Verificando...</>
+                <><Loader2 className="w-4 h-4 animate-spin" /><span>Verificando...</span></>
               ) : (
-                <>Ingresar al sistema <ArrowRight className="w-4 h-4" /></>
+                <><span>Ingresar al sistema</span> <ArrowRight className="w-4 h-4" /></>
               )}
             </button>
           </form>
 
-          {/* Credentials hint */}
-          <div className="mt-8 pt-6" style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+          {/* Credentials hint — solo visible en modo debug */}
+          {getAppDebug() && <div className="mt-8 pt-6" style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
             <p className="text-[10px] font-semibold uppercase tracking-widest text-white/20 text-center mb-3">
               Acceso de prueba
             </p>
@@ -275,7 +277,7 @@ export default function Login() {
             <p className="text-[10px] text-white/15 text-center mt-3">
               Haz clic en una credencial para autocompletar
             </p>
-          </div>
+          </div>}
         </div>
 
         {/* Footer */}

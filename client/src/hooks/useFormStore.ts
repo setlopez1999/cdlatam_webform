@@ -10,7 +10,9 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { nanoid } from "nanoid";
-import { DISTRIBUCION_GIM, DISTRIBUCION_GP, TASA_IMPUESTO } from "../../../shared/catalogs";
+const DISTRIBUCION_GIM = 0.1;  // 10%
+const DISTRIBUCION_GP  = 0.9;  // 90%
+const TASA_IMPUESTO    = 0.19; // 19%
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 

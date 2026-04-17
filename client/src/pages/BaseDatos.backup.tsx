@@ -19,17 +19,13 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Link } from "wouter";
 import { toast } from "sonner";
+import { Link } from "wouter";
 import { Table2 } from "lucide-react";
-import { PageLayout } from "@/components/PageLayout";
-import { ManageCatalogsModal } from "@/components/ManageCatalogsModal";
-import { CatalogTabGrid } from "@/components/CatalogTabGrid";
 import { loadActasList, loadEPList, deleteActa, deleteEP } from "@/hooks/useFormStore";
 import { formatCurrency, formatDate, getStatusColor, getStatusLabel } from "@/lib/formatters";
 import { CatalogCrudView } from "@/components/CatalogCrudView";
 import { catalogConfigs } from "@/config/catalogConfig";
-import { parseErrorMessage, isConnectionError, APP_DEBUG } from "@/lib/errorUtils";
 
 // ─── Tipos ───────────────────────────────────────────────────────────────────
 
@@ -119,16 +115,24 @@ function EmptyState({ icon: Icon, title, desc }: { icon: React.ComponentType<{ c
 
 // ─── Vista Resumen ────────────────────────────────────────────────────────────
 
-function ResumenView({ data, catalogMeta, onSelectTab }: {
-  data: SummaryData;
-  catalogMeta: { tableName: string; title: string; isCustom: number }[];
-  onSelectTab: (tab: string) => void;
-}) {
-  const { data: counts = {} } = trpc.catalogsDB.allCounts.useQuery();
-
-  const total = Object.values(counts).reduce((a, v) => a + v, 0);
-  const empty = catalogMeta.filter(m => (counts[m.tableName] ?? 0) === 0);
-  const filled = catalogMeta.filter(m => (counts[m.tableName] ?? 0) > 0);
+function ResumenView({ data }: { data: SummaryData }) {
+  const stats = [
+    { icon: Hash, label: "CECOs", value: data.cecos.length, color: "text-blue-400", bg: "bg-blue-500/10" },
+    { icon: Layers, label: "Soluciones", value: data.soluciones.length, color: "text-emerald-400", bg: "bg-emerald-500/10" },
+    { icon: Globe, label: "Países", value: data.paises.length, color: "text-cyan-400", bg: "bg-cyan-500/10" },
+    { icon: DollarSign, label: "Monedas", value: data.monedas.length, color: "text-yellow-400", bg: "bg-yellow-500/10" },
+    { icon: Building2, label: "Empresas", value: data.empresas.length, color: "text-blue-400", bg: "bg-blue-500/10" },
+    { icon: FileText, label: "Doc. Identidad", value: data.doctos.length, color: "text-slate-400", bg: "bg-slate-500/10" },
+    { icon: Briefcase, label: "Unidades Negocio", value: data.unidades.length, color: "text-orange-400", bg: "bg-orange-500/10" },
+    { icon: Wrench, label: "Detalle Servicio", value: data.detalles.length, color: "text-pink-400", bg: "bg-pink-500/10" },
+    { icon: Tag, label: "Tipos de Venta", value: data.tipos.length, color: "text-red-400", bg: "bg-red-500/10" },
+    { icon: Clock, label: "Plazos", value: data.plazos.length, color: "text-teal-400", bg: "bg-teal-500/10" },
+    { icon: FileText, label: "Documentos", value: data.docs.length, color: "text-indigo-400", bg: "bg-indigo-500/10" },
+    { icon: MapPin, label: "Departamentos", value: data.deptos.length, color: "text-indigo-400", bg: "bg-indigo-500/10" },
+    { icon: Layers, label: "Áreas", value: data.areas.length, color: "text-fuchsia-400", bg: "bg-fuchsia-500/10" },
+    { icon: Users, label: "Nombres", value: data.nombres.length, color: "text-rose-400", bg: "bg-rose-500/10" },
+  ];
+  const total = stats.reduce((a, s) => a + s.value, 0);
 
   return (
     <div className="space-y-6">
@@ -137,61 +141,27 @@ function ResumenView({ data, catalogMeta, onSelectTab }: {
         <div className="w-14 h-14 rounded-xl bg-blue-500/20 flex items-center justify-center flex-shrink-0">
           <Database className="w-7 h-7 text-blue-400" />
         </div>
-        <div className="flex-1">
+        <div>
           <p className="text-4xl font-bold text-white">{total}</p>
           <p className="text-slate-400 text-sm">registros totales en la base de datos</p>
-        </div>
-        {empty.length > 0 && (
-          <div className="flex items-center gap-2 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
-            <div className="w-2 h-2 rounded-full bg-amber-400" />
-            <span className="text-xs text-amber-300 font-medium">{empty.length} tabla{empty.length !== 1 ? 's' : ''} vacía{empty.length !== 1 ? 's' : ''}</span>
-          </div>
-        )}
-      </div>
-
-      {/* Tablas con datos */}
-      <div>
-        <p className="text-xs text-slate-500 font-medium uppercase tracking-wider mb-3">Catálogos con datos</p>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-          {filled.map(m => (
-            <button
-              key={m.tableName}
-              onClick={() => onSelectTab(m.tableName)}
-              className="bg-[#1a1f2e] border border-white/5 rounded-xl p-4 flex items-center gap-3 hover:border-blue-500/30 hover:bg-blue-500/5 transition-colors text-left"
-            >
-              <div className="w-9 h-9 rounded-lg bg-emerald-500/10 flex items-center justify-center flex-shrink-0">
-                <Database className="w-4 h-4 text-emerald-400" />
-              </div>
-              <div className="min-w-0">
-                <p className="text-xl font-bold text-white">{counts[m.tableName] ?? 0}</p>
-                <p className="text-xs text-slate-500 truncate">{m.title}</p>
-              </div>
-            </button>
-          ))}
+          <p className="text-xs text-slate-500 mt-0.5">Importados desde Excel — Hoja "Base de datos"</p>
         </div>
       </div>
 
-      {/* Tablas vacías */}
-      {empty.length > 0 && (
-        <div>
-          <p className="text-xs text-slate-500 font-medium uppercase tracking-wider mb-3 flex items-center gap-2">
-            <span className="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block" />
-            Catálogos vacíos
-          </p>
-          <div className="flex flex-wrap gap-2">
-            {empty.map(m => (
-              <button
-                key={m.tableName}
-                onClick={() => onSelectTab(m.tableName)}
-                className="flex items-center gap-2 px-3 py-2 bg-amber-500/5 border border-amber-500/20 rounded-lg text-xs text-amber-300 hover:bg-amber-500/10 hover:border-amber-500/40 transition-colors"
-              >
-                <div className="w-1.5 h-1.5 rounded-full bg-amber-400" />
-                {m.title}
-              </button>
-            ))}
+      {/* Stats grid */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+        {stats.map(s => (
+          <div key={s.label} className="bg-[#1a1f2e] border border-white/5 rounded-xl p-4 flex items-center gap-3 hover:border-white/10 transition-colors">
+            <div className={`w-9 h-9 rounded-lg ${s.bg} flex items-center justify-center flex-shrink-0`}>
+              <s.icon className={`w-4 h-4 ${s.color}`} />
+            </div>
+            <div className="min-w-0">
+              <p className="text-xl font-bold text-white">{s.value}</p>
+              <p className="text-xs text-slate-500 truncate">{s.label}</p>
+            </div>
           </div>
-        </div>
-      )}
+        ))}
+      </div>
 
       {/* Soluciones preview */}
       <div className="bg-[#1a1f2e] border border-white/5 rounded-xl p-5">
@@ -418,29 +388,40 @@ function EPView() {
 // ─── Página principal ─────────────────────────────────────────────────────────
 
 export default function BaseDatos() {
-  const [activeTab, setActiveTab] = useState<string>("resumen");
+  const [activeTab, setActiveTab] = useState<TabId>("resumen");
   const [showAdminDb, setShowAdminDb] = useState(false);
-  const [showManageCatalogs, setShowManageCatalogs] = useState(false);
   const { data: rawData, isLoading, error } = trpc.catalogsDB.summary.useQuery();
-  const { data: catalogMetaList = [], refetch: refetchTables } = trpc.catalogsDB.listTables.useQuery();
   const data = rawData as SummaryData | undefined;
 
+  const catalogTabs = TABS.filter(t => t.group === "catalogs");
+  const recordTabs = TABS.filter(t => t.group === "records");
+
+  const getCount = (id: TabId) => {
+    if (!data) return null;
+    const map: Partial<Record<TabId, number>> = {
+      cecos: data.cecos.length, soluciones: data.soluciones.length,
+      paises: data.paises.length, monedas: data.monedas.length,
+      unidades: data.unidades.length, detalle: data.detalles.length,
+      tipos: data.tipos.length, plazos: data.plazos.length,
+      documentos: data.docs.length,
+      empresas: data.empresas.length, doctos: data.doctos.length,
+      deptos: data.deptos.length, areas: data.areas.length, nombres: data.nombres.length,
+    };
+    return map[id] ?? null;
+  };
+
   return (
-    <PageLayout
-      title="Base de Datos"
-      subtitle="Catálogos del sistema y registros de documentos"
-      icon={<Database className="w-6 h-6 text-primary" />}
-      actions={
-        <>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => setShowManageCatalogs(true)}
-            className="h-9 border-white/10 bg-white/5 text-slate-300 hover:text-white gap-1.5"
-          >
-            <Settings2 className="w-4 h-4" />
-            Administrar
-          </Button>
+    <div className="p-6 max-w-4xl mx-auto space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
+            <Database className="w-6 h-6 text-primary" />
+            Base de Datos
+          </h1>
+          <p className="text-sm text-slate-400 mt-0.5">Catálogos del sistema y registros de documentos</p>
+        </div>
+        <div className="flex items-center gap-3">
           <Link href="/base-datos/spreadsheet">
             <Button size="sm" className="h-9 bg-emerald-600 hover:bg-emerald-700 text-white shadow-md shadow-emerald-500/20 gap-1.5">
               <Table2 className="w-4 h-4" />
@@ -449,18 +430,31 @@ export default function BaseDatos() {
           </Link>
           <div className="flex items-center gap-2 text-xs text-slate-500 bg-white/5 border border-white/10 rounded-lg px-3 py-1.5">
             <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-            SQLite conectado
+            MySQL conectado
           </div>
-        </>
-      }
-    >
+        </div>
+      </div>
 
-      {/* Grid de bloques de catálogos */}
-      <CatalogTabGrid
-        tables={catalogMetaList.map(t => ({ ...t, isCustom: Boolean(t.isCustom) }))}
-        activeTab={activeTab}
-        onSelect={setActiveTab}
-      />
+      {/* Grupo Catálogos */}
+      <div>
+        <p className="text-xs text-slate-500 font-medium uppercase tracking-wider mb-2 px-1">Catálogos del Sistema</p>
+        <div className="flex gap-1 overflow-x-auto pb-1 scrollbar-none">
+          {catalogTabs.map(tab => {
+            const Icon = tab.icon;
+            const isActive = activeTab === tab.id;
+            const count = getCount(tab.id);
+            return (
+              <button key={tab.id} onClick={() => setActiveTab(tab.id)}
+                className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium whitespace-nowrap transition-all flex-shrink-0 ${isActive ? `${tab.bgColor} ${tab.color} border border-current/20` : "text-slate-400 hover:text-slate-200 hover:bg-white/5"
+                  }`}>
+                <Icon className="w-3.5 h-3.5" />
+                {tab.label}
+                {count !== null && <span className={`ml-0.5 text-xs px-1.5 py-0.5 rounded-full ${isActive ? "bg-current/10" : "bg-white/5 text-slate-500"}`}>{count}</span>}
+              </button>
+            );
+          })}
+        </div>
+      </div>
 
       {/* Grupo Registros 
       <div>
@@ -493,41 +487,19 @@ export default function BaseDatos() {
           </div>
         ) : error && activeTab !== "actas" && activeTab !== "ep" ? (
           <div className="flex items-center justify-center h-48">
-            <div className="text-center space-y-2">
-              <Database className="w-8 h-8 text-red-400 mx-auto" />
-              <p className="text-red-400 text-sm font-medium">
-                {isConnectionError(error) ? "Error de conexión con el servidor" : "Error al cargar los datos"}
-              </p>
-              <p className="text-slate-500 text-xs">{parseErrorMessage(error)}</p>
-              {APP_DEBUG && (
-                <details className="mt-2 text-left max-w-sm mx-auto">
-                  <summary className="text-xs text-slate-600 cursor-pointer hover:text-slate-400">Ver detalle técnico</summary>
-                  <pre className="mt-1 text-xs text-red-300 bg-red-500/10 rounded p-2 overflow-auto max-h-32 whitespace-pre-wrap">{error.message}</pre>
-                </details>
-              )}
+            <div className="text-center">
+              <Database className="w-8 h-8 text-red-400 mx-auto mb-2" />
+              <p className="text-red-400 text-sm">{error.message}</p>
             </div>
           </div>
         ) : (
           <>
-            {activeTab === "resumen" && data && <ResumenView data={data} catalogMeta={catalogMetaList as any} onSelectTab={setActiveTab} />}
+            {activeTab === "resumen" && data && <ResumenView data={data} />}
 
-            {/* CRUD GENÉRICO DE CATÁLOGOS - dinámico desde catalog_meta */}
-            {activeTab !== "resumen" && activeTab !== "actas" && activeTab !== "ep" && (() => {
-              const cat = catalogMetaList.find(c => c.tableName === activeTab);
-              if (!cat) return null;
-              // Usar config hardcodeado si existe, sino generar uno genérico
-              const staticConfig = catalogConfigs[activeTab];
-              const config = staticConfig ?? {
-                tableName: cat.tableName,
-                title: cat.title,
-                fields: [
-                  { key: "valor", label: "Valor", type: "text" as const, required: true },
-                  { key: "activo", label: "Activo", type: "boolean" as const },
-                ],
-              };
-              // Siempre usar el título de catalog_meta (puede haber sido renombrado)
-              return <CatalogCrudView key={activeTab} config={{ ...config, title: cat.title }} />;
-            })()}
+            {/* CRUD GENÉRICO DE CATÁLOGOS */}
+            {activeTab !== "resumen" && activeTab !== "actas" && activeTab !== "ep" && catalogConfigs[activeTab] && (
+              <CatalogCrudView config={catalogConfigs[activeTab]} />
+            )}
 
             {/* VISTAS PARTICULARES */}
             {activeTab === "actas" && <ActasView />}
@@ -615,11 +587,6 @@ export default function BaseDatos() {
           <Settings2 className="w-2.5 h-2.5 text-slate-500" />
         </button>
       </div>
-      <ManageCatalogsModal
-        open={showManageCatalogs}
-        onClose={() => setShowManageCatalogs(false)}
-        onChanged={() => { refetchTables(); setActiveTab("resumen"); }}
-      />
-    </PageLayout>
+    </div>
   );
 }

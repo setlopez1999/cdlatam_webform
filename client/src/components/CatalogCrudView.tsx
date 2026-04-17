@@ -8,8 +8,9 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Search, Plus, Edit2, Trash2, ArrowUpDown, Power } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
-import { CatalogConfig } from "../core/config/catalogConfig";
+import { CatalogConfig } from "@/config/catalogConfig";
 import { toast } from "sonner";
+import { parseErrorMessage } from "@/lib/errorUtils";
 
 export function CatalogCrudView({ config }: { config: CatalogConfig }) {
   const [search, setSearch] = useState("");
@@ -99,7 +100,7 @@ export function CatalogCrudView({ config }: { config: CatalogConfig }) {
       closeModal();
       refetch();
     } catch (error: any) {
-      toast.error(error.message || "Ocurrió un error guardando el registro");
+      toast.error(parseErrorMessage(error));
     }
   };
 
@@ -116,7 +117,7 @@ export function CatalogCrudView({ config }: { config: CatalogConfig }) {
       toast.success(`Registro ${isActivo ? 'inactivado' : 'activado'}`);
       refetch();
     } catch (error: any) {
-      toast.error(`Error al ${action}: ` + error.message);
+      toast.error(`Error al ${action}: ` + parseErrorMessage(error));
     }
   };
 
@@ -127,7 +128,7 @@ export function CatalogCrudView({ config }: { config: CatalogConfig }) {
       toast.success("Registro eliminado");
       refetch();
     } catch (error: any) {
-      toast.error("Error eliminando: " + error.message);
+      toast.error("Error eliminando: " + parseErrorMessage(error));
     }
   };
 
@@ -160,7 +161,7 @@ export function CatalogCrudView({ config }: { config: CatalogConfig }) {
       setSelectedIds([]);
       refetch();
     } catch (error: any) {
-      toast.error(`Error al ${action} masivamente: ` + error.message);
+      toast.error(`Error al ${action} masivamente: ` + parseErrorMessage(error));
     }
   };
 

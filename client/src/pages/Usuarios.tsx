@@ -10,320 +10,503 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import {
-  Users, Plus, Shield, User, Clock, Loader2, RefreshCw, Power
-} from "lucide-react";
+import { Users, Plus, Shield, User, Clock, Loader2, RefreshCw, Power, Pencil, Tag, Trash2, AlertTriangle } from "lucide-react";
+import { PageLayout } from "@/components/PageLayout";
 
+// ─── Tipos ────────────────────────────────────────────────────────────────────
+type UserItem = {
+  id: number; username: string; displayName?: string | null;
+  role: string; roleId?: number | null; isActive: number;
+  createdAt?: Date | null; lastSignedIn?: Date | null;
+};
+type RoleItem = {
+  id: number; nombre: string; label: string;
+  descripcion?: string | null; activo: number;
+};
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+const formatDate = (d: Date | null | undefined) =>
+  d ? new Date(d).toLocaleString("es-CL", { dateStyle: "short", timeStyle: "short" }) : "Nunca";
+
+const initials = (u: UserItem) =>
+  (u.displayName ?? u.username).split(" ").map((w: string) => w[0]).join("").toUpperCase().slice(0, 2);
+
+// ─── Componente principal ─────────────────────────────────────────────────────
 export default function Usuarios() {
   const { isAdmin, isLoading: authLoading } = useLocalAuth();
   const [, navigate] = useLocation();
-  const [showCreate, setShowCreate] = useState(false);
-  const [form, setForm] = useState({ username: "", password: "", displayName: "", role: "user" as "user" | "admin" });
-  const [creating, setCreating] = useState(false);
+  const [activeTab, setActiveTab] = useState<"usuarios" | "roles">("usuarios");
 
-  const { data: users, isLoading, refetch } = trpc.localAuth.listUsers.useQuery(undefined, {
-    enabled: isAdmin,
+  // ── Estado modales usuarios ──
+  const [showCreateUser, setShowCreateUser] = useState(false);
+  const [editUser, setEditUser] = useState<UserItem | null>(null);
+  const [userForm, setUserForm] = useState({ username: "", password: "", displayName: "", role: "user" as "user" | "admin", roleId: null as number | null });
+  const [creatingUser, setCreatingUser] = useState(false);
+
+  // ── Estado modales roles ──
+  const [showCreateRole, setShowCreateRole] = useState(false);
+  const [editRole, setEditRole] = useState<RoleItem | null>(null);
+  const [roleForm, setRoleForm] = useState({ nombre: "", label: "", descripcion: "" });
+  const [creatingRole, setCreatingRole] = useState(false);
+  const [deleteRoleConfirm, setDeleteRoleConfirm] = useState<{ role: RoleItem; affected: UserItem[] } | null>(null);
+
+  // ── Queries ──
+  const { data: users, isLoading: loadingUsers, refetch: refetchUsers } =
+    trpc.localAuth.listUsers.useQuery(undefined, { enabled: isAdmin });
+
+  const { data: roles, isLoading: loadingRoles, refetch: refetchRoles } =
+    trpc.roles.list.useQuery(undefined, { enabled: isAdmin });
+
+  // ── Mutations usuarios ──
+  const createUserMut = trpc.localAuth.createUser.useMutation({
+    onSuccess: () => { toast.success("Usuario creado"); setShowCreateUser(false); resetUserForm(); refetchUsers(); },
+    onError: (e) => toast.error(e.message),
+  });
+  const updateUserMut = trpc.localAuth.updateUser.useMutation({
+    onSuccess: () => { toast.success("Usuario actualizado"); setEditUser(null); refetchUsers(); },
+    onError: (e) => toast.error(e.message),
+  });
+  const toggleStatusMut = trpc.localAuth.toggleStatus.useMutation();
+
+  // ── Mutations roles ──
+  const createRoleMut = trpc.roles.create.useMutation({
+    onSuccess: () => { toast.success("Rol creado"); setShowCreateRole(false); resetRoleForm(); refetchRoles(); },
+    onError: (e) => toast.error(e.message),
+  });
+  const updateRoleMut = trpc.roles.update.useMutation({
+    onSuccess: () => { toast.success("Rol actualizado"); setEditRole(null); refetchRoles(); },
+    onError: (e) => toast.error(e.message),
+  });
+  const deleteRoleMut = trpc.roles.delete.useMutation({
+    onSuccess: async (res: any) => {
+      if (res.requiresConfirm) {
+        setDeleteRoleConfirm({ role: editRole!, affected: res.affected });
+      } else {
+        toast.success("Rol eliminado"); refetchRoles(); refetchUsers();
+      }
+    },
+    onError: (e) => toast.error(e.message),
+  });
+  const deleteRoleForceMut = trpc.roles.deleteForce.useMutation({
+    onSuccess: () => { toast.success("Rol eliminado y usuarios desasignados"); setDeleteRoleConfirm(null); setEditRole(null); refetchRoles(); refetchUsers(); },
+    onError: (e) => toast.error(e.message),
   });
 
-  const createUser = trpc.localAuth.createUser.useMutation({
-    onSuccess: () => {
-      toast.success("Usuario creado correctamente");
-      setShowCreate(false);
-      setForm({ username: "", password: "", displayName: "", role: "user" });
-      refetch();
-    },
-    onError: (err) => {
-      toast.error(err.message);
-    },
-  });
+  // ── Helpers de reset ──
+  const resetUserForm = () => setUserForm({ username: "", password: "", displayName: "", role: "user", roleId: null });
+  const resetRoleForm = () => setRoleForm({ nombre: "", label: "", descripcion: "" });
 
-  const toggleStatusMutation = trpc.localAuth.toggleStatus.useMutation();
-
-  const handleToggleStatus = async (user: any) => {
-    const isActivo = Boolean(user.isActive);
-    const action = isActivo ? "desactivar" : "activar";
-    if (!confirm(`¿Seguro que deseas ${action} la cuenta de ${user.username}?`)) return;
-    try {
-      await toggleStatusMutation.mutateAsync({
-        id: user.id,
-        isActive: isActivo ? 0 : 1,
-      });
-      toast.success(`Cuenta ${isActivo ? 'inactivada' : 'activada'}`);
-      refetch();
-    } catch (error: any) {
-      toast.error(`Error al ${action}: ` + error.message);
-    }
+  const openEditUser = (u: UserItem) => {
+    setUserForm({ username: u.username, password: "", displayName: u.displayName ?? "", role: (u.role as "user" | "admin"), roleId: u.roleId ?? null });
+    setEditUser(u);
   };
 
-  if (authLoading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-      </div>
-    );
-  }
+  const openEditRole = (r: RoleItem) => {
+    setRoleForm({ nombre: r.nombre, label: r.label, descripcion: r.descripcion ?? "" });
+    setEditRole(r);
+  };
 
-  if (!isAdmin) {
-    return (
-      <div className="flex flex-col items-center justify-center h-64 gap-4">
-        <Shield className="w-12 h-12 text-muted-foreground/30" />
-        <p className="text-muted-foreground">Acceso restringido a administradores</p>
-        <Button variant="outline" onClick={() => navigate("/acta")}>Ir a Formularios</Button>
-      </div>
-    );
-  }
+  const handleToggleStatus = async (u: UserItem) => {
+    const isActivo = Boolean(u.isActive);
+    if (!confirm(`¿Seguro que deseas ${isActivo ? "desactivar" : "activar"} la cuenta de ${u.username}?`)) return;
+    try {
+      await toggleStatusMut.mutateAsync({ id: u.id, isActive: isActivo ? 0 : 1 });
+      toast.success(`Cuenta ${isActivo ? "inactivada" : "activada"}`);
+      refetchUsers();
+    } catch (e: any) { toast.error(e.message); }
+  };
 
-  const handleCreate = async (e: React.FormEvent) => {
+  const handleCreateUser = async (e: React.FormEvent) => {
+    e.preventDefault(); setCreatingUser(true);
+    try { await createUserMut.mutateAsync({ ...userForm, roleId: userForm.roleId }); }
+    finally { setCreatingUser(false); }
+  };
+
+  const handleUpdateUser = async (e: React.FormEvent) => {
     e.preventDefault();
-    setCreating(true);
-    try {
-      await createUser.mutateAsync(form);
-    } finally {
-      setCreating(false);
-    }
+    if (!editUser) return;
+    await updateUserMut.mutateAsync({ id: editUser.id, displayName: userForm.displayName, role: userForm.role, roleId: userForm.roleId });
   };
 
-  const formatDate = (d: Date | null | undefined) => {
-    if (!d) return "Nunca";
-    return new Date(d).toLocaleString("es-CL", { dateStyle: "short", timeStyle: "short" });
+  const handleCreateRole = async (e: React.FormEvent) => {
+    e.preventDefault(); setCreatingRole(true);
+    try { await createRoleMut.mutateAsync(roleForm); }
+    finally { setCreatingRole(false); }
+  };
+
+  const handleUpdateRole = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editRole) return;
+    await updateRoleMut.mutateAsync({ id: editRole.id, ...roleForm });
+  };
+
+  const handleDeleteRole = async (r: RoleItem) => {
+    setEditRole(r);
+    await deleteRoleMut.mutateAsync({ id: r.id });
+  };
+
+  // ── Stats ──
+  const totalUsers = users?.length ?? 0;
+  const adminCount = users?.filter(u => u.role === "admin").length ?? 0;
+  const totalRoles = roles?.length ?? 0;
+
+  // ── Guards ──
+  if (authLoading) return (
+    <div className="flex items-center justify-center h-64">
+      <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+    </div>
+  );
+  if (!isAdmin) return (
+    <div className="flex flex-col items-center justify-center h-64 gap-4">
+      <Shield className="w-12 h-12 text-muted-foreground/30" />
+      <p className="text-muted-foreground">Acceso restringido a administradores</p>
+      <Button variant="outline" onClick={() => navigate("/nuevo-expediente")}>Ir a Formularios</Button>
+    </div>
+  );
+
+  const getRoleBadge = (u: UserItem) => {
+    const r = roles?.find(r => r.id === u.roleId);
+    if (r) return <Badge variant="outline" className="text-xs h-5 border-violet-300 text-violet-700 bg-violet-50"><Tag className="w-2.5 h-2.5 mr-1" />{r.label}</Badge>;
+    if (u.role === "admin") return <Badge variant="default" className="text-xs h-5 bg-amber-500/15 text-amber-700 border-amber-200"><Shield className="w-2.5 h-2.5 mr-1" />Admin</Badge>;
+    return <Badge variant="secondary" className="text-xs h-5"><User className="w-2.5 h-2.5 mr-1" />Usuario</Badge>;
   };
 
   return (
-    <div className="p-6 max-w-4xl mx-auto space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
-            <Users className="w-6 h-6 text-primary" />
-            Gestión de Usuarios
-          </h1>
-          <p className="text-muted-foreground text-sm mt-1">
-            Administra los usuarios del sistema y sus permisos
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={() => refetch()}>
-            <RefreshCw className="w-4 h-4 mr-1.5" />
-            Actualizar
+    <PageLayout
+      title="Gestión de Usuarios"
+      subtitle="Administra los usuarios del sistema y sus permisos"
+      icon={<Users className="w-6 h-6 text-primary" />}
+      actions={
+        <>
+          <Button variant="outline" size="sm" onClick={() => { refetchUsers(); refetchRoles(); }}>
+            <RefreshCw className="w-4 h-4 mr-1.5" />Actualizar
           </Button>
-          <Button size="sm" onClick={() => setShowCreate(true)}>
-            <Plus className="w-4 h-4 mr-1.5" />
-            Nuevo Usuario
-          </Button>
-        </div>
-      </div>
-
+          {activeTab === "usuarios"
+            ? <Button size="sm" onClick={() => setShowCreateUser(true)}><Plus className="w-4 h-4 mr-1.5" />Nuevo Usuario</Button>
+            : <Button size="sm" onClick={() => setShowCreateRole(true)}><Plus className="w-4 h-4 mr-1.5" />Nuevo Rol</Button>
+          }
+        </>
+      }
+    >
       {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-        <Card>
-          <CardContent className="pt-4 pb-4">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center">
-                <Users className="w-4 h-4 text-primary" />
+      <div className="grid grid-cols-3 gap-4">
+        {[
+          { label: "Total usuarios", value: totalUsers, icon: Users, color: "primary" },
+          { label: "Administradores", value: adminCount, icon: Shield, color: "amber" },
+          { label: "Roles definidos", value: totalRoles, icon: Tag, color: "violet" },
+        ].map(({ label, value, icon: Icon, color }) => (
+          <Card key={label}>
+            <CardContent className="pt-4 pb-4">
+              <div className="flex items-center gap-3">
+                <div className={`w-9 h-9 rounded-lg bg-${color}-500/10 flex items-center justify-center`}>
+                  <Icon className={`w-4 h-4 text-${color}-500`} />
+                </div>
+                <div>
+                  <p className="text-2xl font-bold">{value}</p>
+                  <p className="text-xs text-muted-foreground">{label}</p>
+                </div>
               </div>
-              <div>
-                <p className="text-2xl font-bold">{users?.length ?? 0}</p>
-                <p className="text-xs text-muted-foreground">Total usuarios</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-4 pb-4">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-lg bg-amber-500/10 flex items-center justify-center">
-                <Shield className="w-4 h-4 text-amber-500" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold">{users?.filter(u => u.role === "admin").length ?? 0}</p>
-                <p className="text-xs text-muted-foreground">Administradores</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-4 pb-4">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-lg bg-blue-500/10 flex items-center justify-center">
-                <User className="w-4 h-4 text-blue-500" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold">{users?.filter(u => u.role === "user").length ?? 0}</p>
-                <p className="text-xs text-muted-foreground">Usuarios regulares</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        ))}
       </div>
 
-      {/* Users Table */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">Usuarios del Sistema</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {isLoading ? (
-            <div className="flex justify-center py-8">
-              <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
-            </div>
-          ) : !users || users.length === 0 ? (
-            <p className="text-center text-muted-foreground py-8 text-sm">No hay usuarios registrados</p>
-          ) : (
-            <div className="space-y-2">
-              {users.map((u) => {
-                const initials = (u.displayName ?? u.username)
-                  .split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 2);
-                return (
-                  <div
-                    key={u.id}
-                    className="flex items-center gap-3 p-3 rounded-lg border border-border hover:bg-muted/30 transition-colors"
-                  >
-                    <Avatar className="w-9 h-9">
-                      <AvatarFallback className={
-                        u.role === "admin"
-                          ? "bg-amber-500/15 text-amber-600 text-xs font-semibold"
-                          : "bg-blue-500/15 text-blue-600 text-xs font-semibold"
-                      }>
-                        {initials}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <p className="text-sm font-medium truncate">
-                          {u.displayName ?? u.username}
-                        </p>
-                        <Badge
-                          variant={u.role === "admin" ? "default" : "secondary"}
-                          className={cn(
-                            "text-xs h-5",
-                            u.role === "admin" && "bg-amber-500/15 text-amber-700 border-amber-200 hover:bg-amber-500/20"
-                          )}
-                        >
-                          {u.role === "admin" ? (
-                            <><Shield className="w-2.5 h-2.5 mr-1" />Admin</>
-                          ) : (
-                            <><User className="w-2.5 h-2.5 mr-1" />Usuario</>
-                          )}
-                        </Badge>
-                        {u.isActive !== 1 && (
-                          <Badge variant="destructive" className="text-xs h-5">Inactivo</Badge>
-                        )}
-                      </div>
-                      <p className="text-xs text-muted-foreground">@{u.username}</p>
-                    </div>
-                    <div className="flex items-center gap-2 pr-4 pl-2">
-                       <Button 
-                         variant="ghost" 
-                         size="icon" 
-                         onClick={() => handleToggleStatus(u)} 
-                         disabled={toggleStatusMutation.isPending}
-                         title={u.isActive ? "Desactivar" : "Activar"} 
-                         className={`h-8 w-8 ${u.isActive ? 'text-orange-400 hover:text-orange-300 hover:bg-orange-500/10' : 'text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10'}`}>
-                         <Power className="w-4 h-4" />
-                       </Button>
-                    </div>
-                    <div className="text-right hidden sm:block">
-                      <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                        <Clock className="w-3 h-3" />
-                        <span>Último acceso: {formatDate(u.lastSignedIn)}</span>
-                      </div>
-                      <p className="text-xs text-muted-foreground">
-                        Creado: {formatDate(u.createdAt)}
-                      </p>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      {/* Tabs */}
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)}>
+        <TabsList className="mb-2">
+          <TabsTrigger value="usuarios" className="gap-2"><Users className="w-4 h-4" />Usuarios del Sistema</TabsTrigger>
+          <TabsTrigger value="roles" className="gap-2"><Tag className="w-4 h-4" />Roles del Sistema</TabsTrigger>
+        </TabsList>
 
-      {/* Create User Dialog */}
-      <Dialog open={showCreate} onOpenChange={setShowCreate}>
+        {/* ── Tab Usuarios ── */}
+        <TabsContent value="usuarios">
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Usuarios del Sistema</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {loadingUsers ? (
+                <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>
+              ) : !users?.length ? (
+                <p className="text-center text-muted-foreground py-8 text-sm">No hay usuarios registrados</p>
+              ) : (
+                <div className="space-y-2">
+                  {users.map((u: UserItem) => (
+                    <div key={u.id} className="flex items-center gap-3 p-3 rounded-lg border border-border hover:bg-muted/30 transition-colors">
+                      <Avatar className="w-9 h-9">
+                        <AvatarFallback className={u.role === "admin" ? "bg-amber-500/15 text-amber-600 text-xs font-semibold" : "bg-blue-500/15 text-blue-600 text-xs font-semibold"}>
+                          {initials(u)}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="text-sm font-medium truncate">{u.displayName ?? u.username}</p>
+                          {getRoleBadge(u)}
+                          {u.isActive !== 1 && <Badge variant="destructive" className="text-xs h-5">Inactivo</Badge>}
+                        </div>
+                        <p className="text-xs text-muted-foreground">@{u.username}</p>
+                      </div>
+                      <div className="text-right hidden sm:block">
+                        <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                          <Clock className="w-3 h-3" />
+                          <span>Último acceso: {formatDate(u.lastSignedIn)}</span>
+                        </div>
+                        <p className="text-xs text-muted-foreground">Creado: {formatDate(u.createdAt)}</p>
+                      </div>
+                      <Button variant="ghost" size="icon" onClick={() => openEditUser(u)} title="Editar usuario"
+                        className="h-8 w-8 text-muted-foreground hover:text-foreground">
+                        <Pencil className="w-4 h-4" />
+                      </Button>
+                      <Button variant="ghost" size="icon" onClick={() => handleToggleStatus(u)} disabled={toggleStatusMut.isPending}
+                        title={u.isActive ? "Desactivar" : "Activar"}
+                        className={`h-8 w-8 ${u.isActive ? "text-orange-400 hover:text-orange-300 hover:bg-orange-500/10" : "text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10"}`}>
+                        <Power className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* ── Tab Roles ── */}
+        <TabsContent value="roles">
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Roles del Sistema</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {loadingRoles ? (
+                <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>
+              ) : !roles?.length ? (
+                <p className="text-center text-muted-foreground py-8 text-sm">No hay roles definidos</p>
+              ) : (
+                <div className="space-y-2">
+                  {roles.map((r: RoleItem) => {
+                    const assignedCount = users?.filter(u => u.roleId === r.id).length ?? 0;
+                    return (
+                      <div key={r.id} className="flex items-center gap-3 p-3 rounded-lg border border-border hover:bg-muted/30 transition-colors">
+                        <div className="w-9 h-9 rounded-lg bg-violet-500/10 flex items-center justify-center flex-shrink-0">
+                          <Tag className="w-4 h-4 text-violet-500" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <p className="text-sm font-medium">{r.label}</p>
+                            <Badge variant="outline" className="text-xs h-5 font-mono">{r.nombre}</Badge>
+                            {r.activo !== 1 && <Badge variant="destructive" className="text-xs h-5">Inactivo</Badge>}
+                          </div>
+                          {r.descripcion && <p className="text-xs text-muted-foreground truncate">{r.descripcion}</p>}
+                        </div>
+                        <div className="text-right text-xs text-muted-foreground hidden sm:block">
+                          <p>{assignedCount} usuario{assignedCount !== 1 ? "s" : ""} asignado{assignedCount !== 1 ? "s" : ""}</p>
+                        </div>
+                        <Button variant="ghost" size="icon" onClick={() => openEditRole(r)} title="Editar rol"
+                          className="h-8 w-8 text-muted-foreground hover:text-foreground">
+                          <Pencil className="w-4 h-4" />
+                        </Button>
+                        <Button variant="ghost" size="icon" onClick={() => handleDeleteRole(r)} title="Eliminar rol"
+                          className="h-8 w-8 text-destructive/60 hover:text-destructive hover:bg-destructive/10"
+                          disabled={deleteRoleMut.isPending}>
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
+
+      {/* ── Modal Crear Usuario ── */}
+      <Dialog open={showCreateUser} onOpenChange={setShowCreateUser}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Plus className="w-4 h-4" />
-              Crear Nuevo Usuario
-            </DialogTitle>
+            <DialogTitle className="flex items-center gap-2"><Plus className="w-4 h-4" />Crear Nuevo Usuario</DialogTitle>
           </DialogHeader>
-          <form onSubmit={handleCreate} className="space-y-4">
+          <form onSubmit={handleCreateUser} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="new-username">Nombre de usuario *</Label>
-              <Input
-                id="new-username"
-                placeholder="ej: jperez"
-                value={form.username}
-                onChange={e => setForm(f => ({ ...f, username: e.target.value }))}
-                required
-                minLength={3}
-              />
+              <Label>Nombre de usuario *</Label>
+              <Input placeholder="ej: jperez" value={userForm.username} onChange={e => setUserForm(f => ({ ...f, username: e.target.value }))} required minLength={3} />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="new-displayName">Nombre completo</Label>
-              <Input
-                id="new-displayName"
-                placeholder="ej: Juan Pérez"
-                value={form.displayName}
-                onChange={e => setForm(f => ({ ...f, displayName: e.target.value }))}
-              />
+              <Label>Nombre completo</Label>
+              <Input placeholder="ej: Juan Pérez" value={userForm.displayName} onChange={e => setUserForm(f => ({ ...f, displayName: e.target.value }))} />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="new-password">Contraseña *</Label>
-              <Input
-                id="new-password"
-                type="password"
-                placeholder="Mínimo 4 caracteres"
-                value={form.password}
-                onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
-                required
-                minLength={4}
-              />
+              <Label>Contraseña *</Label>
+              <Input type="password" placeholder="Mínimo 4 caracteres" value={userForm.password} onChange={e => setUserForm(f => ({ ...f, password: e.target.value }))} required minLength={4} />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="new-role">Rol</Label>
-              <Select
-                value={form.role}
-                onValueChange={(v) => setForm(f => ({ ...f, role: v as "user" | "admin" }))}
-              >
-                <SelectTrigger id="new-role">
-                  <SelectValue />
-                </SelectTrigger>
+              <Label>Permiso base</Label>
+              <Select value={userForm.role} onValueChange={(v) => setUserForm(f => ({ ...f, role: v as "user" | "admin" }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="user">
-                    <div className="flex items-center gap-2">
-                      <User className="w-3.5 h-3.5 text-blue-500" />
-                      Usuario — Solo formularios propios
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="admin">
-                    <div className="flex items-center gap-2">
-                      <Shield className="w-3.5 h-3.5 text-amber-500" />
-                      Administrador — Acceso total
-                    </div>
-                  </SelectItem>
+                  <SelectItem value="user"><div className="flex items-center gap-2"><User className="w-3.5 h-3.5 text-blue-500" />Usuario</div></SelectItem>
+                  <SelectItem value="admin"><div className="flex items-center gap-2"><Shield className="w-3.5 h-3.5 text-amber-500" />Administrador</div></SelectItem>
                 </SelectContent>
               </Select>
             </div>
+            {roles && roles.length > 0 && (
+              <div className="space-y-2">
+                <Label>Rol asignado <span className="text-muted-foreground text-xs">(opcional)</span></Label>
+                <Select value={userForm.roleId?.toString() ?? "none"} onValueChange={(v) => setUserForm(f => ({ ...f, roleId: v === "none" ? null : Number(v) }))}>
+                  <SelectTrigger><SelectValue placeholder="Sin rol" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Sin rol</SelectItem>
+                    {roles.map((r: RoleItem) => <SelectItem key={r.id} value={r.id.toString()}>{r.label}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             <DialogFooter className="pt-2">
-              <Button type="button" variant="outline" onClick={() => setShowCreate(false)}>
-                Cancelar
-              </Button>
-              <Button type="submit" disabled={creating || !form.username || !form.password}>
-                {creating ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Plus className="w-4 h-4 mr-2" />}
-                Crear Usuario
+              <Button type="button" variant="outline" onClick={() => { setShowCreateUser(false); resetUserForm(); }}>Cancelar</Button>
+              <Button type="submit" disabled={creatingUser || !userForm.username || !userForm.password}>
+                {creatingUser ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Plus className="w-4 h-4 mr-2" />}Crear Usuario
               </Button>
             </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
-    </div>
-  );
-}
 
-// Helper cn
-function cn(...classes: (string | boolean | undefined)[]) {
-  return classes.filter(Boolean).join(" ");
+      {/* ── Modal Editar Usuario ── */}
+      <Dialog open={!!editUser} onOpenChange={(o) => { if (!o) setEditUser(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><Pencil className="w-4 h-4" />Editar Usuario — @{editUser?.username}</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleUpdateUser} className="space-y-4">
+            <div className="space-y-2">
+              <Label>Nombre completo</Label>
+              <Input placeholder="ej: Juan Pérez" value={userForm.displayName} onChange={e => setUserForm(f => ({ ...f, displayName: e.target.value }))} />
+            </div>
+            <div className="space-y-2">
+              <Label>Permiso base</Label>
+              <Select value={userForm.role} onValueChange={(v) => setUserForm(f => ({ ...f, role: v as "user" | "admin" }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="user"><div className="flex items-center gap-2"><User className="w-3.5 h-3.5 text-blue-500" />Usuario</div></SelectItem>
+                  <SelectItem value="admin"><div className="flex items-center gap-2"><Shield className="w-3.5 h-3.5 text-amber-500" />Administrador</div></SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {roles && roles.length > 0 && (
+              <div className="space-y-2">
+                <Label>Rol asignado <span className="text-muted-foreground text-xs">(opcional)</span></Label>
+                <Select value={userForm.roleId?.toString() ?? "none"} onValueChange={(v) => setUserForm(f => ({ ...f, roleId: v === "none" ? null : Number(v) }))}>
+                  <SelectTrigger><SelectValue placeholder="Sin rol" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Sin rol</SelectItem>
+                    {roles.map((r: RoleItem) => <SelectItem key={r.id} value={r.id.toString()}>{r.label}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+            <DialogFooter className="pt-2">
+              <Button type="button" variant="outline" onClick={() => setEditUser(null)}>Cancelar</Button>
+              <Button type="submit" disabled={updateUserMut.isPending}>
+                {updateUserMut.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Pencil className="w-4 h-4 mr-2" />}Guardar Cambios
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Modal Crear Rol ── */}
+      <Dialog open={showCreateRole} onOpenChange={setShowCreateRole}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><Plus className="w-4 h-4" />Crear Nuevo Rol</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleCreateRole} className="space-y-4">
+            <div className="space-y-2">
+              <Label>Nombre interno * <span className="text-muted-foreground text-xs">(sin espacios, ej: gerente_ventas)</span></Label>
+              <Input placeholder="ej: gerente_ventas" value={roleForm.nombre} onChange={e => setRoleForm(f => ({ ...f, nombre: e.target.value.toLowerCase().replace(/\s+/g, "_") }))} required minLength={2} />
+            </div>
+            <div className="space-y-2">
+              <Label>Etiqueta visible *</Label>
+              <Input placeholder="ej: Gerente de Ventas" value={roleForm.label} onChange={e => setRoleForm(f => ({ ...f, label: e.target.value }))} required minLength={2} />
+            </div>
+            <div className="space-y-2">
+              <Label>Descripción <span className="text-muted-foreground text-xs">(opcional)</span></Label>
+              <Input placeholder="ej: Acceso a reportes de ventas" value={roleForm.descripcion} onChange={e => setRoleForm(f => ({ ...f, descripcion: e.target.value }))} />
+            </div>
+            <DialogFooter className="pt-2">
+              <Button type="button" variant="outline" onClick={() => { setShowCreateRole(false); resetRoleForm(); }}>Cancelar</Button>
+              <Button type="submit" disabled={creatingRole || !roleForm.nombre || !roleForm.label}>
+                {creatingRole ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Plus className="w-4 h-4 mr-2" />}Crear Rol
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Modal Editar Rol ── */}
+      <Dialog open={!!editRole && !deleteRoleConfirm} onOpenChange={(o) => { if (!o) setEditRole(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><Pencil className="w-4 h-4" />Editar Rol — {editRole?.nombre}</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleUpdateRole} className="space-y-4">
+            <div className="space-y-2">
+              <Label>Nombre interno *</Label>
+              <Input value={roleForm.nombre} onChange={e => setRoleForm(f => ({ ...f, nombre: e.target.value.toLowerCase().replace(/\s+/g, "_") }))} required minLength={2} />
+            </div>
+            <div className="space-y-2">
+              <Label>Etiqueta visible *</Label>
+              <Input value={roleForm.label} onChange={e => setRoleForm(f => ({ ...f, label: e.target.value }))} required minLength={2} />
+            </div>
+            <div className="space-y-2">
+              <Label>Descripción</Label>
+              <Input value={roleForm.descripcion} onChange={e => setRoleForm(f => ({ ...f, descripcion: e.target.value }))} />
+            </div>
+            <DialogFooter className="pt-2">
+              <Button type="button" variant="outline" onClick={() => setEditRole(null)}>Cancelar</Button>
+              <Button type="submit" disabled={updateRoleMut.isPending}>
+                {updateRoleMut.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Pencil className="w-4 h-4 mr-2" />}Guardar Cambios
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Modal Confirmar Eliminar Rol (con usuarios afectados) ── */}
+      <Dialog open={!!deleteRoleConfirm} onOpenChange={(o) => { if (!o) { setDeleteRoleConfirm(null); setEditRole(null); } }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              <AlertTriangle className="w-4 h-4" />Confirmar eliminación de rol
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              El rol <strong>{deleteRoleConfirm?.role.label}</strong> está asignado a los siguientes usuarios:
+            </p>
+            <div className="rounded-lg border border-border divide-y divide-border max-h-40 overflow-y-auto">
+              {deleteRoleConfirm?.affected.map((u: any) => (
+                <div key={u.id} className="flex items-center gap-2 px-3 py-2 text-sm">
+                  <User className="w-3.5 h-3.5 text-muted-foreground" />
+                  <span>{u.displayName ?? u.username}</span>
+                  <span className="text-muted-foreground text-xs">@{u.username}</span>
+                </div>
+              ))}
+            </div>
+            <p className="text-sm">Si eliminas el rol, estos usuarios quedarán <strong>sin rol asignado</strong>. ¿Deseas continuar?</p>
+          </div>
+          <DialogFooter className="pt-2">
+            <Button variant="outline" onClick={() => { setDeleteRoleConfirm(null); setEditRole(null); }}>Cancelar</Button>
+            <Button variant="destructive" disabled={deleteRoleForceMut.isPending}
+              onClick={() => deleteRoleConfirm && deleteRoleForceMut.mutate({ id: deleteRoleConfirm.role.id })}>
+              {deleteRoleForceMut.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Trash2 className="w-4 h-4 mr-2" />}
+              Sí, eliminar rol
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </PageLayout>
+  );
 }
