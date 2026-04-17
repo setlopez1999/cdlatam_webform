@@ -197,7 +197,7 @@ export const appRouter = router({
         password: z.string().min(1),
       }))
       .mutation(async ({ ctx, input }) => {
-        const user = await ds_findLocalUserByUsername(input.username);
+        const user = await ds_findUserByUsername(input.username);
         if (!user || user.isActive !== 1) {
           throw new Error("Usuario o contraseña incorrectos");
         }
