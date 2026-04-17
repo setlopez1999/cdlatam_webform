@@ -9,6 +9,8 @@ import { serveStatic, setupVite } from "./vite";
 import { seedDefaultUsers, registerLocalAuthRoutes } from "../localAuth";
 import { runMigrations, seedCatalogMeta } from "../db";
 import { registerDbManagementRoutes } from "./dbManagement";
+import { ENV } from "./env";
+import type { Request, Response, NextFunction } from "express";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -64,6 +66,28 @@ async function startServer() {
   } else {
     serveStatic(app);
   }
+
+  // ─── Middleware de error global ────────────────────────────────────────────
+  // Siempre devuelve JSON (nunca HTML), con o sin stack según APP_DEBUG
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
+    const status = err.status ?? err.statusCode ?? 500;
+    console.error(`[Error ${status}]`, err.message, ENV.appDebug ? err.stack : "");
+    if (ENV.appDebug) {
+      return res.status(status).json({
+        error: err.message ?? "Error interno del servidor",
+        code: status,
+        stack: err.stack ?? null,
+      });
+    }
+    return res.status(status).json({
+      error: status === 401 ? "No autorizado"
+           : status === 403 ? "Acceso denegado"
+           : status === 404 ? "Recurso no encontrado"
+           : "Error interno del servidor",
+      code: status,
+    });
+  });
 
   const preferredPort = parseInt(process.env.PORT || "3000");
   const port = await findAvailablePort(preferredPort);

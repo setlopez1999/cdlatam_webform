@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
+import { gsap } from "gsap";
 import {
   Database, BarChart3, DollarSign, Globe, Building2, FileText,
   Briefcase, Layers, Wrench, Tag, Clock, Package, Hash,
@@ -22,7 +23,7 @@ interface Props {
   counts?: Record<string, number>;
 }
 
-// Ícono por tableName — usa el alias corto que guarda catalog_meta
+// Ícono por tableName
 const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
   monedas:    DollarSign,
   paises:     Globe,
@@ -40,10 +41,8 @@ const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
   nombres:    Users,
 };
 
-// Íconos de reserva para tablas dinámicas
 const FALLBACK_ICONS = [ShieldCheck, Landmark, Truck, Cpu, BookOpen, Star, Zap, Settings, Flag, Globe];
 
-// Paleta de colores cíclica
 const COLORS = [
   { text: "text-yellow-400",  bg: "bg-yellow-500/10",  border: "border-yellow-400/30"  },
   { text: "text-cyan-400",    bg: "bg-cyan-500/10",    border: "border-cyan-400/30"    },
@@ -61,12 +60,8 @@ const COLORS = [
 
 type ViewMode = "desplegado" | "compacto";
 
-// ─── Tema de hover centralizado ─────────────────────────────────────────────
-// Cambia aqui para ajustar el estilo de hover en ambos modos
 const HOVER_STYLE = {
-  base:   "text-slate-700 bg-blue-50 border-blue-200",
-  text:   "text-slate-700",
-  icon:   "text-blue-500",
+  base: "text-slate-700 bg-blue-50 border-blue-200",
 };
 
 function getStoredMode(): ViewMode {
@@ -75,14 +70,85 @@ function getStoredMode(): ViewMode {
 
 export function CatalogTabGrid({ tables, activeTab, onSelect, counts = {} }: Props) {
   const [mode, setMode] = useState<ViewMode>(getStoredMode);
+  // Refs para animar los contenedores
+  const desplegadoRef = useRef<HTMLDivElement>(null);
+  const compactoRef   = useRef<HTMLDivElement>(null);
+  // Evitar animación en el primer render
+  const isFirstRender = useRef(true);
+
+  // Animar cuando cambia el modo
+  useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
+
+    if (mode === "desplegado" && desplegadoRef.current) {
+      // Compacto → Desplegado: grid aparece desde arriba con fade
+      const items = desplegadoRef.current.querySelectorAll("button");
+      gsap.fromTo(
+        desplegadoRef.current,
+        { opacity: 0, height: 0, overflow: "hidden" },
+        { opacity: 1, height: "auto", duration: 0.28, ease: "power2.out",
+          onComplete: () => { if (desplegadoRef.current) desplegadoRef.current.style.overflow = ""; }
+        }
+      );
+      gsap.fromTo(
+        items,
+        { opacity: 0, y: -8, scale: 0.92 },
+        { opacity: 1, y: 0, scale: 1, duration: 0.22, ease: "power2.out", stagger: 0.018, delay: 0.04 }
+      );
+    }
+
+    if (mode === "compacto" && compactoRef.current) {
+      // Desplegado → Compacto: fila aparece desde abajo con fade
+      const items = compactoRef.current.querySelectorAll("button");
+      gsap.fromTo(
+        compactoRef.current,
+        { opacity: 0, y: -6 },
+        { opacity: 1, y: 0, duration: 0.22, ease: "power2.out" }
+      );
+      gsap.fromTo(
+        items,
+        { opacity: 0, scale: 0.8 },
+        { opacity: 1, scale: 1, duration: 0.18, ease: "back.out(1.4)", stagger: 0.012, delay: 0.05 }
+      );
+    }
+  }, [mode]);
 
   const toggleMode = () => {
     const next: ViewMode = mode === "desplegado" ? "compacto" : "desplegado";
+
+    // Si vamos a compacto, animar la salida del grid desplegado primero
+    if (next === "compacto" && desplegadoRef.current) {
+      const items = desplegadoRef.current.querySelectorAll("button");
+      gsap.to(items, { opacity: 0, scale: 0.88, y: -4, duration: 0.14, ease: "power2.in", stagger: 0.008 });
+      gsap.to(desplegadoRef.current, {
+        opacity: 0, height: 0, duration: 0.2, ease: "power2.in", delay: 0.08,
+        onComplete: () => {
+          setMode(next);
+          try { localStorage.setItem("catalog_view_mode", next); } catch {}
+        }
+      });
+      return;
+    }
+
+    // Si vamos a desplegado, animar la salida de la fila compacta primero
+    if (next === "desplegado" && compactoRef.current) {
+      gsap.to(compactoRef.current, {
+        opacity: 0, y: -4, duration: 0.15, ease: "power2.in",
+        onComplete: () => {
+          setMode(next);
+          try { localStorage.setItem("catalog_view_mode", next); } catch {}
+        }
+      });
+      return;
+    }
+
     setMode(next);
     try { localStorage.setItem("catalog_view_mode", next); } catch {}
   };
 
-  // Lista completa: resumen + tablas
   const allItems = [
     { tableName: "resumen", title: "Resumen", isResumen: true, idx: -1 },
     ...tables.map((t, i) => ({ ...t, isResumen: false, idx: i })),
@@ -107,7 +173,10 @@ export function CatalogTabGrid({ tables, activeTab, onSelect, counts = {} }: Pro
 
       {/* Vista DESPLEGADA: grid de bloques */}
       {mode === "desplegado" && (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2">
+        <div
+          ref={desplegadoRef}
+          className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2"
+        >
           {allItems.map(item => {
             const isActive = activeTab === item.tableName;
             if (item.isResumen) {
@@ -138,9 +207,9 @@ export function CatalogTabGrid({ tables, activeTab, onSelect, counts = {} }: Pro
         </div>
       )}
 
-      {/* Vista COMPACTA: fila de íconos pequeños con label al hover */}
+      {/* Vista COMPACTA: fila de íconos pequeños con tooltip flotante */}
       {mode === "compacto" && (
-        <div className="flex flex-wrap gap-1">
+        <div ref={compactoRef} className="flex flex-wrap gap-1">
           {allItems.map(item => {
             const isActive = activeTab === item.tableName;
             const isResumen = item.isResumen;
@@ -155,22 +224,31 @@ export function CatalogTabGrid({ tables, activeTab, onSelect, counts = {} }: Pro
               <button
                 key={item.tableName}
                 onClick={() => onSelect(item.tableName)}
-                title={item.title}
-                className={`group relative flex items-center gap-0 rounded-lg border transition-all overflow-hidden
+                className={`group relative flex items-center justify-center rounded-lg border transition-all h-8
                   ${isActive
-                    ? `${color.bg} ${color.border} ${color.text} pl-2 pr-2`
-                    : `bg-white/3 border-white/8 text-slate-500 hover:${HOVER_STYLE.base} pl-2 pr-2`
-                  } h-8`}
+                    ? `${color.bg} ${color.border} ${color.text} px-2 gap-1.5`
+                    : `bg-white/3 border-white/8 text-slate-500 hover:${HOVER_STYLE.base} w-8 px-0`
+                  }`}
               >
                 <Icon className={`w-3.5 h-3.5 flex-shrink-0 ${isActive ? color.text : ""}`} />
-                {/* Nombre: siempre visible si activo, al hover si no */}
-                <span className={`text-xs font-medium whitespace-nowrap overflow-hidden transition-all duration-200
-                  ${isActive
-                    ? "max-w-xs ml-1.5 opacity-100"
-                    : "max-w-0 ml-0 opacity-0 group-hover:max-w-xs group-hover:ml-1.5 group-hover:opacity-100"
-                  }`}>
-                  {item.title}
-                </span>
+
+                {/* Tab activo: nombre visible inline */}
+                {isActive && (
+                  <span className="text-xs font-medium whitespace-nowrap">
+                    {item.title}
+                  </span>
+                )}
+
+                {/* Tab inactivo: tooltip flotante — pointer-events:none evita hover loop */}
+                {!isActive && (
+                  <span className={`pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5
+                    px-2 py-0.5 rounded-md text-xs font-medium whitespace-nowrap
+                    bg-slate-800 text-slate-100 border border-white/10 shadow-lg
+                    opacity-0 group-hover:opacity-100 transition-opacity duration-150 delay-100
+                    z-50`}>
+                    {item.title}
+                  </span>
+                )}
               </button>
             );
           })}
