@@ -24,6 +24,7 @@ import { toast } from "sonner";
 import { Table2 } from "lucide-react";
 import { PageLayout } from "@/components/PageLayout";
 import { ManageCatalogsModal } from "@/components/ManageCatalogsModal";
+import { CatalogTabGrid } from "@/components/CatalogTabGrid";
 import { loadActasList, loadEPList, deleteActa, deleteEP } from "@/hooks/useFormStore";
 import { formatCurrency, formatDate, getStatusColor, getStatusLabel } from "@/lib/formatters";
 import { CatalogCrudView } from "@/components/CatalogCrudView";
@@ -390,28 +391,12 @@ function EPView() {
 // ─── Página principal ─────────────────────────────────────────────────────────
 
 export default function BaseDatos() {
-  const [activeTab, setActiveTab] = useState<TabId>("resumen");
+  const [activeTab, setActiveTab] = useState<string>("resumen");
   const [showAdminDb, setShowAdminDb] = useState(false);
   const [showManageCatalogs, setShowManageCatalogs] = useState(false);
   const { data: rawData, isLoading, error } = trpc.catalogsDB.summary.useQuery();
+  const { data: catalogMetaList = [], refetch: refetchTables } = trpc.catalogsDB.listTables.useQuery();
   const data = rawData as SummaryData | undefined;
-
-  const catalogTabs = TABS.filter(t => t.group === "catalogs");
-  const recordTabs = TABS.filter(t => t.group === "records");
-
-  const getCount = (id: TabId) => {
-    if (!data) return null;
-    const map: Partial<Record<TabId, number>> = {
-      cecos: data.cecos.length, soluciones: data.soluciones.length,
-      paises: data.paises.length, monedas: data.monedas.length,
-      unidades: data.unidades.length, detalle: data.detalles.length,
-      tipos: data.tipos.length, plazos: data.plazos.length,
-      documentos: data.docs.length,
-      empresas: data.empresas.length, doctos: data.doctos.length,
-      deptos: data.deptos.length, areas: data.areas.length, nombres: data.nombres.length,
-    };
-    return map[id] ?? null;
-  };
 
   return (
     <PageLayout
@@ -443,26 +428,12 @@ export default function BaseDatos() {
       }
     >
 
-      {/* Grupo Catálogos */}
-      <div>
-        <p className="text-xs text-slate-500 font-medium uppercase tracking-wider mb-2 px-1">Catálogos del Sistema</p>
-        <div className="flex gap-1 overflow-x-auto pb-1 scrollbar-none">
-          {catalogTabs.map(tab => {
-            const Icon = tab.icon;
-            const isActive = activeTab === tab.id;
-            const count = getCount(tab.id);
-            return (
-              <button key={tab.id} onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium whitespace-nowrap transition-all flex-shrink-0 ${isActive ? `${tab.bgColor} ${tab.color} border border-current/20` : "text-slate-400 hover:text-slate-200 hover:bg-white/5"
-                  }`}>
-                <Icon className="w-3.5 h-3.5" />
-                {tab.label}
-                {count !== null && <span className={`ml-0.5 text-xs px-1.5 py-0.5 rounded-full ${isActive ? "bg-current/10" : "bg-white/5 text-slate-500"}`}>{count}</span>}
-              </button>
-            );
-          })}
-        </div>
-      </div>
+      {/* Grid de bloques de catálogos */}
+      <CatalogTabGrid
+        tables={catalogMetaList}
+        activeTab={activeTab}
+        onSelect={setActiveTab}
+      />
 
       {/* Grupo Registros 
       <div>
@@ -504,10 +475,23 @@ export default function BaseDatos() {
           <>
             {activeTab === "resumen" && data && <ResumenView data={data} />}
 
-            {/* CRUD GENÉRICO DE CATÁLOGOS */}
-            {activeTab !== "resumen" && activeTab !== "actas" && activeTab !== "ep" && catalogConfigs[activeTab] && (
-              <CatalogCrudView config={catalogConfigs[activeTab]} />
-            )}
+            {/* CRUD GENÉRICO DE CATÁLOGOS - dinámico desde catalog_meta */}
+            {activeTab !== "resumen" && activeTab !== "actas" && activeTab !== "ep" && (() => {
+              const cat = catalogMetaList.find(c => c.tableName === activeTab);
+              if (!cat) return null;
+              // Usar config hardcodeado si existe, sino generar uno genérico
+              const staticConfig = catalogConfigs[activeTab];
+              const config = staticConfig ?? {
+                tableName: cat.tableName,
+                title: cat.title,
+                fields: [
+                  { key: "valor", label: "Valor", type: "text" as const, required: true },
+                  { key: "activo", label: "Activo", type: "boolean" as const },
+                ],
+              };
+              // Siempre usar el título de catalog_meta (puede haber sido renombrado)
+              return <CatalogCrudView key={activeTab} config={{ ...config, title: cat.title }} />;
+            })()}
 
             {/* VISTAS PARTICULARES */}
             {activeTab === "actas" && <ActasView />}
@@ -598,7 +582,7 @@ export default function BaseDatos() {
       <ManageCatalogsModal
         open={showManageCatalogs}
         onClose={() => setShowManageCatalogs(false)}
-        onChanged={() => refetch()}
+        onChanged={() => { refetchTables(); setActiveTab("resumen"); }}
       />
     </PageLayout>
   );

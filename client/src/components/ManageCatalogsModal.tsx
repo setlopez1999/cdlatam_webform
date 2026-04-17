@@ -15,7 +15,7 @@ interface Props {
 }
 
 export function ManageCatalogsModal({ open, onClose, onChanged }: Props) {
-  const { data: tables = [], refetch } = trpc.catalogsDB.listTables.useQuery(undefined, { enabled: open });
+  const { data: tables = [], refetch = () => {} } = trpc.catalogsDB.listTables.useQuery(undefined, { enabled: open }) ?? {};
   const createTable = trpc.catalogsDB.createTable.useMutation();
   const renameTable = trpc.catalogsDB.renameTable.useMutation();
   const deleteTable = trpc.catalogsDB.deleteTable.useMutation();

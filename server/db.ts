@@ -209,42 +209,46 @@ export async function bulkDeleteCatalogRecordsGeneric(tableName: string, ids: nu
 }
 
 export async function getCatalogList(tableName: string) {
-  const db = await getDb();
   const table = getCatalogTable(tableName);
-  // Devolvemos todos para poder ver inactivos y reactivarlos desde el cliente
+  if (!table) return getCatalogListGeneric(tableName);
+  const db = await getDb();
   return await db.select().from(table);
 }
 
 export async function createCatalogRecord(tableName: string, data: any) {
-  const db = await getDb();
   const table = getCatalogTable(tableName);
+  if (!table) return createCatalogRecordGeneric(tableName, data);
+  const db = await getDb();
   return await db.insert(table).values(data).returning();
 }
 
 export async function updateCatalogRecord(tableName: string, id: number, data: any) {
-  const db = await getDb();
   const table = getCatalogTable(tableName);
+  if (!table) return updateCatalogRecordGeneric(tableName, id, data);
+  const db = await getDb();
   return await db.update(table).set(data).where(eq(table.id, id));
 }
 
 export async function deleteCatalogRecord(tableName: string, id: number) {
-  const db = await getDb();
   const table = getCatalogTable(tableName);
-  // Hard Delete
+  if (!table) return deleteCatalogRecordGeneric(tableName, id);
+  const db = await getDb();
   return await db.delete(table).where(eq(table.id, id));
 }
 
 export async function bulkUpdateCatalogRecords(tableName: string, ids: number[], data: any) {
   if (!ids.length) return;
-  const db = await getDb();
   const table = getCatalogTable(tableName);
+  if (!table) return; // tablas dinámicas no tienen bulk update por ahora
+  const db = await getDb();
   return await db.update(table).set(data).where(inArray(table.id, ids));
 }
 
 export async function bulkDeleteCatalogRecords(tableName: string, ids: number[]) {
   if (!ids.length) return;
-  const db = await getDb();
   const table = getCatalogTable(tableName);
+  if (!table) return bulkDeleteCatalogRecordsGeneric(tableName, ids);
+  const db = await getDb();
   return await db.delete(table).where(inArray(table.id, ids));
 }
 
@@ -493,77 +497,4 @@ export async function searchRegistros(userId: number, query: string) {
 
   return { actas: actasResult, evaluaciones: evaluacionesResult };
 }
-// ─── Funciones de catalog_meta ────────────────────────────────────────────────
 
-export function listCatalogMeta() {
-  const rows = sqlite.prepare("SELECT * FROM catalog_meta ORDER BY is_custom ASC, title ASC").all() as Array<{
-    id: number; table_name: string; title: string; is_custom: number; linked_field: string | null;
-  }>;
-  return rows.map(r => ({
-    id: r.id,
-    tableName: r.table_name,
-    title: r.title,
-    isCustom: r.is_custom === 1,
-    linkedField: r.linked_field,
-  }));
-}
-
-export function createCatalogTable(tableName: string, title: string) {
-  const fullName = `catalog_${tableName}`;
-  // Crear la tabla física
-  sqlite.prepare(`CREATE TABLE IF NOT EXISTS "${fullName}" (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    valor TEXT NOT NULL DEFAULT '',
-    activo INTEGER NOT NULL DEFAULT 1
-  )`).run();
-  // Registrar en metadatos
-  sqlite.prepare(
-    "INSERT OR IGNORE INTO catalog_meta (table_name, title, is_custom) VALUES (?, ?, 1)"
-  ).run(fullName, title);
-  return { ok: true };
-}
-
-export function renameCatalogTable(tableName: string, newTitle: string) {
-  sqlite.prepare("UPDATE catalog_meta SET title = ? WHERE table_name = ?").run(newTitle, tableName);
-  return { ok: true };
-}
-
-export function deleteCatalogTable(tableName: string) {
-  // Solo permitir eliminar tablas dinámicas
-  const row = sqlite.prepare("SELECT is_custom FROM catalog_meta WHERE table_name = ?").get(tableName) as { is_custom: number } | undefined;
-  if (!row) throw new Error("Tabla no encontrada");
-  if (!row.is_custom) throw new Error("No se pueden eliminar tablas del sistema");
-  sqlite.prepare(`DROP TABLE IF EXISTS "${tableName}"`).run();
-  sqlite.prepare("DELETE FROM catalog_meta WHERE table_name = ?").run(tableName);
-  return { ok: true };
-}
-
-// CRUD genérico para cualquier tabla de catálogo (fija o dinámica)
-export function getCatalogListGeneric(tableName: string) {
-  return sqlite.prepare(`SELECT * FROM "${tableName}" ORDER BY id ASC`).all();
-}
-
-export function createCatalogRecordGeneric(tableName: string, data: { valor: string; activo?: number }) {
-  const result = sqlite.prepare(
-    `INSERT INTO "${tableName}" (valor, activo) VALUES (?, ?)`
-  ).run(data.valor ?? "", data.activo ?? 1);
-  return { id: result.lastInsertRowid };
-}
-
-export function updateCatalogRecordGeneric(tableName: string, id: number, data: Partial<{ valor: string; activo: number }>) {
-  const fields = Object.keys(data).map(k => `"${k}" = ?`).join(", ");
-  const values = [...Object.values(data), id];
-  sqlite.prepare(`UPDATE "${tableName}" SET ${fields} WHERE id = ?`).run(...values);
-  return { ok: true };
-}
-
-export function deleteCatalogRecordGeneric(tableName: string, id: number) {
-  sqlite.prepare(`DELETE FROM "${tableName}" WHERE id = ?`).run(id);
-  return { ok: true };
-}
-
-export function bulkDeleteCatalogRecordsGeneric(tableName: string, ids: number[]) {
-  const placeholders = ids.map(() => "?").join(", ");
-  sqlite.prepare(`DELETE FROM "${tableName}" WHERE id IN (${placeholders})`).run(...ids);
-  return { ok: true, deleted: ids.length };
-}
