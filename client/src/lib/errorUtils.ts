@@ -1,11 +1,36 @@
 /**
  * Utilidades centralizadas para manejo de errores en el cliente.
  *
- * APP_DEBUG (VITE_APP_DEBUG=true en .env) controla si se muestran
- * detalles técnicos del error en la UI o solo mensajes genéricos.
+ * APP_DEBUG se lee desde window.__ENV__ (inyectado por el servidor en /config.js)
+ * en RUNTIME — no requiere rebuild para cambiar su valor.
+ *
+ * Para cambiar el modo debug:
+ *   1. Editar APP_DEBUG en el .env del servidor
+ *   2. docker-compose restart web  (NO necesita --build)
  */
 
-export const APP_DEBUG = import.meta.env.VITE_APP_DEBUG === "true";
+declare global {
+  interface Window {
+    __ENV__?: {
+      APP_DEBUG?: boolean;
+    };
+  }
+}
+
+/**
+ * Lee APP_DEBUG desde window.__ENV__ (runtime) con fallback a import.meta.env (build-time).
+ * Esto permite cambiar el modo debug sin rebuild.
+ */
+export function getAppDebug(): boolean {
+  // Primero intenta leer desde runtime config (window.__ENV__)
+  if (typeof window !== "undefined" && window.__ENV__?.APP_DEBUG !== undefined) {
+    return window.__ENV__.APP_DEBUG === true;
+  }
+  // Fallback a variable de build-time (útil en desarrollo local con Vite HMR)
+  return import.meta.env.VITE_APP_DEBUG === "true";
+}
+
+export const APP_DEBUG = getAppDebug();
 
 /**
  * Convierte cualquier error (tRPC, fetch, JSON parse, etc.) en un
@@ -18,11 +43,12 @@ export const APP_DEBUG = import.meta.env.VITE_APP_DEBUG === "true";
 export function parseErrorMessage(err: unknown): string {
   if (!err) return "Error desconocido";
 
+  const debug = getAppDebug();
   const raw = err instanceof Error ? err.message : String(err);
 
   // El servidor devolvió HTML en vez de JSON (crash, Vite fallback, etc.)
   if (raw.includes("<!doctype") || raw.includes("<!DOCTYPE") || raw.includes("Unexpected token '<'")) {
-    return APP_DEBUG
+    return debug
       ? "Error de conexión: el servidor devolvió HTML en vez de JSON. Revisa los logs del servidor."
       : "Error de conexión con el servidor. Intenta de nuevo.";
   }
@@ -39,7 +65,7 @@ export function parseErrorMessage(err: unknown): string {
   }
 
   // En modo debug mostramos el mensaje técnico completo
-  if (APP_DEBUG) return raw;
+  if (debug) return raw;
 
   // En modo producción mostramos un mensaje genérico
   return "Ocurrió un error. Intenta de nuevo o contacta al administrador.";

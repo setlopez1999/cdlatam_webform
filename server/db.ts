@@ -6,10 +6,10 @@ import * as Database from 'better-sqlite3';
 import { join, dirname } from 'path';
 import { existsSync, mkdirSync } from 'fs';
 // Importamos los esquemas (asegúrate de que esta ruta sea correcta)
-// --- MODIFICADO: Importar localUsers ---
 import {
-  InsertUser, users, actas, evaluaciones, InsertActa, InsertEvaluacion,
-  localUsers, catalogMeta,
+  InsertUser, users, roles, type Role, type InsertRole,
+  actas, evaluaciones, InsertActa, InsertEvaluacion,
+  catalogMeta,
   // Catálogos
   catalogMonedas, catalogPaises, catalogEmpresas, catalogDocumentoIdentidad,
   catalogUnidadesNegocio, catalogSoluciones, catalogDetalleServicio,
@@ -376,34 +376,83 @@ export async function getUserByOpenId(openId: string) {
   return result.length > 0 ? result[0] : undefined;
 }
 
-// ─── LOCAL USERS (Username/Password) ──────────────────────────────────────────
-// --- AGREGADO: Funciones para usuarios locales ---
+// ─── USERS (Username/Password) ───────────────────────────────────────────────
 
-export async function getLocalUsers() {
+export async function getUsers() {
   const db = await getDb();
-  return await db.select().from(localUsers);
+  return await db.select().from(users);
+}
+/** @deprecated Usar getUsers */
+export const getLocalUsers = getUsers;
+
+export async function createUser(user: typeof users.$inferInsert) {
+  const db = await getDb();
+  return await db.insert(users).values(user);
+}
+/** @deprecated Usar createUser */
+export const createLocalUser = createUser;
+
+export async function findUserByUsername(username: string) {
+  const db = await getDb();
+  const result = await db.select().from(users).where(eq(users.username, username)).limit(1);
+  return result[0];
+}
+/** @deprecated Usar findUserByUsername */
+export const findLocalUserByUsername = findUserByUsername;
+
+export async function findUserById(id: number) {
+  const db = await getDb();
+  const result = await db.select().from(users).where(eq(users.id, id)).limit(1);
+  return result[0];
+}
+/** @deprecated Usar findUserById */
+export const findLocalUserById = findUserById;
+
+export async function toggleUserStatus(id: number, isActive: number) {
+  const db = await getDb();
+  return await db.update(users).set({ isActive }).where(eq(users.id, id));
+}
+/** @deprecated Usar toggleUserStatus */
+export const toggleLocalUserStatus = toggleUserStatus;
+
+export async function updateUser(id: number, data: { displayName?: string; roleId?: number | null; role?: string }) {
+  const db = await getDb();
+  return await db.update(users).set({ ...data, updatedAt: new Date() }).where(eq(users.id, id));
 }
 
-export async function createLocalUser(user: typeof localUsers.$inferInsert) {
+// ─── ROLES ────────────────────────────────────────────────────────────────────
+
+export async function getRoles() {
   const db = await getDb();
-  return await db.insert(localUsers).values(user);
+  return await db.select().from(roles).orderBy(roles.id);
 }
 
-export async function findLocalUserByUsername(username: string) {
+export async function getRoleById(id: number) {
   const db = await getDb();
-  const result = await db.select().from(localUsers).where(eq(localUsers.username, username)).limit(1);
+  const result = await db.select().from(roles).where(eq(roles.id, id)).limit(1);
   return result[0];
 }
 
-export async function findLocalUserById(id: number) {
+export async function createRole(data: InsertRole) {
   const db = await getDb();
-  const result = await db.select().from(localUsers).where(eq(localUsers.id, id)).limit(1);
-  return result[0];
+  return await db.insert(roles).values(data).returning();
 }
 
-export async function toggleLocalUserStatus(id: number, isActive: number) {
+export async function updateRole(id: number, data: Partial<InsertRole>) {
   const db = await getDb();
-  return await db.update(localUsers).set({ isActive }).where(eq(localUsers.id, id));
+  return await db.update(roles).set({ ...data, updatedAt: new Date() }).where(eq(roles.id, id));
+}
+
+export async function deleteRole(id: number) {
+  const db = await getDb();
+  return await db.delete(roles).where(eq(roles.id, id));
+}
+
+export async function getUsersByRoleId(roleId: number) {
+  const db = await getDb();
+  return await db.select({ id: users.id, username: users.username, displayName: users.displayName })
+    .from(users)
+    .where(eq(users.roleId, roleId));
 }
 
 // ─── Actas ────────────────────────────────────────────────────────────────────

@@ -6,22 +6,19 @@ import {
   real,
 } from "drizzle-orm/sqlite-core";
 
-// ─── Core user table ─────────────────────────────────────────────────────────
-export const users = sqliteTable("users", {
+// ─── Roles del sistema ───────────────────────────────────────────────────────
+export const roles = sqliteTable("roles", {
   id: integer("id").primaryKey({ autoIncrement: true }),
-  openId: text("openId").notNull().unique(),
-  name: text("name"),
-  email: text("email"),
-  loginMethod: text("loginMethod"),
-  role: text("role").default("user").notNull(),
+  nombre: text("nombre").notNull().unique(),
+  label: text("label").notNull(),
+  descripcion: text("descripcion"),
+  activo: integer("activo").default(1).notNull(),
   createdAt: integer("createdAt", { mode: "timestamp" }).default(sql`(strftime('%s', 'now'))`).notNull(),
   updatedAt: integer("updatedAt", { mode: "timestamp" }).default(sql`(strftime('%s', 'now'))`).notNull(),
-  lastSignedIn: integer("lastSignedIn", { mode: "timestamp" }).default(sql`(strftime('%s', 'now'))`).notNull(),
-  activo: integer("activo").default(1).notNull(),
 });
 
-export type User = typeof users.$inferSelect;
-export type InsertUser = typeof users.$inferInsert;
+export type Role = typeof roles.$inferSelect;
+export type InsertRole = typeof roles.$inferInsert;
 
 // ─── Actas (Formulario 1) ─────────────────────────────────────────────────────
 export const actas = sqliteTable("actas", {
@@ -119,21 +116,26 @@ export const evaluaciones = sqliteTable("evaluaciones", {
 export type Evaluacion = typeof evaluaciones.$inferSelect;
 export type InsertEvaluacion = typeof evaluaciones.$inferInsert;
 
-// ─── Usuarios locales ──────────────────────────────────────────────────────────
-export const localUsers = sqliteTable("localUsers", {
+// ─── Usuarios del sistema ────────────────────────────────────────────────────
+export const users = sqliteTable("users", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   username: text("username").notNull().unique(),
   passwordHash: text("passwordHash").notNull(),
   displayName: text("displayName"),
-  role: text("role").default("user").notNull(),
+  role: text("role").default("user").notNull(),   // fallback string
+  roleId: integer("roleId"),                       // FK blanda a roles.id
   isActive: integer("isActive").default(1).notNull(),
   createdAt: integer("createdAt", { mode: "timestamp" }).default(sql`(strftime('%s', 'now'))`).notNull(),
   updatedAt: integer("updatedAt", { mode: "timestamp" }).default(sql`(strftime('%s', 'now'))`).notNull(),
   lastSignedIn: integer("lastSignedIn", { mode: "timestamp" }),
 });
 
-export type LocalUser = typeof localUsers.$inferSelect;
-export type InsertLocalUser = typeof localUsers.$inferInsert;
+export type User = typeof users.$inferSelect;
+export type InsertUser = typeof users.$inferInsert;
+/** @deprecated Usar User e InsertUser */
+export type LocalUser = User;
+/** @deprecated Usar User e InsertUser */
+export type InsertLocalUser = InsertUser;
 
 // ─── Tipos compartidos para JSON fields (¡Estas eran las que faltaban!) ──────
 

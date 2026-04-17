@@ -22,10 +22,16 @@ import {
   ds_deleteCatalogRecord,
   ds_bulkUpdateCatalogRecords,
   ds_bulkDeleteCatalogRecords,
-  ds_getLocalUsers,
-  ds_findLocalUserByUsername,
-  ds_createLocalUser,
-  ds_toggleLocalUserStatus,
+  ds_getUsers,
+  ds_findUserByUsername,
+  ds_createUser,
+  ds_toggleUserStatus,
+  ds_updateUser,
+  ds_getRoles,
+  ds_createRole,
+  ds_updateRole,
+  ds_deleteRole,
+  ds_getUsersByRoleId,
   // Catálogos dinámicos y meta — ahora también pasan por dataSource
   ds_listCatalogMeta,
   ds_createCatalogTable,
@@ -232,10 +238,8 @@ export const appRouter = router({
     }),
 
     listUsers: protectedProcedure.query(async ({ ctx }) => {
-      if (ctx.user?.role !== "admin") {
-        throw new Error("Acceso denegado: se requiere rol admin");
-      }
-      return await ds_getLocalUsers();
+      if (ctx.user?.role !== "admin") throw new Error("Acceso denegado: se requiere rol admin");
+      return await ds_getUsers();
     }),
 
     createUser: protectedProcedure
@@ -244,22 +248,34 @@ export const appRouter = router({
         password: z.string().min(4),
         displayName: z.string().optional(),
         role: z.enum(["user", "admin"]).default("user"),
+        roleId: z.number().optional().nullable(),
       }))
       .mutation(async ({ ctx, input }) => {
-        if (ctx.user?.role !== "admin") {
-          throw new Error("Acceso denegado: se requiere rol admin");
-        }
-        const existing = await ds_findLocalUserByUsername(input.username);
+        if (ctx.user?.role !== "admin") throw new Error("Acceso denegado: se requiere rol admin");
+        const existing = await ds_findUserByUsername(input.username);
         if (existing) throw new Error("El nombre de usuario ya existe");
-
         const passwordHash = await hashPassword(input.password);
-
-        await ds_createLocalUser({
+        await ds_createUser({
           username: input.username,
           passwordHash,
           displayName: input.displayName,
           role: input.role,
+          roleId: input.roleId ?? null,
         });
+        return { success: true };
+      }),
+
+    updateUser: protectedProcedure
+      .input(z.object({
+        id: z.number(),
+        displayName: z.string().optional(),
+        roleId: z.number().nullable().optional(),
+        role: z.enum(["user", "admin"]).optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user?.role !== "admin") throw new Error("Acceso denegado: se requiere rol admin");
+        const { id, ...data } = input;
+        await ds_updateUser(id, data);
         return { success: true };
       }),
 
@@ -269,11 +285,77 @@ export const appRouter = router({
         isActive: z.number().min(0).max(1),
       }))
       .mutation(async ({ ctx, input }) => {
-        if (ctx.user?.role !== "admin") {
-          throw new Error("Acceso denegado: se requiere rol admin");
-        }
-        await ds_toggleLocalUserStatus(input.id, input.isActive);
+        if (ctx.user?.role !== "admin") throw new Error("Acceso denegado: se requiere rol admin");
+        await ds_toggleUserStatus(input.id, input.isActive);
         return { success: true };
+      }),
+  }),
+
+  // ─── Roles ────────────────────────────────────────────────────────────────────
+  roles: router({
+    list: protectedProcedure.query(async ({ ctx }) => {
+      if (ctx.user?.role !== "admin") throw new Error("Acceso denegado");
+      return await ds_getRoles();
+    }),
+
+    create: protectedProcedure
+      .input(z.object({
+        nombre: z.string().min(2).max(64),
+        label: z.string().min(2).max(128),
+        descripcion: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user?.role !== "admin") throw new Error("Acceso denegado");
+        const result = await ds_createRole(input);
+        return result[0];
+      }),
+
+    update: protectedProcedure
+      .input(z.object({
+        id: z.number(),
+        nombre: z.string().min(2).max(64).optional(),
+        label: z.string().min(2).max(128).optional(),
+        descripcion: z.string().optional(),
+        activo: z.number().min(0).max(1).optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user?.role !== "admin") throw new Error("Acceso denegado");
+        const { id, ...data } = input;
+        await ds_updateRole(id, data);
+        return { success: true };
+      }),
+
+    delete: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user?.role !== "admin") throw new Error("Acceso denegado");
+        const affected = await ds_getUsersByRoleId(input.id);
+        if (affected.length > 0) {
+          return { success: false, affected, requiresConfirm: true };
+        }
+        await ds_deleteRole(input.id);
+        return { success: true, affected: [] };
+      }),
+
+    deleteForce: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user?.role !== "admin") throw new Error("Acceso denegado");
+        // Desasignar el rol de todos los usuarios antes de borrar
+        await ds_updateUser(0, {});
+        const affected = await ds_getUsersByRoleId(input.id);
+        for (const u of affected) {
+          await ds_updateUser(u.id, { roleId: null });
+        }
+        await ds_deleteRole(input.id);
+        return { success: true };
+      }),
+
+    getUsersByRole: protectedProcedure
+      .input(z.object({ roleId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        if (ctx.user?.role !== "admin") throw new Error("Acceso denegado");
+        return await ds_getUsersByRoleId(input.roleId);
       }),
   }),
 

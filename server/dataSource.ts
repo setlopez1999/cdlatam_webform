@@ -15,11 +15,18 @@ import {
   deleteCatalogRecord,
   bulkUpdateCatalogRecords,
   bulkDeleteCatalogRecords,
-  getLocalUsers,
-  createLocalUser,
-  findLocalUserByUsername,
-  findLocalUserById,
-  toggleLocalUserStatus,
+  getUsers,
+  createUser,
+  findUserByUsername,
+  findUserById,
+  toggleUserStatus,
+  updateUser,
+  getRoles,
+  getRoleById,
+  createRole,
+  updateRole,
+  deleteRole,
+  getUsersByRoleId,
   getDb,
   // Catálogos dinámicos y meta
   listCatalogMeta,
@@ -183,31 +190,78 @@ export async function ds_searchCatalogs(query: string) {
   return { cecos, soluciones, detalles };
 }
 
-// ─── Usuarios ─────────────────────────────────────────────────────────────────
+// ─── Usuarios ────────────────────────────────────────────────────────────────────
 
-export async function ds_getLocalUsers() {
+export async function ds_getUsers() {
   if (USE_API) return apiFetch<any[]>(`/users`);
-  return getLocalUsers();
+  return getUsers();
 }
+/** @deprecated Usar ds_getUsers */
+export const ds_getLocalUsers = ds_getUsers;
 
-export async function ds_findLocalUserByUsername(username: string) {
+export async function ds_findUserByUsername(username: string) {
   if (USE_API) return apiFetch<any>(`/users/by-username/${encodeURIComponent(username)}`);
-  return findLocalUserByUsername(username);
+  return findUserByUsername(username);
 }
+/** @deprecated Usar ds_findUserByUsername */
+export const ds_findLocalUserByUsername = ds_findUserByUsername;
 
-export async function ds_findLocalUserById(id: number) {
+export async function ds_findUserById(id: number) {
   if (USE_API) return apiFetch<any>(`/users/${id}`);
-  return findLocalUserById(id);
+  return findUserById(id);
 }
+/** @deprecated Usar ds_findUserById */
+export const ds_findLocalUserById = ds_findUserById;
 
-export async function ds_createLocalUser(user: { username: string; passwordHash: string; displayName?: string; role: string }) {
+export async function ds_createUser(user: { username: string; passwordHash: string; displayName?: string; role: string }) {
   if (USE_API) return apiFetch<any>(`/users`, { method: "POST", body: JSON.stringify(user) });
-  return createLocalUser(user);
+  return createUser(user);
+}
+/** @deprecated Usar ds_createUser */
+export const ds_createLocalUser = ds_createUser;
+
+export async function ds_toggleUserStatus(id: number, isActive: number) {
+  if (USE_API) return apiFetch<any>(`/users/${id}/toggle`, { method: "PUT", body: JSON.stringify({ isActive }) });
+  return toggleUserStatus(id, isActive);
+}
+/** @deprecated Usar ds_toggleUserStatus */
+export const ds_toggleLocalUserStatus = ds_toggleUserStatus;
+
+export async function ds_updateUser(id: number, data: { displayName?: string; roleId?: number | null; role?: string }) {
+  if (USE_API) return apiFetch<any>(`/users/${id}`, { method: "PUT", body: JSON.stringify(data) });
+  return updateUser(id, data);
 }
 
-export async function ds_toggleLocalUserStatus(id: number, isActive: number) {
-  if (USE_API) return apiFetch<any>(`/users/${id}/toggle`, { method: "PUT", body: JSON.stringify({ isActive }) });
-  return toggleLocalUserStatus(id, isActive);
+// ─── Roles ────────────────────────────────────────────────────────────────────
+
+export async function ds_getRoles() {
+  if (USE_API) return apiFetch<any[]>(`/roles`);
+  return getRoles();
+}
+
+export async function ds_getRoleById(id: number) {
+  if (USE_API) return apiFetch<any>(`/roles/${id}`);
+  return getRoleById(id);
+}
+
+export async function ds_createRole(data: { nombre: string; label: string; descripcion?: string }) {
+  if (USE_API) return apiFetch<any>(`/roles`, { method: "POST", body: JSON.stringify(data) });
+  return createRole(data);
+}
+
+export async function ds_updateRole(id: number, data: { nombre?: string; label?: string; descripcion?: string; activo?: number }) {
+  if (USE_API) return apiFetch<any>(`/roles/${id}`, { method: "PUT", body: JSON.stringify(data) });
+  return updateRole(id, data);
+}
+
+export async function ds_deleteRole(id: number) {
+  if (USE_API) return apiFetch<any>(`/roles/${id}`, { method: "DELETE" });
+  return deleteRole(id);
+}
+
+export async function ds_getUsersByRoleId(roleId: number) {
+  if (USE_API) return apiFetch<any[]>(`/roles/${roleId}/users`);
+  return getUsersByRoleId(roleId);
 }
 
 // ─── Catálogos — Metadatos y gestión de tablas dinámicas ─────────────────────

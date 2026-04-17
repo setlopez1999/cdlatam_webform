@@ -52,6 +52,18 @@ async function startServer() {
 
   // DB Management Routes (Export/Import)
   registerDbManagementRoutes(app);
+
+  // ─── Runtime config endpoint ──────────────────────────────────────────────
+  // Expone variables de entorno al cliente SIN necesidad de rebuild.
+  // El cliente carga este script en index.html y lee window.__ENV__
+  app.get("/config.js", (_req: Request, res: Response) => {
+    res.setHeader("Content-Type", "application/javascript");
+    res.setHeader("Cache-Control", "no-store"); // nunca cachear — siempre fresco
+    res.send(`window.__ENV__ = ${JSON.stringify({
+      APP_DEBUG: ENV.appDebug,
+    })};`);
+  });
+
   // tRPC API
   app.use(
     "/api/trpc",

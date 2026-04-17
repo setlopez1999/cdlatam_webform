@@ -3,7 +3,7 @@ import { useLocation } from "wouter";
 import { useLocalAuth } from "@/hooks/useLocalAuth";
 import { Label } from "@/components/ui/label";
 import { Loader2, Lock, User, ArrowRight, CheckCircle2 } from "lucide-react";
-import { APP_DEBUG } from "@/lib/errorUtils";
+import { getAppDebug } from "@/lib/errorUtils";
 
 export default function Login() {
   const [username, setUsername] = useState("");
@@ -228,7 +228,7 @@ export default function Login() {
           </form>
 
           {/* Credentials hint — solo visible en modo debug */}
-          {APP_DEBUG && <div className="mt-8 pt-6" style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+          {getAppDebug() && <div className="mt-8 pt-6" style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
             <p className="text-[10px] font-semibold uppercase tracking-widest text-white/20 text-center mb-3">
               Acceso de prueba
             </p>
