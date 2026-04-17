@@ -158,7 +158,7 @@ export default function SpreadsheetView() {
 
   // Cargar tabs dinámicamente desde catalog_meta
   const { data: tables = [] } = trpc.catalogsDB.listTables.useQuery(undefined, {
-    onSuccess: (data) => {
+    onSuccess: (data: { tableName: string; title: string; isCustom: number }[]) => {
       if (!activeTab && data.length > 0) setActiveTab(data[0].tableName);
     },
   } as any);

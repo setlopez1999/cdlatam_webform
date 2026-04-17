@@ -8,9 +8,9 @@ tRPC es equivalente a REST pero con tipado de extremo a extremo (TypeScript).
 ```
 Frontend (React)          Backend (Express + tRPC)
 ─────────────────         ──────────────────────────────────────
-trpc.actas.list           → server/routers.ts → actasController.ts → db.ts → MySQL
-trpc.localAuth.login      → server/routers.ts → localAuth.ts → MySQL
-trpc.catalogsDB.summary   → server/routers.ts → db.ts → MySQL
+trpc.actas.list           → server/routers.ts → dataSource.ts → db.ts → SQLite
+trpc.localAuth.login      → server/routers.ts → dataSource.ts → localAuth.ts → SQLite
+trpc.catalogsDB.summary   → server/routers.ts → dataSource.ts → db.ts → SQLite
 ```
 
 ## Estructura del Backend
@@ -21,6 +21,7 @@ server/
 │   ├── index.ts            ← Punto de entrada Express
 │   ├── context.ts          ← Construye ctx.user en cada request
 │   ├── trpc.ts             ← Definición de publicProcedure / protectedProcedure
+│   ├── vite.ts             ← Inyecta window.__ENV__ en el HTML (APP_DEBUG, etc.)
 │   └── env.ts              ← Variables de entorno
 │
 ├── routes/                 ← (Este directorio) Documentación de rutas
@@ -37,8 +38,11 @@ server/
 │   └── auth.ts             ← requireAuth, requireAdmin
 │
 ├── routers.ts              ← Punto de entrada tRPC (equivalente a routes REST)
+│                              SIEMPRE importa desde dataSource.ts, nunca desde db.ts
+├── dataSource.ts           ← Capa de abstracción (fuente de verdad única)
+│                              Switch SQLite/API externa via USE_API en .env
 ├── localAuth.ts            ← Lógica de autenticación (bcrypt + JWT)
-├── db.ts                   ← Helpers de queries a la base de datos
+├── db.ts                   ← Queries directas a SQLite (solo acceder via dataSource.ts)
 └── storage.ts              ← Helpers de S3
 ```
 
@@ -53,6 +57,16 @@ server/
 | `localAuth.listUsers` | query | admin | Lista todos los usuarios |
 | `localAuth.createUser` | mutation | admin | Crea nuevo usuario |
 | `localAuth.toggleUser` | mutation | admin | Activa/desactiva usuario |
+| `localAuth.updateUser` | mutation | admin | Edita displayName y roleId |
+| `localAuth.deleteUser` | mutation | admin | Elimina un usuario |
+
+### Roles (`roles.*`)
+| Endpoint | Tipo | Acceso | Descripción |
+|---|---|---|---|
+| `roles.list` | query | admin | Lista todos los roles |
+| `roles.create` | mutation | admin | Crea nuevo rol |
+| `roles.update` | mutation | admin | Edita nombre/descripción de rol |
+| `roles.delete` | mutation | admin | Elimina rol (con validación de usuarios asignados) |
 
 ### Actas (`actas.*`)
 | Endpoint | Tipo | Acceso | Descripción |
@@ -72,7 +86,7 @@ server/
 | Endpoint | Tipo | Acceso | Descripción |
 |---|---|---|---|
 | `catalogs.all` | query | público | Todos los catálogos para dropdowns |
-| `catalogsDB.summary` | query | auth | Catálogos desde MySQL con conteos |
+| `catalogsDB.summary` | query | auth | Catálogos desde SQLite con conteos |
 | `catalogsDB.cecosByEmpresa` | query | auth | CECOs agrupados por empresa |
 | `catalogsDB.search` | query | auth | Búsqueda en catálogos |
 
@@ -83,39 +97,52 @@ Admin  → Acceso total: Dashboard, Acta, EP, Resultado, Base de Datos, Usuarios
 Usuario → Solo: Acta (propias), EP (propias)
 ```
 
-El rol se almacena en la tabla `localUsers.role` (enum: "admin" | "user").
+El rol se almacena en la tabla `users.role` (string legacy: "admin" | "user") y en
+`users.roleId` como FK blanda a la tabla `roles`.
 Al hacer login, el rol se incluye en el JWT y se verifica en cada request.
 
-## Despliegue en servidor propio
+## Base de datos
+
+La aplicación usa **SQLite** (archivo `data/gestion.db`).
+El ORM es **Drizzle**. El schema canónico está en `drizzle/schema.ts`.
+
+Tablas principales:
+- `users` — Usuarios del sistema (username/password, bcrypt)
+- `roles` — Roles relacionales con nombre y descripción
+- `actas` — Actas de servicio
+- `evaluaciones` — Evaluaciones de proyecto (EP)
+- `catalog_meta` — Metadatos de catálogos (fijos + dinámicos)
+- `catalog_custom_*` — Tablas de catálogos dinámicos creados por el usuario
+
+## Despliegue en servidor propio (Docker)
 
 ```bash
 # 1. Clonar repositorio
 git clone <repo-url>
-cd gestion_administrativa
+cd cdlatam_webform
 
-# 2. Instalar dependencias
-pnpm install
-
-# 3. Configurar variables de entorno
+# 2. Configurar variables de entorno
 cp .env.example .env
-# Editar .env con DATABASE_URL y JWT_SECRET
+# Editar .env con JWT_SECRET, COOKIE_SECRET, APP_DEBUG, etc.
 
-# 4. Ejecutar migraciones
-pnpm db:push
+# 3. Construir y levantar
+docker-compose up --build -d
 
-# 5. Compilar para producción
-pnpm build
+# Para cambios solo de .env (sin rebuild):
+docker-compose down && docker-compose up -d
 
-# 6. Iniciar servidor
-pnpm start
-# → Servidor corriendo en http://localhost:3000
+# Para cambios de código (requiere rebuild):
+docker-compose down && docker-compose up --build -d
 ```
 
 ## Variables de entorno requeridas
 
 ```env
-DATABASE_URL=mysql://user:password@host:3306/database
+DATABASE_URL=./data/gestion.db
 JWT_SECRET=tu-secreto-muy-largo-y-seguro
+COOKIE_SECRET=otro-secreto-largo
 NODE_ENV=production
 PORT=3000
+APP_DEBUG=false
+USE_API=false
 ```

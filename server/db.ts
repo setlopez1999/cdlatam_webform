@@ -264,27 +264,32 @@ export async function runMigrations() {
     try {
       const rawDb = sqlite;
       rawDb.exec(`
-        CREATE TABLE IF NOT EXISTS localUsers (
+        CREATE TABLE IF NOT EXISTS roles (
+          id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+          name TEXT NOT NULL UNIQUE,
+          description TEXT,
+          createdAt INTEGER DEFAULT (strftime('%s', 'now')) NOT NULL,
+          updatedAt INTEGER DEFAULT (strftime('%s', 'now')) NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS users (
           id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
           username TEXT NOT NULL UNIQUE,
           passwordHash TEXT NOT NULL,
           displayName TEXT,
           role TEXT DEFAULT 'user' NOT NULL,
+          roleId INTEGER,
           isActive INTEGER DEFAULT 1 NOT NULL,
           createdAt INTEGER DEFAULT (strftime('%s', 'now')) NOT NULL,
           updatedAt INTEGER DEFAULT (strftime('%s', 'now')) NOT NULL,
           lastSignedIn INTEGER
         );
-        CREATE TABLE IF NOT EXISTS users (
+        CREATE TABLE IF NOT EXISTS catalog_meta (
           id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
-          openId TEXT NOT NULL UNIQUE,
-          name TEXT,
-          email TEXT,
-          loginMethod TEXT,
-          role TEXT DEFAULT 'user' NOT NULL,
-          createdAt INTEGER DEFAULT (strftime('%s', 'now')) NOT NULL,
-          updatedAt INTEGER DEFAULT (strftime('%s', 'now')) NOT NULL,
-          lastSignedIn INTEGER DEFAULT (strftime('%s', 'now')) NOT NULL
+          table_name TEXT NOT NULL UNIQUE,
+          title TEXT NOT NULL,
+          is_custom INTEGER DEFAULT 0 NOT NULL,
+          linked_field TEXT,
+          created_at INTEGER DEFAULT (strftime('%s', 'now')) NOT NULL
         );
         CREATE TABLE IF NOT EXISTS actas (
           id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
@@ -335,48 +340,7 @@ export async function runMigrations() {
   }
 }
 
-// ─── Users (OAuth/OpenID) ──────────────────────────────────────────────────────
-export async function upsertUser(user: InsertUser): Promise<void> {
-  if (!user.openId) throw new Error("User openId is required for upsert");
-  const db = await getDb();
-
-  try {
-    const values: InsertUser = { openId: user.openId };
-    const updateSet: Record<string, unknown> = {};
-    const textFields = ["name", "email", "loginMethod"] as const;
-    type TextField = (typeof textFields)[number];
-    const assignNullable = (field: TextField) => {
-      const value = user[field];
-      if (value === undefined) return;
-      const normalized = value ?? null;
-      values[field] = normalized;
-      updateSet[field] = normalized;
-    };
-    textFields.forEach(assignNullable);
-    if (user.lastSignedIn !== undefined) { values.lastSignedIn = user.lastSignedIn; updateSet.lastSignedIn = user.lastSignedIn; }
-    if (user.role !== undefined) { values.role = user.role; updateSet.role = user.role; }
-
-    // Asignar rol por defecto si es necesario (puedes ajustar esta lógica)
-    if (!values.role) values.role = "user";
-
-    if (!values.lastSignedIn) values.lastSignedIn = new Date();
-    if (Object.keys(updateSet).length === 0) updateSet.lastSignedIn = new Date();
-
-    // SQLite upsert
-    await db.insert(users).values(values).onConflictDoUpdate({ target: users.openId, set: updateSet });
-  } catch (error) {
-    console.error("[Database] Failed to upsert user:", error);
-    throw error;
-  }
-}
-
-export async function getUserByOpenId(openId: string) {
-  const db = await getDb();
-  const result = await db.select().from(users).where(eq(users.openId, openId)).limit(1);
-  return result.length > 0 ? result[0] : undefined;
-}
-
-// ─── USERS (Username/Password) ───────────────────────────────────────────────
+// ─── USERS (Username/Password) ────────────────────────────────────────────────────
 
 export async function getUsers() {
   const db = await getDb();

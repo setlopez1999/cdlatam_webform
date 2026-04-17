@@ -31,21 +31,10 @@ export async function createContext(
     const payload = await verifyLocalJWT(localToken);
     if (payload) {
       localUser = payload;
-      // Construir un objeto User compatible para no romper protectedProcedure
+      // Cargar el usuario desde la BD y asignarlo directamente al contexto
       const dbUser = await findLocalUserById(payload.id);
       if (dbUser && dbUser.isActive === 1) {
-        user = {
-          id: dbUser.id,
-          openId: `local_${dbUser.username}`,
-          name: dbUser.displayName ?? dbUser.username,
-          email: null,
-          loginMethod: "local",
-          role: dbUser.role,
-          createdAt: dbUser.createdAt,
-          updatedAt: dbUser.updatedAt,
-          lastSignedIn: dbUser.lastSignedIn ?? dbUser.createdAt,
-          activo: 1,
-        };
+        user = dbUser;
       }
     }
   }
