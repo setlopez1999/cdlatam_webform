@@ -29,6 +29,7 @@ import { loadActasList, loadEPList, deleteActa, deleteEP } from "@/hooks/useForm
 import { formatCurrency, formatDate, getStatusColor, getStatusLabel } from "@/lib/formatters";
 import { CatalogCrudView } from "@/components/CatalogCrudView";
 import { catalogConfigs } from "@/config/catalogConfig";
+import { parseErrorMessage, isConnectionError, APP_DEBUG } from "@/lib/errorUtils";
 
 // ─── Tipos ───────────────────────────────────────────────────────────────────
 
@@ -492,9 +493,18 @@ export default function BaseDatos() {
           </div>
         ) : error && activeTab !== "actas" && activeTab !== "ep" ? (
           <div className="flex items-center justify-center h-48">
-            <div className="text-center">
-              <Database className="w-8 h-8 text-red-400 mx-auto mb-2" />
-              <p className="text-red-400 text-sm">{error.message}</p>
+            <div className="text-center space-y-2">
+              <Database className="w-8 h-8 text-red-400 mx-auto" />
+              <p className="text-red-400 text-sm font-medium">
+                {isConnectionError(error) ? "Error de conexión con el servidor" : "Error al cargar los datos"}
+              </p>
+              <p className="text-slate-500 text-xs">{parseErrorMessage(error)}</p>
+              {APP_DEBUG && (
+                <details className="mt-2 text-left max-w-sm mx-auto">
+                  <summary className="text-xs text-slate-600 cursor-pointer hover:text-slate-400">Ver detalle técnico</summary>
+                  <pre className="mt-1 text-xs text-red-300 bg-red-500/10 rounded p-2 overflow-auto max-h-32 whitespace-pre-wrap">{error.message}</pre>
+                </details>
+              )}
             </div>
           </div>
         ) : (

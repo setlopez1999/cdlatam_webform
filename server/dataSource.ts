@@ -21,6 +21,16 @@ import {
   findLocalUserById,
   toggleLocalUserStatus,
   getDb,
+  // Catálogos dinámicos y meta
+  listCatalogMeta,
+  createCatalogTable,
+  renameCatalogTable,
+  deleteCatalogTable,
+  getCatalogListGeneric,
+  createCatalogRecordGeneric,
+  updateCatalogRecordGeneric,
+  deleteCatalogRecordGeneric,
+  bulkDeleteCatalogRecordsGeneric,
 } from "./db";
 import {
   catalogMonedas, catalogPaises, catalogEmpresas, catalogDocumentoIdentidad,
@@ -198,4 +208,64 @@ export async function ds_createLocalUser(user: { username: string; passwordHash:
 export async function ds_toggleLocalUserStatus(id: number, isActive: number) {
   if (USE_API) return apiFetch<any>(`/users/${id}/toggle`, { method: "PUT", body: JSON.stringify({ isActive }) });
   return toggleLocalUserStatus(id, isActive);
+}
+
+// ─── Catálogos — Metadatos y gestión de tablas dinámicas ─────────────────────
+// Nota: Las operaciones de estructura (CREATE/DROP TABLE) son siempre SQLite-only
+// porque son DDL. El CRUD de registros dinámicos sí respeta USE_API.
+
+export async function ds_listCatalogMeta() {
+  // La estructura de tablas siempre viene de SQLite local
+  return listCatalogMeta();
+}
+
+export async function ds_createCatalogTable(tableName: string, title: string) {
+  // DDL siempre en SQLite local
+  return createCatalogTable(tableName, title);
+}
+
+export async function ds_renameCatalogTable(tableName: string, newTitle: string) {
+  return renameCatalogTable(tableName, newTitle);
+}
+
+export async function ds_deleteCatalogTable(tableName: string) {
+  return deleteCatalogTable(tableName);
+}
+
+// CRUD genérico de registros en tablas dinámicas — respeta USE_API
+
+export async function ds_getCatalogListGeneric(tableName: string) {
+  if (USE_API) return apiFetch<any[]>(`/catalogs/custom/${tableName}`);
+  return getCatalogListGeneric(tableName);
+}
+
+export async function ds_createCatalogRecordGeneric(tableName: string, data: any) {
+  if (USE_API) return apiFetch<any>(`/catalogs/custom/${tableName}`, { method: "POST", body: JSON.stringify(data) });
+  return createCatalogRecordGeneric(tableName, data);
+}
+
+export async function ds_updateCatalogRecordGeneric(tableName: string, id: number, data: any) {
+  if (USE_API) return apiFetch<any>(`/catalogs/custom/${tableName}/${id}`, { method: "PUT", body: JSON.stringify(data) });
+  return updateCatalogRecordGeneric(tableName, id, data);
+}
+
+export async function ds_deleteCatalogRecordGeneric(tableName: string, id: number) {
+  if (USE_API) return apiFetch<any>(`/catalogs/custom/${tableName}/${id}`, { method: "DELETE" });
+  return deleteCatalogRecordGeneric(tableName, id);
+}
+
+export async function ds_bulkDeleteCatalogRecordsGeneric(tableName: string, ids: number[]) {
+  if (USE_API) return apiFetch<any>(`/catalogs/custom/${tableName}/bulk-delete`, { method: "DELETE", body: JSON.stringify({ ids }) });
+  return bulkDeleteCatalogRecordsGeneric(tableName, ids);
+}
+
+export async function ds_allCounts(): Promise<Record<string, number>> {
+  if (USE_API) return apiFetch<Record<string, number>>(`/catalogs/all-counts`);
+  const metas = await listCatalogMeta();
+  const counts: Record<string, number> = {};
+  for (const m of metas) {
+    const rows = await getCatalogListGeneric(m.tableName);
+    counts[m.tableName] = (rows as any[]).filter((r: any) => r.activo !== 0).length;
+  }
+  return counts;
 }
