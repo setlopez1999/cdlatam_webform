@@ -252,7 +252,94 @@ export async function bulkDeleteCatalogRecords(tableName: string, ids: number[])
   return await db.delete(table).where(inArray(table.id, ids));
 }
 
+/**
+ * Detecta si la tabla users tiene el schema v1 (openId) y la migra al v2 (username/passwordHash).
+ * Se ejecuta ANTES de las migraciones de Drizzle para que la BD siempre quede en estado correcto.
+ * Es idempotente: si ya tiene el schema v2, no hace nada.
+ */
+function autoMigrateUsersSchemaIfNeeded(): void {
+  try {
+    // Leer las columnas actuales de la tabla users
+    const cols = sqlite
+      .prepare("SELECT name FROM pragma_table_info('users')")
+      .all() as Array<{ name: string }>;
+    const colNames = cols.map(c => c.name);
+
+    // Si ya tiene username, el schema es v2 — no hacer nada
+    if (colNames.includes("username")) {
+      console.log("[DB] users schema v2 detected — no migration needed");
+      return;
+    }
+
+    // Si tiene openId, es el schema v1 — migrar
+    if (colNames.includes("openId")) {
+      console.warn("[DB] users schema v1 (openId) detected — migrating to v2 (username/password)...");
+
+      sqlite.exec(`
+        -- Renombrar tabla vieja para preservar datos
+        ALTER TABLE users RENAME TO users_v1_backup;
+
+        -- Crear tabla roles si no existe
+        CREATE TABLE IF NOT EXISTS roles (
+          id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+          nombre TEXT NOT NULL UNIQUE,
+          label TEXT NOT NULL,
+          descripcion TEXT,
+          activo INTEGER DEFAULT 1 NOT NULL,
+          createdAt INTEGER DEFAULT (strftime('%s', 'now')) NOT NULL,
+          updatedAt INTEGER DEFAULT (strftime('%s', 'now')) NOT NULL
+        );
+
+        -- Insertar roles base
+        INSERT OR IGNORE INTO roles (nombre, label, descripcion, activo) VALUES
+          ('admin',   'Administrador', 'Acceso total al sistema', 1),
+          ('manager', 'Gerente',       'Puede ver todo, no puede gestionar usuarios', 1),
+          ('viewer',  'Solo lectura',  'Acceso de solo lectura', 1),
+          ('user',    'Usuario',       'Acceso basico al sistema', 1);
+
+        -- Crear nueva tabla users con schema v2
+        CREATE TABLE users (
+          id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+          username TEXT NOT NULL UNIQUE,
+          passwordHash TEXT NOT NULL,
+          displayName TEXT,
+          role TEXT DEFAULT 'user' NOT NULL,
+          roleId INTEGER,
+          isActive INTEGER DEFAULT 1 NOT NULL,
+          createdAt INTEGER DEFAULT (strftime('%s', 'now')) NOT NULL,
+          updatedAt INTEGER DEFAULT (strftime('%s', 'now')) NOT NULL,
+          lastSignedIn INTEGER
+        );
+
+        -- Crear catalog_meta si no existe
+        CREATE TABLE IF NOT EXISTS catalog_meta (
+          id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+          table_name TEXT NOT NULL UNIQUE,
+          title TEXT NOT NULL,
+          is_custom INTEGER DEFAULT 0 NOT NULL,
+          linked_field TEXT,
+          created_at INTEGER DEFAULT (strftime('%s', 'now')) NOT NULL
+        );
+      `);
+
+      console.log("[DB] users schema migrated to v2 successfully. Old data backed up in users_v1_backup.");
+      return;
+    }
+
+    // Si la tabla no existe aún, no hacer nada — Drizzle la creará
+    if (colNames.length === 0) {
+      console.log("[DB] users table does not exist yet — will be created by Drizzle migrations");
+    }
+  } catch (err: any) {
+    // Si la tabla no existe, pragma_table_info devuelve vacío sin error — esto no debería ocurrir
+    console.warn("[DB] autoMigrateUsersSchemaIfNeeded skipped:", err?.message ?? err);
+  }
+}
+
 export async function runMigrations() {
+  // Paso 0: Migrar schema viejo automáticamente si es necesario (idempotente)
+  autoMigrateUsersSchemaIfNeeded();
+
   try {
     // Intentar migración estándar de Drizzle primero
     const db = await getDb();
