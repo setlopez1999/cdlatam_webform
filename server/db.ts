@@ -8,6 +8,7 @@ import { existsSync, mkdirSync } from 'fs';
 // Importamos los esquemas (asegúrate de que esta ruta sea correcta)
 import {
   InsertUser, users, roles, type Role, type InsertRole,
+  userRoles, type UserRole, type InsertUserRole,
   actas, evaluaciones, InsertActa, InsertEvaluacion,
   catalogMeta,
   // Catálogos
@@ -265,9 +266,19 @@ function autoMigrateUsersSchemaIfNeeded(): void {
       .all() as Array<{ name: string }>;
     const colNames = cols.map(c => c.name);
 
-    // Si ya tiene username, el schema es v2 — no hacer nada
+    // Si ya tiene username, el schema es v2 — verificar que user_roles existe
     if (colNames.includes("username")) {
       console.log("[DB] users schema v2 detected — no migration needed");
+      // Asegurar que user_roles existe (puede faltar en instalaciones anteriores a RBAC)
+      sqlite.exec(`
+        CREATE TABLE IF NOT EXISTS user_roles (
+          id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+          userId INTEGER NOT NULL,
+          roleId INTEGER NOT NULL,
+          assignedAt INTEGER DEFAULT (strftime('%s', 'now')) NOT NULL,
+          UNIQUE(userId, roleId)
+        );
+      `);
       return;
     }
 
@@ -319,6 +330,15 @@ function autoMigrateUsersSchemaIfNeeded(): void {
           is_custom INTEGER DEFAULT 0 NOT NULL,
           linked_field TEXT,
           created_at INTEGER DEFAULT (strftime('%s', 'now')) NOT NULL
+        );
+
+        -- Crear user_roles si no existe
+        CREATE TABLE IF NOT EXISTS user_roles (
+          id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+          userId INTEGER NOT NULL,
+          roleId INTEGER NOT NULL,
+          assignedAt INTEGER DEFAULT (strftime('%s', 'now')) NOT NULL,
+          UNIQUE(userId, roleId)
         );
       `);
 
@@ -419,6 +439,13 @@ export async function runMigrations() {
         CREATE TABLE IF NOT EXISTS catalog_departamentos (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, valor TEXT NOT NULL UNIQUE, activo INTEGER DEFAULT 1 NOT NULL);
         CREATE TABLE IF NOT EXISTS catalog_areas (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, valor TEXT NOT NULL UNIQUE, activo INTEGER DEFAULT 1 NOT NULL);
         CREATE TABLE IF NOT EXISTS catalog_nombres (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, valor TEXT NOT NULL, activo INTEGER DEFAULT 1 NOT NULL);
+        CREATE TABLE IF NOT EXISTS user_roles (
+          id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+          userId INTEGER NOT NULL,
+          roleId INTEGER NOT NULL,
+          assignedAt INTEGER DEFAULT (strftime('%s', 'now')) NOT NULL,
+          UNIQUE(userId, roleId)
+        );
       `);
       console.log("[DB] Schema applied manually (fallback)");
     } catch (fallbackError) {
@@ -504,6 +531,73 @@ export async function getUsersByRoleId(roleId: number) {
   return await db.select({ id: users.id, username: users.username, displayName: users.displayName })
     .from(users)
     .where(eq(users.roleId, roleId));
+}
+
+// ─── USER_ROLES (RBAC N:N) ──────────────────────────────────────────────────
+
+/** Obtiene todos los roles asignados a un usuario */
+export async function getUserRoles(userId: number): Promise<UserRole[]> {
+  const db = await getDb();
+  return await db.select().from(userRoles).where(eq(userRoles.userId, userId));
+}
+
+/** Obtiene los nombres de roles de un usuario (join con tabla roles) */
+export async function getUserRoleNames(userId: number): Promise<string[]> {
+  const db = await getDb();
+  const result = await db
+    .select({ nombre: roles.nombre })
+    .from(userRoles)
+    .innerJoin(roles, eq(userRoles.roleId, roles.id))
+    .where(eq(userRoles.userId, userId));
+  return result.map(r => r.nombre);
+}
+
+/** Asigna un rol a un usuario (idempotente — ignora si ya existe) */
+export async function assignRoleToUser(userId: number, roleId: number): Promise<void> {
+  const db = await getDb();
+  await db.insert(userRoles).values({ userId, roleId }).onConflictDoNothing();
+}
+
+/** Revoca un rol de un usuario */
+export async function revokeRoleFromUser(userId: number, roleId: number): Promise<void> {
+  const db = await getDb();
+  await db.delete(userRoles)
+    .where(and(eq(userRoles.userId, userId), eq(userRoles.roleId, roleId)));
+}
+
+/** Reemplaza todos los roles de un usuario por un nuevo set */
+export async function setUserRoles(userId: number, roleIds: number[]): Promise<void> {
+  const db = await getDb();
+  // Borrar todos los roles actuales del usuario
+  await db.delete(userRoles).where(eq(userRoles.userId, userId));
+  // Insertar los nuevos
+  if (roleIds.length > 0) {
+    await db.insert(userRoles).values(roleIds.map(roleId => ({ userId, roleId })));
+  }
+}
+
+/** Verifica si un usuario tiene un rol específico */
+export async function userHasRole(userId: number, roleName: string): Promise<boolean> {
+  const db = await getDb();
+  const result = await db
+    .select({ id: userRoles.id })
+    .from(userRoles)
+    .innerJoin(roles, eq(userRoles.roleId, roles.id))
+    .where(and(eq(userRoles.userId, userId), eq(roles.nombre, roleName)))
+    .limit(1);
+  return result.length > 0;
+}
+
+/** Verifica si un usuario tiene al menos uno de los roles dados */
+export async function userHasAnyRole(userId: number, roleNames: string[]): Promise<boolean> {
+  const db = await getDb();
+  const result = await db
+    .select({ id: userRoles.id })
+    .from(userRoles)
+    .innerJoin(roles, eq(userRoles.roleId, roles.id))
+    .where(and(eq(userRoles.userId, userId), inArray(roles.nombre, roleNames)))
+    .limit(1);
+  return result.length > 0;
 }
 
 // ─── Actas ────────────────────────────────────────────────────────────────────

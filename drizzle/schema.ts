@@ -137,6 +137,17 @@ export type LocalUser = User;
 /** @deprecated Usar User e InsertUser */
 export type InsertLocalUser = InsertUser;
 
+// ─── Relación N:N usuarios ↔ roles (RBAC) ────────────────────────────────────────────
+export const userRoles = sqliteTable("user_roles", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  userId: integer("userId").notNull(),
+  roleId: integer("roleId").notNull(),
+  assignedAt: integer("assignedAt", { mode: "timestamp" }).default(sql`(strftime('%s', 'now'))`).notNull(),
+});
+
+export type UserRole = typeof userRoles.$inferSelect;
+export type InsertUserRole = typeof userRoles.$inferInsert;
+
 // ─── Tipos compartidos para JSON fields (¡Estas eran las que faltaban!) ──────
 
 export interface ServicioContratado {

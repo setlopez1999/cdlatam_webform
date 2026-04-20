@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
@@ -43,6 +44,7 @@ export default function Usuarios() {
   const [showCreateUser, setShowCreateUser] = useState(false);
   const [editUser, setEditUser] = useState<UserItem | null>(null);
   const [userForm, setUserForm] = useState({ username: "", password: "", displayName: "", role: "user" as "user" | "admin", roleId: null as number | null });
+  const [selectedRoleIds, setSelectedRoleIds] = useState<number[]>([]);
   const [creatingUser, setCreatingUser] = useState(false);
 
   // ── Estado modales roles ──
@@ -59,6 +61,13 @@ export default function Usuarios() {
   const { data: roles, isLoading: loadingRoles, refetch: refetchRoles } =
     trpc.roles.list.useQuery(undefined, { enabled: isAdmin });
 
+  // Roles RBAC del usuario que se está editando
+  const { data: editUserRoles } =
+    trpc.userRoles.getByUser.useQuery(
+      { userId: editUser?.id ?? 0 },
+      { enabled: !!editUser && isAdmin, onSuccess: (data: any[]) => setSelectedRoleIds(data.map((r: any) => r.roleId)) } as any
+    );
+
   // ── Mutations usuarios ──
   const createUserMut = trpc.localAuth.createUser.useMutation({
     onSuccess: () => { toast.success("Usuario creado"); setShowCreateUser(false); resetUserForm(); refetchUsers(); },
@@ -69,6 +78,12 @@ export default function Usuarios() {
     onError: (e) => toast.error(e.message),
   });
   const toggleStatusMut = trpc.localAuth.toggleStatus.useMutation();
+
+  // Mutation para guardar roles RBAC del usuario
+  const setUserRolesMut = trpc.userRoles.setRoles.useMutation({
+    onSuccess: () => toast.success("Roles RBAC actualizados"),
+    onError: (e) => toast.error(e.message),
+  });
 
   // ── Mutations roles ──
   const createRoleMut = trpc.roles.create.useMutation({
@@ -100,6 +115,7 @@ export default function Usuarios() {
 
   const openEditUser = (u: UserItem) => {
     setUserForm({ username: u.username, password: "", displayName: u.displayName ?? "", role: (u.role as "user" | "admin"), roleId: u.roleId ?? null });
+    setSelectedRoleIds([]);
     setEditUser(u);
   };
 
@@ -128,6 +144,8 @@ export default function Usuarios() {
     e.preventDefault();
     if (!editUser) return;
     await updateUserMut.mutateAsync({ id: editUser.id, displayName: userForm.displayName, role: userForm.role, roleId: userForm.roleId });
+    // Guardar roles RBAC en paralelo
+    await setUserRolesMut.mutateAsync({ userId: editUser.id, roleIds: selectedRoleIds });
   };
 
   const handleCreateRole = async (e: React.FormEvent) => {
@@ -396,20 +414,32 @@ export default function Usuarios() {
             </div>
             {roles && roles.length > 0 && (
               <div className="space-y-2">
-                <Label>Rol asignado <span className="text-muted-foreground text-xs">(opcional)</span></Label>
-                <Select value={userForm.roleId?.toString() ?? "none"} onValueChange={(v) => setUserForm(f => ({ ...f, roleId: v === "none" ? null : Number(v) }))}>
-                  <SelectTrigger><SelectValue placeholder="Sin rol" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Sin rol</SelectItem>
-                    {roles.map((r: RoleItem) => <SelectItem key={r.id} value={r.id.toString()}>{r.label}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <Label>Roles RBAC <span className="text-muted-foreground text-xs">(acceso a pantallas específicas)</span></Label>
+                <div className="rounded-lg border border-border p-3 space-y-2 max-h-40 overflow-y-auto">
+                  {roles.map((r: RoleItem) => (
+                    <div key={r.id} className="flex items-center gap-2">
+                      <Checkbox
+                        id={`role-${r.id}`}
+                        checked={selectedRoleIds.includes(r.id)}
+                        onCheckedChange={(checked) => {
+                          setSelectedRoleIds(prev =>
+                            checked ? [...prev, r.id] : prev.filter(id => id !== r.id)
+                          );
+                        }}
+                      />
+                      <label htmlFor={`role-${r.id}`} className="text-sm cursor-pointer flex-1">
+                        <span className="font-medium">{r.label}</span>
+                        {r.descripcion && <span className="text-muted-foreground text-xs ml-2">{r.descripcion}</span>}
+                      </label>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
             <DialogFooter className="pt-2">
               <Button type="button" variant="outline" onClick={() => setEditUser(null)}>Cancelar</Button>
-              <Button type="submit" disabled={updateUserMut.isPending}>
-                {updateUserMut.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Pencil className="w-4 h-4 mr-2" />}Guardar Cambios
+              <Button type="submit" disabled={updateUserMut.isPending || setUserRolesMut.isPending}>
+                {(updateUserMut.isPending || setUserRolesMut.isPending) ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Pencil className="w-4 h-4 mr-2" />}Guardar Cambios
               </Button>
             </DialogFooter>
           </form>

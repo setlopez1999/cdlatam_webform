@@ -12,6 +12,7 @@ import {
   Shield,
   Users,
   History,
+  CalendarClock,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -33,6 +34,7 @@ interface NavItem {
   icon: React.ElementType;
   badge?: string;
   adminOnly?: boolean;
+  requiredRole?: string; // rol RBAC específico (de user_roles)
 }
 
 const ADMIN_NAV_ITEMS: NavItem[] = [
@@ -40,6 +42,11 @@ const ADMIN_NAV_ITEMS: NavItem[] = [
   { href: "/base-datos", label: "Base de Datos", icon: Database, adminOnly: true },
   { href: "/usuarios", label: "Usuarios", icon: Users, adminOnly: true },
   { href: "/historial", label: "Historial", icon: History, adminOnly: true },
+];
+
+// Items accesibles por rol específico (RBAC)
+const ROLE_NAV_ITEMS: NavItem[] = [
+  { href: "/gestor-horarios", label: "Gestor de Horarios", icon: CalendarClock, requiredRole: "gestor_horarios" },
 ];
 
 // Items para usuario normal
@@ -57,7 +64,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const [location, navigate] = useLocation();
-  const { currentUser, isAdmin, logout } = useLocalAuth();
+  const { currentUser, isAdmin, hasRole, logout } = useLocalAuth();
 
   const isActive = (href: string) => {
     if (href === "/" || href === "/home") return location === href;
@@ -71,6 +78,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
   };
 
   const visibleAdminItems = ADMIN_NAV_ITEMS.filter(item => !item.adminOnly || isAdmin);
+  const visibleRoleItems = ROLE_NAV_ITEMS.filter(item => !item.requiredRole || hasRole(item.requiredRole));
 
   const initials = (currentUser?.displayName ?? currentUser?.username ?? "U")
     .split(" ").map((w: string) => w[0]).join("").toUpperCase().slice(0, 2);
@@ -179,7 +187,21 @@ export default function AppLayout({ children }: AppLayoutProps) {
           </div>
         )}
 
-
+        {/* Secciones por rol RBAC (visibles según user_roles) */}
+        {visibleRoleItems.length > 0 && (
+          <div>
+            {!collapsed && (
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-sidebar-foreground/30 px-3 mb-1">
+                Herramientas
+              </p>
+            )}
+            <div className="space-y-0.5">
+              {visibleRoleItems.map(item => (
+                <NavItemRow key={item.href} item={item} />
+              ))}
+            </div>
+          </div>
+        )}
 
       </nav>
 
