@@ -1,11 +1,11 @@
 /**
  * Utilidades centralizadas para manejo de errores en el cliente.
  *
- * APP_DEBUG se lee desde window.__ENV__ (inyectado por el servidor en /config.js)
+ * APP_DEBUG y USE_API se leen desde window.__ENV__ (inyectado por el servidor en /config.js)
  * en RUNTIME — no requiere rebuild para cambiar su valor.
  *
- * Para cambiar el modo debug:
- *   1. Editar APP_DEBUG en el .env del servidor
+ * Para cambiar el modo debug o la fuente de datos:
+ *   1. Editar APP_DEBUG / USE_API en el .env del servidor
  *   2. docker-compose restart web  (NO necesita --build)
  */
 
@@ -13,6 +13,7 @@ declare global {
   interface Window {
     __ENV__?: {
       APP_DEBUG?: boolean;
+      USE_API?: boolean;
     };
   }
 }
@@ -20,17 +21,27 @@ declare global {
 /**
  * Lee APP_DEBUG desde window.__ENV__ (inyectado por el servidor en runtime).
  * Siempre lee desde el servidor — nunca desde el build.
- * Para cambiar: editar APP_DEBUG en .env y hacer docker-compose down && up (sin --build).
  */
 export function getAppDebug(): boolean {
   if (typeof window !== "undefined" && window.__ENV__?.APP_DEBUG !== undefined) {
     return window.__ENV__.APP_DEBUG === true;
   }
-  // Solo en SSR o entornos sin window, default false (seguro)
+  return false;
+}
+
+/**
+ * Lee USE_API desde window.__ENV__ (inyectado por el servidor en runtime).
+ * false → SQLite local | true → API externa
+ */
+export function getUseApi(): boolean {
+  if (typeof window !== "undefined" && window.__ENV__?.USE_API !== undefined) {
+    return window.__ENV__.USE_API === true;
+  }
   return false;
 }
 
 export const APP_DEBUG = getAppDebug();
+export const USE_API = getUseApi();
 
 /**
  * Convierte cualquier error (tRPC, fetch, JSON parse, etc.) en un

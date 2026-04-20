@@ -100,7 +100,7 @@ export function ManageCatalogsModal({ open, onClose, onChanged }: Props) {
 
         {/* Lista de tablas */}
         <div className="max-h-80 overflow-y-auto space-y-1 mt-1">
-          {tables.map(t => (
+          {tables.map(t => { const isCustom = Boolean(t.isCustom); return (
             <div
               key={t.id}
               className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white/5 hover:bg-white/8 group"
@@ -138,7 +138,7 @@ export function ManageCatalogsModal({ open, onClose, onChanged }: Props) {
               ) : (
                 <>
                   <span className="text-sm text-slate-200 flex-1">{t.title}</span>
-                  {!t.isCustom && (
+                  {!isCustom && (
                     <span className="text-xs text-slate-500 px-1.5 py-0.5 bg-white/5 rounded">sistema</span>
                   )}
                   <button
@@ -148,7 +148,7 @@ export function ManageCatalogsModal({ open, onClose, onChanged }: Props) {
                   >
                     <Pencil className="w-3.5 h-3.5" />
                   </button>
-                  {t.isCustom ? (
+                  {isCustom ? (
                     <button
                       onClick={() => setConfirmDelete(t.tableName)}
                       className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-300 transition-opacity"
@@ -162,7 +162,7 @@ export function ManageCatalogsModal({ open, onClose, onChanged }: Props) {
                 </>
               )}
             </div>
-          ))}
+          ); })}
         </div>
       </DialogContent>
     </Dialog>

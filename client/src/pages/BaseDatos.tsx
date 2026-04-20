@@ -29,7 +29,7 @@ import { loadActasList, loadEPList, deleteActa, deleteEP } from "@/hooks/useForm
 import { formatCurrency, formatDate, getStatusColor, getStatusLabel } from "@/lib/formatters";
 import { CatalogCrudView } from "@/components/CatalogCrudView";
 import { catalogConfigs } from "@/config/catalogConfig";
-import { parseErrorMessage, isConnectionError, APP_DEBUG } from "@/lib/errorUtils";
+import { parseErrorMessage, isConnectionError, APP_DEBUG, getUseApi } from "@/lib/errorUtils";
 
 // ─── Tipos ───────────────────────────────────────────────────────────────────
 
@@ -449,7 +449,7 @@ export default function BaseDatos() {
           </Link>
           <div className="flex items-center gap-2 text-xs text-slate-500 bg-white/5 border border-white/10 rounded-lg px-3 py-1.5">
             <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-            SQLite conectado
+            {getUseApi() ? "API externa" : "SQLite"} conectado
           </div>
         </>
       }

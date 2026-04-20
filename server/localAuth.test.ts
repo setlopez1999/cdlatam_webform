@@ -14,11 +14,12 @@ import type { User } from "../drizzle/schema";
 function createCtx(role: "admin" | "user" = "admin", localUser?: LocalAuthPayload | null): TrpcContext {
   const user: User = {
     id: 1,
-    openId: `local_${role}`,
-    name: role === "admin" ? "Administrador" : "Usuario Regular",
-    email: null,
-    loginMethod: "local",
+    username: role,
+    passwordHash: "hash",
+    displayName: role === "admin" ? "Administrador" : "Usuario Regular",
     role,
+    roleId: null,
+    isActive: 1,
     createdAt: new Date(),
     updatedAt: new Date(),
     lastSignedIn: new Date(),

@@ -59,9 +59,7 @@ async function startServer() {
   app.get("/config.js", (_req: Request, res: Response) => {
     res.setHeader("Content-Type", "application/javascript");
     res.setHeader("Cache-Control", "no-store"); // nunca cachear — siempre fresco
-    res.send(`window.__ENV__ = ${JSON.stringify({
-      APP_DEBUG: ENV.appDebug,
-    })};`);
+    res.send(`window.__ENV__ = ${JSON.stringify({ APP_DEBUG: ENV.appDebug, USE_API: ENV.useApi })};`);
   });
 
   // tRPC API
