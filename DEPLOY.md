@@ -74,8 +74,12 @@ Deberias ver:
 
 ```
 [DB] Conectando a base de datos en: ./data/gestion.db
+[DB] users schema v2 detected — no migration needed
+[DB] Migrations applied successfully
 Server running on http://0.0.0.0:3000/
 ```
+
+> **Primera vez con BD antigua (schema OAuth):** el servidor detecta y migra automaticamente la tabla `users` al arrancar. No se necesita ningun paso manual. Ver `docs/WORKFLOW_AUTO_MIGRATION_USERS_V2.md` para detalle.
 
 ---
 
