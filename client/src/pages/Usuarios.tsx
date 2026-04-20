@@ -14,6 +14,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { Users, Plus, Shield, User, Clock, Loader2, RefreshCw, Power, Pencil, Tag, Trash2, AlertTriangle } from "lucide-react";
+import { useEffect } from "react";
 import { PageLayout } from "@/components/PageLayout";
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
@@ -65,8 +66,15 @@ export default function Usuarios() {
   const { data: editUserRoles } =
     trpc.userRoles.getByUser.useQuery(
       { userId: editUser?.id ?? 0 },
-      { enabled: !!editUser && isAdmin, onSuccess: (data: any[]) => setSelectedRoleIds(data.map((r: any) => r.roleId)) } as any
+      { enabled: !!editUser && isAdmin }
     );
+
+  // Sincronizar checkboxes cuando llegan los roles del usuario editado
+  useEffect(() => {
+    if (editUserRoles) {
+      setSelectedRoleIds((editUserRoles as any[]).map((r: any) => r.roleId));
+    }
+  }, [editUserRoles]);
 
   // ── Mutations usuarios ──
   const createUserMut = trpc.localAuth.createUser.useMutation({
@@ -74,14 +82,12 @@ export default function Usuarios() {
     onError: (e) => toast.error(e.message),
   });
   const updateUserMut = trpc.localAuth.updateUser.useMutation({
-    onSuccess: () => { toast.success("Usuario actualizado"); setEditUser(null); refetchUsers(); },
     onError: (e) => toast.error(e.message),
   });
   const toggleStatusMut = trpc.localAuth.toggleStatus.useMutation();
 
   // Mutation para guardar roles RBAC del usuario
   const setUserRolesMut = trpc.userRoles.setRoles.useMutation({
-    onSuccess: () => toast.success("Roles RBAC actualizados"),
     onError: (e) => toast.error(e.message),
   });
 
@@ -143,9 +149,15 @@ export default function Usuarios() {
   const handleUpdateUser = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editUser) return;
-    await updateUserMut.mutateAsync({ id: editUser.id, displayName: userForm.displayName, role: userForm.role, roleId: userForm.roleId });
-    // Guardar roles RBAC en paralelo
-    await setUserRolesMut.mutateAsync({ userId: editUser.id, roleIds: selectedRoleIds });
+    try {
+      await updateUserMut.mutateAsync({ id: editUser.id, displayName: userForm.displayName, role: userForm.role, roleId: userForm.roleId });
+      await setUserRolesMut.mutateAsync({ userId: editUser.id, roleIds: selectedRoleIds });
+      toast.success("Usuario actualizado");
+      setEditUser(null);
+      refetchUsers();
+    } catch (e: any) {
+      toast.error(e.message);
+    }
   };
 
   const handleCreateRole = async (e: React.FormEvent) => {
