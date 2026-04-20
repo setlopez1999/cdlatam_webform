@@ -9,13 +9,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { Users, Plus, Shield, User, Clock, Loader2, RefreshCw, Power, Pencil, Tag, Trash2, AlertTriangle } from "lucide-react";
-import { useEffect } from "react";
 import { PageLayout } from "@/components/PageLayout";
+import { EditUserModal } from "@/components/EditUserModal";
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 type UserItem = {
@@ -45,7 +44,6 @@ export default function Usuarios() {
   const [showCreateUser, setShowCreateUser] = useState(false);
   const [editUser, setEditUser] = useState<UserItem | null>(null);
   const [userForm, setUserForm] = useState({ username: "", password: "", displayName: "", role: "user" as "user" | "admin", roleId: null as number | null });
-  const [selectedRoleIds, setSelectedRoleIds] = useState<number[]>([]);
   const [creatingUser, setCreatingUser] = useState(false);
 
   // ── Estado modales roles ──
@@ -62,34 +60,19 @@ export default function Usuarios() {
   const { data: roles, isLoading: loadingRoles, refetch: refetchRoles } =
     trpc.roles.list.useQuery(undefined, { enabled: isAdmin });
 
-  // Roles RBAC del usuario que se está editando
-  const { data: editUserRoles } =
+  // Roles RBAC del usuario que se está editando — se pasan a EditUserModal como initialRoles
+  const { data: editUserRoles = [] } =
     trpc.userRoles.getByUser.useQuery(
       { userId: editUser?.id ?? 0 },
       { enabled: !!editUser && isAdmin }
     );
-
-  // Sincronizar checkboxes cuando llegan los roles del usuario editado
-  useEffect(() => {
-    if (editUserRoles) {
-      setSelectedRoleIds((editUserRoles as any[]).map((r: any) => r.roleId));
-    }
-  }, [editUserRoles]);
 
   // ── Mutations usuarios ──
   const createUserMut = trpc.localAuth.createUser.useMutation({
     onSuccess: () => { toast.success("Usuario creado"); setShowCreateUser(false); resetUserForm(); refetchUsers(); },
     onError: (e) => toast.error(e.message),
   });
-  const updateUserMut = trpc.localAuth.updateUser.useMutation({
-    onError: (e) => toast.error(e.message),
-  });
   const toggleStatusMut = trpc.localAuth.toggleStatus.useMutation();
-
-  // Mutation para guardar roles RBAC del usuario
-  const setUserRolesMut = trpc.userRoles.setRoles.useMutation({
-    onError: (e) => toast.error(e.message),
-  });
 
   // ── Mutations roles ──
   const createRoleMut = trpc.roles.create.useMutation({
@@ -120,8 +103,6 @@ export default function Usuarios() {
   const resetRoleForm = () => setRoleForm({ nombre: "", label: "", descripcion: "" });
 
   const openEditUser = (u: UserItem) => {
-    setUserForm({ username: u.username, password: "", displayName: u.displayName ?? "", role: (u.role as "user" | "admin"), roleId: u.roleId ?? null });
-    setSelectedRoleIds([]);
     setEditUser(u);
   };
 
@@ -144,20 +125,6 @@ export default function Usuarios() {
     e.preventDefault(); setCreatingUser(true);
     try { await createUserMut.mutateAsync({ ...userForm, roleId: userForm.roleId }); }
     finally { setCreatingUser(false); }
-  };
-
-  const handleUpdateUser = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editUser) return;
-    try {
-      await updateUserMut.mutateAsync({ id: editUser.id, displayName: userForm.displayName, role: userForm.role, roleId: userForm.roleId });
-      await setUserRolesMut.mutateAsync({ userId: editUser.id, roleIds: selectedRoleIds });
-      toast.success("Usuario actualizado");
-      setEditUser(null);
-      refetchUsers();
-    } catch (e: any) {
-      toast.error(e.message);
-    }
   };
 
   const handleCreateRole = async (e: React.FormEvent) => {
@@ -403,60 +370,19 @@ export default function Usuarios() {
         </DialogContent>
       </Dialog>
 
-      {/* ── Modal Editar Usuario ── */}
-      <Dialog open={!!editUser} onOpenChange={(o) => { if (!o) setEditUser(null); }}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2"><Pencil className="w-4 h-4" />Editar Usuario — @{editUser?.username}</DialogTitle>
-          </DialogHeader>
-          <form onSubmit={handleUpdateUser} className="space-y-4">
-            <div className="space-y-2">
-              <Label>Nombre completo</Label>
-              <Input placeholder="ej: Juan Pérez" value={userForm.displayName} onChange={e => setUserForm(f => ({ ...f, displayName: e.target.value }))} />
-            </div>
-            <div className="space-y-2">
-              <Label>Permiso base</Label>
-              <Select value={userForm.role} onValueChange={(v) => setUserForm(f => ({ ...f, role: v as "user" | "admin" }))}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="user"><div className="flex items-center gap-2"><User className="w-3.5 h-3.5 text-blue-500" />Usuario</div></SelectItem>
-                  <SelectItem value="admin"><div className="flex items-center gap-2"><Shield className="w-3.5 h-3.5 text-amber-500" />Administrador</div></SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            {roles && roles.length > 0 && (
-              <div className="space-y-2">
-                <Label>Roles RBAC <span className="text-muted-foreground text-xs">(acceso a pantallas específicas)</span></Label>
-                <div className="rounded-lg border border-border p-3 space-y-2 max-h-40 overflow-y-auto">
-                  {roles.map((r: RoleItem) => (
-                    <div key={r.id} className="flex items-center gap-2">
-                      <Checkbox
-                        id={`role-${r.id}`}
-                        checked={selectedRoleIds.includes(r.id)}
-                        onCheckedChange={(checked) => {
-                          setSelectedRoleIds(prev =>
-                            checked ? [...prev, r.id] : prev.filter(id => id !== r.id)
-                          );
-                        }}
-                      />
-                      <label htmlFor={`role-${r.id}`} className="text-sm cursor-pointer flex-1">
-                        <span className="font-medium">{r.label}</span>
-                        {r.descripcion && <span className="text-muted-foreground text-xs ml-2">{r.descripcion}</span>}
-                      </label>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-            <DialogFooter className="pt-2">
-              <Button type="button" variant="outline" onClick={() => setEditUser(null)}>Cancelar</Button>
-              <Button type="submit" disabled={updateUserMut.isPending || setUserRolesMut.isPending}>
-                {(updateUserMut.isPending || setUserRolesMut.isPending) ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Pencil className="w-4 h-4 mr-2" />}Guardar Cambios
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+      {/* ── Modal Editar Usuario ── key={editUser.id} hace que React remonte el
+           componente al cambiar de usuario, lo que permite usar useState(initialRoles)
+           directamente sin necesidad de useEffect para sincronizar estado derivado. */}
+      {editUser && roles && (
+        <EditUserModal
+          key={editUser.id}
+          user={editUser}
+          roles={roles as any[]}
+          initialRoles={editUserRoles as any[]}
+          onClose={() => setEditUser(null)}
+          onSaved={() => refetchUsers()}
+        />
+      )}
 
       {/* ── Modal Crear Rol ── */}
       <Dialog open={showCreateRole} onOpenChange={setShowCreateRole}>
