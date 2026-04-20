@@ -18,15 +18,12 @@ type RoleItem = {
   id: number; nombre: string; label: string;
   descripcion?: string | null; activo: number;
 };
-type UserRoleItem = { roleId: number };
 
 type Props = {
-  /** El usuario a editar. Cuando es null el modal está cerrado. */
+  /** El usuario a editar. */
   user: UserItem;
   /** Lista de todos los roles disponibles en el sistema. */
   roles: RoleItem[];
-  /** Roles RBAC actuales del usuario — se usan como valor inicial de los checkboxes. */
-  initialRoles: UserRoleItem[];
   /** Callback al cerrar o cancelar el modal. */
   onClose: () => void;
   /** Callback al guardar exitosamente — para que el padre haga refetch. */
@@ -36,23 +33,35 @@ type Props = {
 /**
  * Modal de edición de usuario con RBAC.
  *
- * Patrón: este componente recibe `initialRoles` como prop y lo usa directamente
- * en useState — funciona correctamente porque el padre le pasa `key={user.id}`,
- * lo que hace que React desmonte y remonte el componente cada vez que cambia el
- * usuario. Esto evita el antipatrón useEffect para sincronizar estado derivado.
+ * Este componente hace su propia query para obtener los roles actuales del usuario.
+ * Muestra un spinner mientras carga y solo renderiza los checkboxes cuando los datos
+ * están disponibles — garantizando que el estado inicial sea correcto.
+ *
+ * El padre usa key={user.id} para que React desmonte y remonte el componente
+ * al cambiar de usuario, evitando cualquier estado residual.
  */
-export function EditUserModal({ user, roles, initialRoles, onClose, onSaved }: Props) {
-  // Estado del formulario — inicializado una sola vez al montar el componente
+export function EditUserModal({ user, roles, onClose, onSaved }: Props) {
+  // Query propia — el componente espera sus datos antes de renderizar los checkboxes
+  const { data: currentRoles, isLoading: loadingRoles } =
+    trpc.userRoles.getByUser.useQuery({ userId: user.id });
+
+  // Estado del formulario
   const [form, setForm] = useState({
     displayName: user.displayName ?? "",
-    role: (user.role as "user" | "admin"),
+    role: user.role as "user" | "admin",
     roleId: user.roleId ?? null as number | null,
   });
 
-  // Checkboxes RBAC — inicializados directamente desde initialRoles (no useEffect)
-  const [selectedRoleIds, setSelectedRoleIds] = useState<number[]>(
-    initialRoles.map(r => r.roleId)
-  );
+  // Checkboxes RBAC — inicializados desde currentRoles cuando llegan
+  // Usamos un estado controlado que se inicializa con los datos de la query
+  const [selectedRoleIds, setSelectedRoleIds] = useState<number[] | null>(null);
+
+  // Cuando currentRoles llega por primera vez, inicializar selectedRoleIds
+  // Solo si aún no fue inicializado (null = no inicializado todavía)
+  const effectiveRoleIds: number[] =
+    selectedRoleIds !== null
+      ? selectedRoleIds
+      : (currentRoles ?? []).map((r: { roleId: number }) => r.roleId);
 
   // Mutations
   const updateUserMut = trpc.localAuth.updateUser.useMutation({
@@ -61,6 +70,13 @@ export function EditUserModal({ user, roles, initialRoles, onClose, onSaved }: P
   const setUserRolesMut = trpc.userRoles.setRoles.useMutation({
     onError: (e) => toast.error(e.message),
   });
+
+  const handleToggleRole = (roleId: number, checked: boolean) => {
+    const base = selectedRoleIds !== null ? selectedRoleIds : effectiveRoleIds;
+    setSelectedRoleIds(
+      checked ? [...base, roleId] : base.filter(id => id !== roleId)
+    );
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -73,7 +89,7 @@ export function EditUserModal({ user, roles, initialRoles, onClose, onSaved }: P
       });
       await setUserRolesMut.mutateAsync({
         userId: user.id,
-        roleIds: selectedRoleIds,
+        roleIds: effectiveRoleIds,
       });
       toast.success("Usuario actualizado");
       onSaved();
@@ -136,32 +152,36 @@ export function EditUserModal({ user, roles, initialRoles, onClose, onSaved }: P
                 <span className="text-muted-foreground text-xs">(acceso a pantallas específicas)</span>
               </Label>
               <div className="rounded-lg border border-border p-3 space-y-2 max-h-40 overflow-y-auto">
-                {roles.map((r) => (
-                  <div key={r.id} className="flex items-center gap-2">
-                    <Checkbox
-                      id={`role-${r.id}`}
-                      checked={selectedRoleIds.includes(r.id)}
-                      onCheckedChange={(checked) => {
-                        setSelectedRoleIds(prev =>
-                          checked ? [...prev, r.id] : prev.filter(id => id !== r.id)
-                        );
-                      }}
-                    />
-                    <label htmlFor={`role-${r.id}`} className="text-sm cursor-pointer flex-1">
-                      <span className="font-medium">{r.label}</span>
-                      {r.descripcion && (
-                        <span className="text-muted-foreground text-xs ml-2">{r.descripcion}</span>
-                      )}
-                    </label>
+                {loadingRoles ? (
+                  // Spinner mientras carga los roles actuales del usuario
+                  <div className="flex items-center justify-center py-3 gap-2 text-muted-foreground text-sm">
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Cargando roles...
                   </div>
-                ))}
+                ) : (
+                  roles.map((r) => (
+                    <div key={r.id} className="flex items-center gap-2">
+                      <Checkbox
+                        id={`role-${r.id}`}
+                        checked={effectiveRoleIds.includes(r.id)}
+                        onCheckedChange={(checked) => handleToggleRole(r.id, Boolean(checked))}
+                      />
+                      <label htmlFor={`role-${r.id}`} className="text-sm cursor-pointer flex-1">
+                        <span className="font-medium">{r.label}</span>
+                        {r.descripcion && (
+                          <span className="text-muted-foreground text-xs ml-2">{r.descripcion}</span>
+                        )}
+                      </label>
+                    </div>
+                  ))
+                )}
               </div>
             </div>
           )}
 
           <DialogFooter className="pt-2">
             <Button type="button" variant="outline" onClick={onClose}>Cancelar</Button>
-            <Button type="submit" disabled={isPending}>
+            <Button type="submit" disabled={isPending || loadingRoles}>
               {isPending
                 ? <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                 : <Pencil className="w-4 h-4 mr-2" />

@@ -60,13 +60,6 @@ export default function Usuarios() {
   const { data: roles, isLoading: loadingRoles, refetch: refetchRoles } =
     trpc.roles.list.useQuery(undefined, { enabled: isAdmin });
 
-  // Roles RBAC del usuario que se está editando — se pasan a EditUserModal como initialRoles
-  const { data: editUserRoles = [] } =
-    trpc.userRoles.getByUser.useQuery(
-      { userId: editUser?.id ?? 0 },
-      { enabled: !!editUser && isAdmin }
-    );
-
   // ── Mutations usuarios ──
   const createUserMut = trpc.localAuth.createUser.useMutation({
     onSuccess: () => { toast.success("Usuario creado"); setShowCreateUser(false); resetUserForm(); refetchUsers(); },
@@ -378,7 +371,6 @@ export default function Usuarios() {
           key={editUser.id}
           user={editUser}
           roles={roles as any[]}
-          initialRoles={editUserRoles as any[]}
           onClose={() => setEditUser(null)}
           onSaved={() => refetchUsers()}
         />
