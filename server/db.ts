@@ -760,3 +760,104 @@ export async function searchRegistros(userId: number, query: string) {
   return { actas: actasResult, evaluaciones: evaluacionesResult };
 }
 
+
+// --- GESTOR DE HORARIOS -------------------------------------------------------
+
+// Empleados
+export async function getEmpleados(): Promise<SchEmpleado[]> {
+  const db = await getDb();
+  return db.select().from(schEmpleados).orderBy(schEmpleados.apellido, schEmpleados.nombre);
+}
+
+export async function getEmpleadoById(id: number): Promise<SchEmpleado | undefined> {
+  const db = await getDb();
+  const result = await db.select().from(schEmpleados).where(eq(schEmpleados.id, id)).limit(1);
+  return result[0];
+}
+
+export async function createEmpleado(data: InsertSchEmpleado): Promise<SchEmpleado> {
+  const db = await getDb();
+  const result = await db.insert(schEmpleados).values(data).returning();
+  return result[0];
+}
+
+export async function updateEmpleado(id: number, data: Partial<InsertSchEmpleado>): Promise<void> {
+  const db = await getDb();
+  await db.update(schEmpleados).set({ ...data, updatedAt: new Date() }).where(eq(schEmpleados.id, id));
+}
+
+export async function toggleEmpleadoStatus(id: number, activo: number): Promise<void> {
+  const db = await getDb();
+  await db.update(schEmpleados).set({ activo, updatedAt: new Date() }).where(eq(schEmpleados.id, id));
+}
+
+// Contratos
+export async function getContratosByEmpleado(empleadoId: number): Promise<SchContrato[]> {
+  const db = await getDb();
+  return db.select().from(schContratos)
+    .where(eq(schContratos.empleadoId, empleadoId))
+    .orderBy(desc(schContratos.createdAt));
+}
+
+export async function getContratoActivoByEmpleado(empleadoId: number): Promise<SchContrato | undefined> {
+  const db = await getDb();
+  const result = await db.select().from(schContratos)
+    .where(and(eq(schContratos.empleadoId, empleadoId), eq(schContratos.activo, 1)))
+    .limit(1);
+  return result[0];
+}
+
+export async function createContrato(data: InsertSchContrato): Promise<SchContrato> {
+  const db = await getDb();
+  // Desactivar contratos anteriores del mismo empleado
+  await db.update(schContratos)
+    .set({ activo: 0 })
+    .where(eq(schContratos.empleadoId, data.empleadoId));
+  const result = await db.insert(schContratos).values({ ...data, activo: 1 }).returning();
+  return result[0];
+}
+
+export async function updateContrato(id: number, data: Partial<InsertSchContrato>): Promise<void> {
+  const db = await getDb();
+  await db.update(schContratos).set({ ...data, updatedAt: new Date() }).where(eq(schContratos.id, id));
+}
+
+// Bloques de horario
+export async function getBloquesByContrato(contratoId: number): Promise<SchBloqueHorario[]> {
+  const db = await getDb();
+  return db.select().from(schBloquesHorario)
+    .where(eq(schBloquesHorario.contratoId, contratoId))
+    .orderBy(schBloquesHorario.diaSemana, schBloquesHorario.horaInicio);
+}
+
+export async function setBloques(contratoId: number, bloques: Omit<InsertSchBloqueHorario, "contratoId">[]): Promise<void> {
+  const db = await getDb();
+  // Reemplazar todos los bloques del contrato
+  await db.delete(schBloquesHorario).where(eq(schBloquesHorario.contratoId, contratoId));
+  if (bloques.length > 0) {
+    await db.insert(schBloquesHorario).values(bloques.map(b => ({ ...b, contratoId })));
+  }
+}
+
+// Vista semanal: obtener todos los bloques activos de la semana con info del empleado
+export async function getBloquesSemanales(): Promise<Array<SchBloqueHorario & { empleadoId: number; empleadoNombre: string; empleadoApellido: string }>> {
+  const db = await getDb();
+  const result = await db
+    .select({
+      id: schBloquesHorario.id,
+      contratoId: schBloquesHorario.contratoId,
+      diaSemana: schBloquesHorario.diaSemana,
+      horaInicio: schBloquesHorario.horaInicio,
+      horaFin: schBloquesHorario.horaFin,
+      createdAt: schBloquesHorario.createdAt,
+      empleadoId: schEmpleados.id,
+      empleadoNombre: schEmpleados.nombre,
+      empleadoApellido: schEmpleados.apellido,
+    })
+    .from(schBloquesHorario)
+    .innerJoin(schContratos, eq(schBloquesHorario.contratoId, schContratos.id))
+    .innerJoin(schEmpleados, eq(schContratos.empleadoId, schEmpleados.id))
+    .where(and(eq(schContratos.activo, 1), eq(schEmpleados.activo, 1)))
+    .orderBy(schBloquesHorario.diaSemana, schBloquesHorario.horaInicio);
+  return result;
+}

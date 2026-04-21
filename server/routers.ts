@@ -10,6 +10,9 @@ import {
   getEvaluacionesByUserId, getEvaluacionById, createEvaluacion, updateEvaluacion, deleteEvaluacion,
   searchRegistros,
   getUserRoles, getUserRoleNames, setUserRoles, assignRoleToUser, revokeRoleFromUser,
+  getEmpleados, getEmpleadoById, createEmpleado, updateEmpleado, toggleEmpleadoStatus,
+  getContratosByEmpleado, getContratoActivoByEmpleado, createContrato, updateContrato,
+  getBloquesByContrato, setBloques, getBloquesSemanales,
 } from "./db";
 
 // dataSource — abstracción SQLite / API externa (controlado por USE_API en .env)
@@ -639,6 +642,131 @@ export const appRouter = router({
     // Conteo de registros activos para todas las tablas (fijas + dinámicas)
     allCounts: protectedProcedure.query(async () => {
       return ds_allCounts();
+    }),
+  }),
+
+  // ─── Gestor de Horarios ──────────────────────────────────────────────────
+  horario: router({
+    // Empleados
+    listEmpleados: protectedProcedure.query(async ({ ctx }) => {
+      await requireAnyRole(ctx, ["admin", "gestor_horarios"]);
+      return getEmpleados();
+    }),
+
+    getEmpleado: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .query(async ({ ctx, input }) => {
+        await requireAnyRole(ctx, ["admin", "gestor_horarios"]);
+        return getEmpleadoById(input.id);
+      }),
+
+    createEmpleado: protectedProcedure
+      .input(z.object({
+        nombre: z.string().min(1).max(100),
+        apellido: z.string().min(1).max(100),
+        cargo: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        await requireAnyRole(ctx, ["admin", "gestor_horarios"]);
+        return createEmpleado(input);
+      }),
+
+    updateEmpleado: protectedProcedure
+      .input(z.object({
+        id: z.number(),
+        nombre: z.string().min(1).max(100).optional(),
+        apellido: z.string().min(1).max(100).optional(),
+        cargo: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        await requireAnyRole(ctx, ["admin", "gestor_horarios"]);
+        const { id, ...data } = input;
+        await updateEmpleado(id, data);
+        return { success: true };
+      }),
+
+    toggleEmpleado: protectedProcedure
+      .input(z.object({ id: z.number(), activo: z.number().min(0).max(1) }))
+      .mutation(async ({ ctx, input }) => {
+        await requireAnyRole(ctx, ["admin", "gestor_horarios"]);
+        await toggleEmpleadoStatus(input.id, input.activo);
+        return { success: true };
+      }),
+
+    // Contratos
+    getContratos: protectedProcedure
+      .input(z.object({ empleadoId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        await requireAnyRole(ctx, ["admin", "gestor_horarios"]);
+        return getContratosByEmpleado(input.empleadoId);
+      }),
+
+    getContratoActivo: protectedProcedure
+      .input(z.object({ empleadoId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        await requireAnyRole(ctx, ["admin", "gestor_horarios"]);
+        return getContratoActivoByEmpleado(input.empleadoId) ?? null;
+      }),
+
+    createContrato: protectedProcedure
+      .input(z.object({
+        empleadoId: z.number(),
+        fechaInicio: z.string(),
+        fechaFin: z.string().optional().nullable(),
+        horasDiarias: z.number().min(0.5).max(24),
+        diasSemana: z.string(),
+        tipoDistribucion: z.enum(["normal", "lun_sab", "personalizado"]).default("normal"),
+        mismasHorasDiarias: z.number().min(0).max(1).default(1),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        await requireAnyRole(ctx, ["admin", "gestor_horarios"]);
+        return createContrato(input);
+      }),
+
+    updateContrato: protectedProcedure
+      .input(z.object({
+        id: z.number(),
+        fechaInicio: z.string().optional(),
+        fechaFin: z.string().optional().nullable(),
+        horasDiarias: z.number().min(0.5).max(24).optional(),
+        diasSemana: z.string().optional(),
+        tipoDistribucion: z.enum(["normal", "lun_sab", "personalizado"]).optional(),
+        mismasHorasDiarias: z.number().min(0).max(1).optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        await requireAnyRole(ctx, ["admin", "gestor_horarios"]);
+        const { id, ...data } = input;
+        await updateContrato(id, data);
+        return { success: true };
+      }),
+
+    // Bloques de horario
+    getBloques: protectedProcedure
+      .input(z.object({ contratoId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        await requireAnyRole(ctx, ["admin", "gestor_horarios"]);
+        return getBloquesByContrato(input.contratoId);
+      }),
+
+    setBloques: protectedProcedure
+      .input(z.object({
+        contratoId: z.number(),
+        bloques: z.array(z.object({
+          diaSemana: z.number().min(0).max(6),
+          horaInicio: z.string().regex(/^\d{2}:\d{2}$/),
+          horaFin: z.string().regex(/^\d{2}:\d{2}$/),
+        })),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        await requireAnyRole(ctx, ["admin", "gestor_horarios"]);
+        await setBloques(input.contratoId, input.bloques);
+        return { success: true };
+      }),
+
+    // Vista semanal general
+    bloquesSemanales: protectedProcedure.query(async ({ ctx }) => {
+      await requireAnyRole(ctx, ["admin", "gestor_horarios"]);
+      return getBloquesSemanales();
     }),
   }),
 
