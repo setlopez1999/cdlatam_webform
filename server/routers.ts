@@ -10,7 +10,7 @@ import {
   getEvaluacionesByUserId, getEvaluacionById, createEvaluacion, updateEvaluacion, deleteEvaluacion,
   searchRegistros,
   getUserRoles, getUserRoleNames, setUserRoles, assignRoleToUser, revokeRoleFromUser,
-  getEmpleados, getEmpleadoById, createEmpleado, updateEmpleado, toggleEmpleadoStatus,
+  getEmpleados, getEmpleadoById, createEmpleado, updateEmpleado, toggleEmpleadoStatus, deleteEmpleado,
   getContratosByEmpleado, getContratoActivoByEmpleado, createContrato, updateContrato,
   getBloquesByContrato, setBloques, getBloquesSemanales,
 } from "./db";
@@ -690,6 +690,14 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         await requireAnyRole(ctx, ["admin", "gestor_horarios"]);
         await toggleEmpleadoStatus(input.id, input.activo);
+        return { success: true };
+      }),
+
+    deleteEmpleado: protectedProcedure
+      .input(z.object({ id: z.number().int().positive() }))
+      .mutation(async ({ ctx, input }) => {
+        await requireAnyRole(ctx, ["admin", "gestor_horarios"]);
+        await deleteEmpleado(input.id);
         return { success: true };
       }),
 

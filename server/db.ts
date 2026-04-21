@@ -791,6 +791,27 @@ export async function toggleEmpleadoStatus(id: number, activo: number): Promise<
   await db.update(schEmpleados).set({ activo, updatedAt: new Date() }).where(eq(schEmpleados.id, id));
 }
 
+/**
+ * Elimina un empleado y todos sus datos relacionados en cascada:
+ * bloques de horario → contratos → empleado
+ */
+export async function deleteEmpleado(id: number): Promise<void> {
+  const db = await getDb();
+  // 1. Obtener todos los contratos del empleado
+  const contratos = await db.select({ id: schContratos.id })
+    .from(schContratos)
+    .where(eq(schContratos.empleadoId, id));
+  // 2. Eliminar bloques de todos sus contratos
+  if (contratos.length > 0) {
+    const contratoIds = contratos.map(c => c.id);
+    await db.delete(schBloquesHorario).where(inArray(schBloquesHorario.contratoId, contratoIds));
+  }
+  // 3. Eliminar contratos
+  await db.delete(schContratos).where(eq(schContratos.empleadoId, id));
+  // 4. Eliminar empleado
+  await db.delete(schEmpleados).where(eq(schEmpleados.id, id));
+}
+
 // Contratos
 export async function getContratosByEmpleado(empleadoId: number): Promise<SchContrato[]> {
   const db = await getDb();
