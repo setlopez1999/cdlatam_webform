@@ -3,7 +3,9 @@ import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import AddEmpleadoModal from "@/components/AddEmpleadoModal";
-import { UserPlus, Users, Calendar, ChevronLeft, ChevronRight } from "lucide-react";
+import EditEmpleadoModal from "@/components/EditEmpleadoModal";
+import EditContratoModal from "@/components/EditContratoModal";
+import { UserPlus, Users, Calendar, ChevronLeft, ChevronRight, Pencil, CalendarClock } from "lucide-react";
 
 const DIAS_SEMANA = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
 const HORAS = Array.from({ length: 24 }, (_, i) => i);
@@ -16,21 +18,43 @@ const CHIP_COLORS = [
 
 type Vista = "semanal" | "empleado";
 
+type Empleado = {
+  id: number;
+  nombre: string;
+  apellido: string;
+  cargo: string | null;
+  activo: number;
+};
+
+type Contrato = {
+  id: number;
+  empleadoId: number;
+  fechaInicio: string;
+  fechaFin: string | null;
+  horasDiarias: number;
+  diasSemana: string | number[];
+  tipoDistribucion: string;
+  mismasHorasDiarias: number;
+  activo: number;
+};
+
 export default function GestorHorarios() {
   const [vista, setVista] = useState<Vista>("semanal");
   const [empleadoSeleccionado, setEmpleadoSeleccionado] = useState<number | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [editEmpleado, setEditEmpleado] = useState<Empleado | null>(null);
+  const [editContrato, setEditContrato] = useState<Contrato | null>(null);
   const [semanaOffset, setSemanaOffset] = useState(0);
 
   const { data: empleados = [], refetch: refetchEmpleados } = trpc.horario.listEmpleados.useQuery();
   const { data: bloquesSemanales = [], refetch: refetchBloques } = trpc.horario.bloquesSemanales.useQuery();
 
-  const { data: contratoActivo } = trpc.horario.getContratoActivo.useQuery(
+  const { data: contratoActivo, refetch: refetchContrato } = trpc.horario.getContratoActivo.useQuery(
     { empleadoId: empleadoSeleccionado ?? 0 },
     { enabled: !!empleadoSeleccionado }
   );
 
-  const { data: bloquesEmpleado = [] } = trpc.horario.getBloques.useQuery(
+  const { data: bloquesEmpleado = [], refetch: refetchBloquesEmpleado } = trpc.horario.getBloques.useQuery(
     { contratoId: contratoActivo?.id ?? 0 },
     { enabled: !!contratoActivo?.id }
   );
@@ -72,7 +96,11 @@ export default function GestorHorarios() {
   function handleSaved() {
     refetchEmpleados();
     refetchBloques();
+    refetchContrato();
+    refetchBloquesEmpleado();
   }
+
+  const empleadoActual = empleados.find(e => e.id === empleadoSeleccionado) ?? null;
 
   return (
     <div className="p-6 space-y-6">
@@ -121,7 +149,13 @@ export default function GestorHorarios() {
               <ChevronLeft className="w-4 h-4" />
             </Button>
             <span className="text-sm font-medium min-w-[220px] text-center">
-              {semanaOffset === 0 ? "Esta semana" : semanaOffset === -1 ? "Semana pasada" : semanaOffset === 1 ? "Próxima semana" : `Semana del ${formatFecha(lunes)}`}
+              {semanaOffset === 0
+                ? "Esta semana"
+                : semanaOffset === -1
+                ? "Semana pasada"
+                : semanaOffset === 1
+                ? "Próxima semana"
+                : `Semana del ${formatFecha(lunes)}`}
               {" · "}{formatFecha(lunes)} – {formatFecha(diasSemana[6])}
             </span>
             <Button variant="outline" size="icon" onClick={() => setSemanaOffset(o => o + 1)}>
@@ -171,7 +205,6 @@ export default function GestorHorarios() {
                         {String(hora).padStart(2, "0")}:00
                       </td>
                       {diasSemana.map((_, colIdx) => {
-                        // colIdx 0=lun→diaBD 1, ..., colIdx 5=sab→diaBD 6, colIdx 6=dom→diaBD 0
                         const diaBD = colIdx < 6 ? colIdx + 1 : 0;
                         const bloques = getBloquesEnCelda(diaBD, hora, bloquesSemanales);
                         return (
@@ -213,26 +246,32 @@ export default function GestorHorarios() {
               <div className="space-y-2">
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Empleados</p>
                 {empleados.map(e => (
-                  <button
+                  <div
                     key={e.id}
-                    onClick={() => setEmpleadoSeleccionado(e.id)}
-                    className={`w-full text-left p-3 rounded-lg border transition-colors ${
+                    className={`group flex items-center gap-2 p-3 rounded-lg border cursor-pointer transition-colors ${
                       empleadoSeleccionado === e.id
                         ? "border-primary bg-primary/5"
                         : "border-border hover:bg-muted/50"
                     }`}
+                    onClick={() => setEmpleadoSeleccionado(e.id)}
                   >
-                    <div className="flex items-center gap-2">
-                      <span className={`w-3 h-3 rounded-full flex-shrink-0 ${colorPorEmpleado[e.id]}`} />
-                      <div>
-                        <p className="font-medium text-sm">{e.nombre} {e.apellido}</p>
-                        {e.cargo && <p className="text-xs text-muted-foreground">{e.cargo}</p>}
-                      </div>
-                      {e.activo !== 1 && (
-                        <Badge variant="secondary" className="ml-auto text-xs">Inactivo</Badge>
-                      )}
+                    <span className={`w-3 h-3 rounded-full flex-shrink-0 ${colorPorEmpleado[e.id]}`} />
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-sm truncate">{e.nombre} {e.apellido}</p>
+                      {e.cargo && <p className="text-xs text-muted-foreground truncate">{e.cargo}</p>}
                     </div>
-                  </button>
+                    {e.activo !== 1 && (
+                      <Badge variant="secondary" className="text-xs flex-shrink-0">Inactivo</Badge>
+                    )}
+                    {/* Botón editar empleado */}
+                    <button
+                      onClick={ev => { ev.stopPropagation(); setEditEmpleado(e); }}
+                      className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-muted"
+                      title="Editar empleado"
+                    >
+                      <Pencil className="w-3.5 h-3.5 text-muted-foreground" />
+                    </button>
+                  </div>
                 ))}
               </div>
 
@@ -243,20 +282,52 @@ export default function GestorHorarios() {
                     Selecciona un empleado para ver su horario
                   </div>
                 ) : !contratoActivo ? (
-                  <div className="flex items-center justify-center h-48 text-muted-foreground text-sm border rounded-lg">
-                    Este empleado no tiene contrato activo
+                  <div className="flex flex-col items-center justify-center h-48 text-muted-foreground text-sm border rounded-lg gap-3">
+                    <CalendarClock className="w-8 h-8 opacity-30" />
+                    <p>Este empleado no tiene contrato activo</p>
                   </div>
                 ) : (
                   <div className="space-y-3">
+                    {/* Info del contrato con botón editar */}
                     <div className="p-3 bg-muted/40 rounded-lg text-sm space-y-1">
-                      <p><span className="font-medium">Rango:</span> {contratoActivo.fechaInicio} → {contratoActivo.fechaFin ?? "Indefinido"}</p>
-                      <p><span className="font-medium">Horas diarias:</span> {contratoActivo.horasDiarias}h</p>
-                      <p>
-                        <span className="font-medium">Días:</span>{" "}
-                        {(JSON.parse(contratoActivo.diasSemana as string) as number[]).map((d: number) => DIAS_SEMANA[d]).join(", ")}
-                      </p>
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="space-y-1">
+                          <p>
+                            <span className="font-medium">Empleado:</span>{" "}
+                            {empleadoActual?.nombre} {empleadoActual?.apellido}
+                            {empleadoActual?.cargo && (
+                              <span className="text-muted-foreground ml-1">· {empleadoActual.cargo}</span>
+                            )}
+                          </p>
+                          <p><span className="font-medium">Rango:</span> {contratoActivo.fechaInicio} → {contratoActivo.fechaFin ?? "Indefinido"}</p>
+                          <p><span className="font-medium">Horas diarias:</span> {contratoActivo.horasDiarias}h</p>
+                          <p>
+                            <span className="font-medium">Días:</span>{" "}
+                            {(JSON.parse(contratoActivo.diasSemana as string) as number[]).map((d: number) => DIAS_SEMANA[d]).join(", ")}
+                          </p>
+                        </div>
+                        <div className="flex gap-1 flex-shrink-0">
+                          <Button
+                            variant="outline" size="sm"
+                            className="gap-1.5 text-xs"
+                            onClick={() => setEditEmpleado(empleadoActual)}
+                          >
+                            <Pencil className="w-3 h-3" />
+                            Empleado
+                          </Button>
+                          <Button
+                            variant="outline" size="sm"
+                            className="gap-1.5 text-xs"
+                            onClick={() => setEditContrato(contratoActivo as Contrato)}
+                          >
+                            <CalendarClock className="w-3 h-3" />
+                            Horario
+                          </Button>
+                        </div>
+                      </div>
                     </div>
 
+                    {/* Grilla del empleado */}
                     <div className="overflow-x-auto rounded-lg border">
                       <table className="w-full text-xs border-collapse">
                         <thead>
@@ -306,9 +377,22 @@ export default function GestorHorarios() {
         </div>
       )}
 
+      {/* Modales */}
       <AddEmpleadoModal
         open={showAddModal}
         onClose={() => setShowAddModal(false)}
+        onSaved={handleSaved}
+      />
+      <EditEmpleadoModal
+        empleado={editEmpleado}
+        open={!!editEmpleado}
+        onClose={() => setEditEmpleado(null)}
+        onSaved={handleSaved}
+      />
+      <EditContratoModal
+        contrato={editContrato}
+        open={!!editContrato}
+        onClose={() => setEditContrato(null)}
         onSaved={handleSaved}
       />
     </div>
