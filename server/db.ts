@@ -55,7 +55,7 @@ export async function getDb() {
   return _db;
 }
 
-// ─── METADATOS DE CATÁLOGOS ──────────────────────────────────────────────────
+// --- METADATOS DE CATÁLOGOS --------------------------------------------------
 
 // Tablas fijas del sistema (no eliminables)
 const FIXED_CATALOGS = [
@@ -126,7 +126,7 @@ export async function deleteCatalogTable(tableName: string) {
   await db.delete(catalogMeta).where(eq(catalogMeta.tableName, tableName));
 }
 
-// ─── HELPER GENÉRICO PARA CATÁLOGOS ──────────────────────────────────────────
+// --- HELPER GENÉRICO PARA CATÁLOGOS ------------------------------------------
 
 const catalogMap: Record<string, any> = {
   monedas: catalogMonedas,
@@ -266,9 +266,9 @@ function autoMigrateUsersSchemaIfNeeded(): void {
       .all() as Array<{ name: string }>;
     const colNames = cols.map(c => c.name);
 
-    // Si ya tiene username, el schema es v2 — verificar que user_roles existe
+    // Si ya tiene username, el schema es v2 - verificar que user_roles existe
     if (colNames.includes("username")) {
-      console.log("[DB] users schema v2 detected — no migration needed");
+      console.log("[DB] users schema v2 detected - no migration needed");
       // Asegurar que user_roles existe (puede faltar en instalaciones anteriores a RBAC)
       sqlite.exec(`
         CREATE TABLE IF NOT EXISTS user_roles (
@@ -282,9 +282,9 @@ function autoMigrateUsersSchemaIfNeeded(): void {
       return;
     }
 
-    // Si tiene openId, es el schema v1 — migrar
+    // Si tiene openId, es el schema v1 - migrar
     if (colNames.includes("openId")) {
-      console.warn("[DB] users schema v1 (openId) detected — migrating to v2 (username/password)...");
+      console.warn("[DB] users schema v1 (openId) detected - migrating to v2 (username/password)...");
 
       sqlite.exec(`
         -- Renombrar tabla vieja para preservar datos
@@ -346,12 +346,12 @@ function autoMigrateUsersSchemaIfNeeded(): void {
       return;
     }
 
-    // Si la tabla no existe aún, no hacer nada — Drizzle la creará
+    // Si la tabla no existe aún, no hacer nada - Drizzle la creará
     if (colNames.length === 0) {
-      console.log("[DB] users table does not exist yet — will be created by Drizzle migrations");
+      console.log("[DB] users table does not exist yet - will be created by Drizzle migrations");
     }
   } catch (err: any) {
-    // Si la tabla no existe, pragma_table_info devuelve vacío sin error — esto no debería ocurrir
+    // Si la tabla no existe, pragma_table_info devuelve vacío sin error - esto no debería ocurrir
     console.warn("[DB] autoMigrateUsersSchemaIfNeeded skipped:", err?.message ?? err);
   }
 }
@@ -454,7 +454,7 @@ export async function runMigrations() {
   }
 }
 
-// ─── USERS (Username/Password) ────────────────────────────────────────────────────
+// --- USERS (Username/Password) ----------------------------------------------------
 
 export async function getUsers() {
   const db = await getDb();
@@ -498,7 +498,7 @@ export async function updateUser(id: number, data: { displayName?: string; roleI
   return await db.update(users).set({ ...data, updatedAt: new Date() }).where(eq(users.id, id));
 }
 
-// ─── ROLES ────────────────────────────────────────────────────────────────────
+// --- ROLES --------------------------------------------------------------------
 
 export async function getRoles() {
   const db = await getDb();
@@ -533,7 +533,7 @@ export async function getUsersByRoleId(roleId: number) {
     .where(eq(users.roleId, roleId));
 }
 
-// ─── USER_ROLES (RBAC N:N) ──────────────────────────────────────────────────
+// --- USER_ROLES (RBAC N:N) --------------------------------------------------
 
 /** Obtiene todos los roles asignados a un usuario */
 export async function getUserRoles(userId: number): Promise<UserRole[]> {
@@ -552,7 +552,7 @@ export async function getUserRoleNames(userId: number): Promise<string[]> {
   return result.map(r => r.nombre);
 }
 
-/** Asigna un rol a un usuario (idempotente — ignora si ya existe) */
+/** Asigna un rol a un usuario (idempotente - ignora si ya existe) */
 export async function assignRoleToUser(userId: number, roleId: number): Promise<void> {
   const db = await getDb();
   await db.insert(userRoles).values({ userId, roleId }).onConflictDoNothing();
@@ -600,7 +600,7 @@ export async function userHasAnyRole(userId: number, roleNames: string[]): Promi
   return result.length > 0;
 }
 
-// ─── Actas ────────────────────────────────────────────────────────────────────
+// --- Actas --------------------------------------------------------------------
 export async function getActasByUserId(userId: number) {
   const db = await getDb();
   return db.select().from(actas).where(eq(actas.userId, userId)).orderBy(desc(actas.createdAt));
@@ -628,7 +628,7 @@ export async function deleteActa(id: number) {
   return db.delete(actas).where(eq(actas.id, id));
 }
 
-// ─── Evaluaciones de Proyecto ─────────────────────────────────────────────────
+// --- Evaluaciones de Proyecto -------------------------------------------------
 export async function getEvaluacionesByUserId(userId: number) {
   const db = await getDb();
   return db.select().from(evaluaciones).where(eq(evaluaciones.userId, userId)).orderBy(desc(evaluaciones.createdAt));
