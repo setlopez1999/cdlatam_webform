@@ -137,6 +137,88 @@ export type LocalUser = User;
 /** @deprecated Usar User e InsertUser */
 export type InsertLocalUser = InsertUser;
 
+// ─── Relación N:N usuarios ↔ roles (RBAC) ────────────────────────────────────────────
+export const userRoles = sqliteTable("user_roles", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  userId: integer("userId").notNull(),
+  roleId: integer("roleId").notNull(),
+  assignedAt: integer("assignedAt", { mode: "timestamp" }).default(sql`(strftime('%s', 'now'))`).notNull(),
+});
+
+export type UserRole = typeof userRoles.$inferSelect;
+export type InsertUserRole = typeof userRoles.$inferInsert;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MÓDULO: GESTOR DE HORARIOS
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * sch_empleados — Empleados registrados en el sistema de horarios.
+ * Son entidades independientes de los users de la app.
+ */
+export const schEmpleados = sqliteTable("sch_empleados", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  nombre: text("nombre").notNull(),
+  apellido: text("apellido").notNull(),
+  cargo: text("cargo"),
+  activo: integer("activo").default(1).notNull(),
+  createdAt: integer("createdAt", { mode: "timestamp" }).default(sql`(strftime('%s', 'now'))`).notNull(),
+  updatedAt: integer("updatedAt", { mode: "timestamp" }).default(sql`(strftime('%s', 'now'))`).notNull(),
+});
+
+export type SchEmpleado = typeof schEmpleados.$inferSelect;
+export type InsertSchEmpleado = typeof schEmpleados.$inferInsert;
+
+/**
+ * sch_contratos — Rango de trabajo de un empleado.
+ * Un empleado puede tener varios contratos históricos.
+ *
+ * diasSemana: JSON array de números [1,2,3,4,5] (1=lun...7=dom)
+ *   - "normal"      → [1,2,3,4,5]
+ *   - "lunes_sabado" → [1,2,3,4,5,6]
+ *   - "personalizado" → cualquier combinación
+ *
+ * mismasHorasDiarias: 1 = todos los días tienen el mismo bloque
+ *                      0 = cada día puede tener bloques distintos
+ */
+export const schContratos = sqliteTable("sch_contratos", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  empleadoId: integer("empleadoId").notNull(),
+  fechaInicio: text("fechaInicio").notNull(),      // "YYYY-MM-DD"
+  fechaFin: text("fechaFin"),                       // null = indefinido
+  horasDiarias: real("horasDiarias").notNull(),
+  diasSemana: text("diasSemana", { mode: "json" }).notNull(), // number[]
+  tipoDistribucion: text("tipoDistribucion").default("normal").notNull(), // "normal" | "lunes_sabado" | "personalizado"
+  mismasHorasDiarias: integer("mismasHorasDiarias").default(1).notNull(), // 0 | 1
+  activo: integer("activo").default(1).notNull(),
+  createdAt: integer("createdAt", { mode: "timestamp" }).default(sql`(strftime('%s', 'now'))`).notNull(),
+  updatedAt: integer("updatedAt", { mode: "timestamp" }).default(sql`(strftime('%s', 'now'))`).notNull(),
+});
+
+export type SchContrato = typeof schContratos.$inferSelect;
+export type InsertSchContrato = typeof schContratos.$inferInsert;
+
+/**
+ * sch_bloques_horario — Distribución de horas por día dentro de un contrato.
+ *
+ * diaSemana: 1=lunes, 2=martes, 3=miércoles, 4=jueves, 5=viernes, 6=sábado, 7=domingo
+ * horaInicio / horaFin: "HH:MM" en formato 24h
+ *
+ * Si mismasHorasDiarias=1 → se crea un bloque con diaSemana=0 (aplica a todos los días)
+ * Si mismasHorasDiarias=0 → un bloque por cada día configurado
+ */
+export const schBloquesHorario = sqliteTable("sch_bloques_horario", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  contratoId: integer("contratoId").notNull(),
+  diaSemana: integer("diaSemana").notNull(), // 0=todos, 1=lun...7=dom
+  horaInicio: text("horaInicio").notNull(),  // "08:00"
+  horaFin: text("horaFin").notNull(),        // "17:00"
+  createdAt: integer("createdAt", { mode: "timestamp" }).default(sql`(strftime('%s', 'now'))`).notNull(),
+});
+
+export type SchBloqueHorario = typeof schBloquesHorario.$inferSelect;
+export type InsertSchBloqueHorario = typeof schBloquesHorario.$inferInsert;
+
 // ─── Tipos compartidos para JSON fields (¡Estas eran las que faltaban!) ──────
 
 export interface ServicioContratado {
