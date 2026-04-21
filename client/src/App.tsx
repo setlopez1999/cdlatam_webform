@@ -17,23 +17,27 @@ import ExpedienteActa from "./pages/ExpedienteActa";
 import ExpedienteEP from "./pages/ExpedienteEP";
 import ExpedienteResultados from "./pages/ExpedienteResultados";
 import SpreadsheetView from "./pages/SpreadsheetView";
+import GestorHorarios from "./pages/GestorHorarios";
 import { useLocalAuth } from "./hooks/useLocalAuth";
 import { Loader2 } from "lucide-react";
 
 /**
  * Componente que protege rutas: redirige a /login si no hay sesión.
- * Opcionalmente restringe solo a admins.
+ * - adminOnly: solo admins (compatibilidad hacia atrás)
+ * - requiredRole: cualquier rol específico de la tabla roles (RBAC)
  */
 function ProtectedRoute({
   component: Component,
   adminOnly = false,
+  requiredRole,
   fullscreen = false,
 }: {
   component: React.ComponentType<any>;
   adminOnly?: boolean;
+  requiredRole?: string;
   fullscreen?: boolean;
 }) {
-  const { isAuthenticated, isAdmin, isLoading } = useLocalAuth();
+  const { isAuthenticated, isAdmin, hasRole, isLoading } = useLocalAuth();
 
   if (isLoading) {
     return (
@@ -47,7 +51,13 @@ function ProtectedRoute({
     return <Redirect to="/login" />;
   }
 
+  // Verificación por adminOnly (compatibilidad hacia atrás)
   if (adminOnly && !isAdmin) {
+    return <Redirect to="/home" />;
+  }
+
+  // Verificación por rol específico (RBAC)
+  if (requiredRole && !hasRole(requiredRole)) {
     return <Redirect to="/home" />;
   }
 
@@ -104,6 +114,11 @@ function Router() {
       </Route>
       <Route path="/usuarios">
         {() => <ProtectedRoute component={Usuarios} adminOnly />}
+      </Route>
+
+      {/* Rutas protegidas por rol específico (RBAC) */}
+      <Route path="/gestor-horarios">
+        {() => <ProtectedRoute component={GestorHorarios} requiredRole="gestor_horarios" />}
       </Route>
 
       {/* Rutas accesibles para todos los usuarios autenticados */}

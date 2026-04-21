@@ -9,6 +9,7 @@ import {
   getActasByUserId, getActaById, createActa, updateActa, deleteActa,
   getEvaluacionesByUserId, getEvaluacionById, createEvaluacion, updateEvaluacion, deleteEvaluacion,
   searchRegistros,
+  getUserRoles, getUserRoleNames, setUserRoles, assignRoleToUser, revokeRoleFromUser,
 } from "./db";
 
 // dataSource — abstracción SQLite / API externa (controlado por USE_API en .env)
@@ -50,6 +51,9 @@ import {
   verifyPassword, signLocalJWT,
   LOCAL_AUTH_COOKIE, hashPassword,
 } from "./localAuth";
+
+// 3. RBAC — verificación de roles
+import { requireRole, requireAnyRole } from "./rbac";
 import { getSessionCookieOptions as getCookieOpts } from "./_core/cookies";
 
 // ─── Zod Schemas ──────────────────────────────────────────────────────────────
@@ -238,7 +242,7 @@ export const appRouter = router({
     }),
 
     listUsers: protectedProcedure.query(async ({ ctx }) => {
-      if (ctx.user?.role !== "admin") throw new Error("Acceso denegado: se requiere rol admin");
+      await requireRole(ctx, "admin");
       return await ds_getUsers();
     }),
 
@@ -251,7 +255,7 @@ export const appRouter = router({
         roleId: z.number().optional().nullable(),
       }))
       .mutation(async ({ ctx, input }) => {
-        if (ctx.user?.role !== "admin") throw new Error("Acceso denegado: se requiere rol admin");
+        await requireRole(ctx, "admin");
         const existing = await ds_findUserByUsername(input.username);
         if (existing) throw new Error("El nombre de usuario ya existe");
         const passwordHash = await hashPassword(input.password);
@@ -273,7 +277,7 @@ export const appRouter = router({
         role: z.enum(["user", "admin"]).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
-        if (ctx.user?.role !== "admin") throw new Error("Acceso denegado: se requiere rol admin");
+        await requireRole(ctx, "admin");
         const { id, ...data } = input;
         await ds_updateUser(id, data);
         return { success: true };
@@ -285,7 +289,7 @@ export const appRouter = router({
         isActive: z.number().min(0).max(1),
       }))
       .mutation(async ({ ctx, input }) => {
-        if (ctx.user?.role !== "admin") throw new Error("Acceso denegado: se requiere rol admin");
+        await requireRole(ctx, "admin");
         await ds_toggleUserStatus(input.id, input.isActive);
         return { success: true };
       }),
@@ -294,7 +298,7 @@ export const appRouter = router({
   // ─── Roles ────────────────────────────────────────────────────────────────────
   roles: router({
     list: protectedProcedure.query(async ({ ctx }) => {
-      if (ctx.user?.role !== "admin") throw new Error("Acceso denegado");
+      await requireRole(ctx, "admin");
       return await ds_getRoles();
     }),
 
@@ -305,7 +309,7 @@ export const appRouter = router({
         descripcion: z.string().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
-        if (ctx.user?.role !== "admin") throw new Error("Acceso denegado");
+        await requireRole(ctx, "admin");
         const result = await ds_createRole(input);
         return result[0];
       }),
@@ -319,7 +323,7 @@ export const appRouter = router({
         activo: z.number().min(0).max(1).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
-        if (ctx.user?.role !== "admin") throw new Error("Acceso denegado");
+        await requireRole(ctx, "admin");
         const { id, ...data } = input;
         await ds_updateRole(id, data);
         return { success: true };
@@ -328,7 +332,7 @@ export const appRouter = router({
     delete: protectedProcedure
       .input(z.object({ id: z.number() }))
       .mutation(async ({ ctx, input }) => {
-        if (ctx.user?.role !== "admin") throw new Error("Acceso denegado");
+        await requireRole(ctx, "admin");
         const affected = await ds_getUsersByRoleId(input.id);
         if (affected.length > 0) {
           return { success: false, affected, requiresConfirm: true };
@@ -340,7 +344,7 @@ export const appRouter = router({
     deleteForce: protectedProcedure
       .input(z.object({ id: z.number() }))
       .mutation(async ({ ctx, input }) => {
-        if (ctx.user?.role !== "admin") throw new Error("Acceso denegado");
+        await requireRole(ctx, "admin");
         // Desasignar el rol de todos los usuarios antes de borrar
         await ds_updateUser(0, {});
         const affected = await ds_getUsersByRoleId(input.id);
@@ -354,8 +358,51 @@ export const appRouter = router({
     getUsersByRole: protectedProcedure
       .input(z.object({ roleId: z.number() }))
       .query(async ({ ctx, input }) => {
-        if (ctx.user?.role !== "admin") throw new Error("Acceso denegado");
+        await requireRole(ctx, "admin");
         return await ds_getUsersByRoleId(input.roleId);
+      }),
+  }),
+
+  // ─── User Roles (RBAC N:N) ──────────────────────────────────────────────────────────────────────
+  userRoles: router({
+    /** Obtiene los roleIds asignados a un usuario (solo admin) */
+    getByUser: protectedProcedure
+      .input(z.object({ userId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        await requireRole(ctx, "admin");
+        return await getUserRoles(input.userId);
+      }),
+
+    /** Obtiene los nombres de roles del usuario autenticado (para el cliente) */
+    myRoles: protectedProcedure.query(async ({ ctx }) => {
+      return await getUserRoleNames(ctx.user.id);
+    }),
+
+    /** Reemplaza todos los roles de un usuario por un nuevo set */
+    setRoles: protectedProcedure
+      .input(z.object({ userId: z.number(), roleIds: z.array(z.number()) }))
+      .mutation(async ({ ctx, input }) => {
+        await requireRole(ctx, "admin");
+        await setUserRoles(input.userId, input.roleIds);
+        return { success: true };
+      }),
+
+    /** Asigna un rol a un usuario */
+    assign: protectedProcedure
+      .input(z.object({ userId: z.number(), roleId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        await requireRole(ctx, "admin");
+        await assignRoleToUser(input.userId, input.roleId);
+        return { success: true };
+      }),
+
+    /** Revoca un rol de un usuario */
+    revoke: protectedProcedure
+      .input(z.object({ userId: z.number(), roleId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        await requireRole(ctx, "admin");
+        await revokeRoleFromUser(input.userId, input.roleId);
+        return { success: true };
       }),
   }),
 
