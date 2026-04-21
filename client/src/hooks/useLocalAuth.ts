@@ -7,7 +7,9 @@
  * Provee:
  *  - currentUser: usuario autenticado
  *  - isAuthenticated: boolean
- *  - isAdmin: boolean
+ *  - isAdmin: boolean — true si el usuario tiene el rol "admin" en user_roles
+ *  - hasRole(roleName): boolean — verifica si el usuario tiene un rol específico
+ *  - hasAnyRole(roleNames[]): boolean — verifica si el usuario tiene alguno de los roles
  *  - login(username, password): Promise
  *  - logout(): Promise
  *  - isLoading: boolean
@@ -31,6 +33,13 @@ export function useLocalAuth() {
 
   // Consulta por el usuario activo (lee las cookies que envían el JWT local)
   const { data: user, isLoading, refetch } = trpc.localAuth.me.useQuery(undefined, {
+    retry: false,
+    refetchOnWindowFocus: false,
+  });
+
+  // Consulta los roles RBAC del usuario autenticado desde user_roles
+  const { data: myRoles = [] } = trpc.userRoles.myRoles.useQuery(undefined, {
+    enabled: !!user,
     retry: false,
     refetchOnWindowFocus: false,
   });
@@ -69,10 +78,35 @@ export function useLocalAuth() {
     await refetch();
   }, [logoutMutation, refetch, clearAuth]);
 
+  /**
+   * Verifica si el usuario tiene un rol específico.
+   * Fuente primaria: user_roles (RBAC). Fallback: campo legacy role="admin".
+   */
+  const hasRole = useCallback((roleName: string): boolean => {
+    if (!currentUser) return false;
+    // Fallback legacy: si el campo role es "admin", tiene acceso total
+    if (currentUser.role === "admin") return true;
+    return myRoles.includes(roleName);
+  }, [currentUser, myRoles]);
+
+  /**
+   * Verifica si el usuario tiene al menos uno de los roles dados.
+   */
+  const hasAnyRole = useCallback((roleNames: string[]): boolean => {
+    if (!currentUser) return false;
+    if (currentUser.role === "admin") return true;
+    return roleNames.some(r => myRoles.includes(r));
+  }, [currentUser, myRoles]);
+
+  const isAdmin = hasRole("admin");
+
   return {
     currentUser,
     isAuthenticated: !!currentUser,
-    isAdmin: currentUser?.role === "admin",
+    isAdmin,
+    hasRole,
+    hasAnyRole,
+    myRoles,
     isLoading,
     login,
     logout,

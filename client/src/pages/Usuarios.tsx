@@ -14,6 +14,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { Users, Plus, Shield, User, Clock, Loader2, RefreshCw, Power, Pencil, Tag, Trash2, AlertTriangle } from "lucide-react";
 import { PageLayout } from "@/components/PageLayout";
+import { EditUserModal } from "@/components/EditUserModal";
+import { CreateUserModal } from "@/components/CreateUserModal";
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 type UserItem = {
@@ -42,8 +44,6 @@ export default function Usuarios() {
   // ── Estado modales usuarios ──
   const [showCreateUser, setShowCreateUser] = useState(false);
   const [editUser, setEditUser] = useState<UserItem | null>(null);
-  const [userForm, setUserForm] = useState({ username: "", password: "", displayName: "", role: "user" as "user" | "admin", roleId: null as number | null });
-  const [creatingUser, setCreatingUser] = useState(false);
 
   // ── Estado modales roles ──
   const [showCreateRole, setShowCreateRole] = useState(false);
@@ -60,14 +60,6 @@ export default function Usuarios() {
     trpc.roles.list.useQuery(undefined, { enabled: isAdmin });
 
   // ── Mutations usuarios ──
-  const createUserMut = trpc.localAuth.createUser.useMutation({
-    onSuccess: () => { toast.success("Usuario creado"); setShowCreateUser(false); resetUserForm(); refetchUsers(); },
-    onError: (e) => toast.error(e.message),
-  });
-  const updateUserMut = trpc.localAuth.updateUser.useMutation({
-    onSuccess: () => { toast.success("Usuario actualizado"); setEditUser(null); refetchUsers(); },
-    onError: (e) => toast.error(e.message),
-  });
   const toggleStatusMut = trpc.localAuth.toggleStatus.useMutation();
 
   // ── Mutations roles ──
@@ -95,11 +87,9 @@ export default function Usuarios() {
   });
 
   // ── Helpers de reset ──
-  const resetUserForm = () => setUserForm({ username: "", password: "", displayName: "", role: "user", roleId: null });
   const resetRoleForm = () => setRoleForm({ nombre: "", label: "", descripcion: "" });
 
   const openEditUser = (u: UserItem) => {
-    setUserForm({ username: u.username, password: "", displayName: u.displayName ?? "", role: (u.role as "user" | "admin"), roleId: u.roleId ?? null });
     setEditUser(u);
   };
 
@@ -116,18 +106,6 @@ export default function Usuarios() {
       toast.success(`Cuenta ${isActivo ? "inactivada" : "activada"}`);
       refetchUsers();
     } catch (e: any) { toast.error(e.message); }
-  };
-
-  const handleCreateUser = async (e: React.FormEvent) => {
-    e.preventDefault(); setCreatingUser(true);
-    try { await createUserMut.mutateAsync({ ...userForm, roleId: userForm.roleId }); }
-    finally { setCreatingUser(false); }
-  };
-
-  const handleUpdateUser = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editUser) return;
-    await updateUserMut.mutateAsync({ id: editUser.id, displayName: userForm.displayName, role: userForm.role, roleId: userForm.roleId });
   };
 
   const handleCreateRole = async (e: React.FormEvent) => {
@@ -323,98 +301,26 @@ export default function Usuarios() {
       </Tabs>
 
       {/* ── Modal Crear Usuario ── */}
-      <Dialog open={showCreateUser} onOpenChange={setShowCreateUser}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2"><Plus className="w-4 h-4" />Crear Nuevo Usuario</DialogTitle>
-          </DialogHeader>
-          <form onSubmit={handleCreateUser} className="space-y-4">
-            <div className="space-y-2">
-              <Label>Nombre de usuario *</Label>
-              <Input placeholder="ej: jperez" value={userForm.username} onChange={e => setUserForm(f => ({ ...f, username: e.target.value }))} required minLength={3} />
-            </div>
-            <div className="space-y-2">
-              <Label>Nombre completo</Label>
-              <Input placeholder="ej: Juan Pérez" value={userForm.displayName} onChange={e => setUserForm(f => ({ ...f, displayName: e.target.value }))} />
-            </div>
-            <div className="space-y-2">
-              <Label>Contraseña *</Label>
-              <Input type="password" placeholder="Mínimo 4 caracteres" value={userForm.password} onChange={e => setUserForm(f => ({ ...f, password: e.target.value }))} required minLength={4} />
-            </div>
-            <div className="space-y-2">
-              <Label>Permiso base</Label>
-              <Select value={userForm.role} onValueChange={(v) => setUserForm(f => ({ ...f, role: v as "user" | "admin" }))}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="user"><div className="flex items-center gap-2"><User className="w-3.5 h-3.5 text-blue-500" />Usuario</div></SelectItem>
-                  <SelectItem value="admin"><div className="flex items-center gap-2"><Shield className="w-3.5 h-3.5 text-amber-500" />Administrador</div></SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            {roles && roles.length > 0 && (
-              <div className="space-y-2">
-                <Label>Rol asignado <span className="text-muted-foreground text-xs">(opcional)</span></Label>
-                <Select value={userForm.roleId?.toString() ?? "none"} onValueChange={(v) => setUserForm(f => ({ ...f, roleId: v === "none" ? null : Number(v) }))}>
-                  <SelectTrigger><SelectValue placeholder="Sin rol" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Sin rol</SelectItem>
-                    {roles.map((r: RoleItem) => <SelectItem key={r.id} value={r.id.toString()}>{r.label}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-            <DialogFooter className="pt-2">
-              <Button type="button" variant="outline" onClick={() => { setShowCreateUser(false); resetUserForm(); }}>Cancelar</Button>
-              <Button type="submit" disabled={creatingUser || !userForm.username || !userForm.password}>
-                {creatingUser ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Plus className="w-4 h-4 mr-2" />}Crear Usuario
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+      {showCreateUser && roles && (
+        <CreateUserModal
+          roles={roles as any[]}
+          onClose={() => setShowCreateUser(false)}
+          onCreated={() => { refetchUsers(); }}
+        />
+      )}
 
-      {/* ── Modal Editar Usuario ── */}
-      <Dialog open={!!editUser} onOpenChange={(o) => { if (!o) setEditUser(null); }}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2"><Pencil className="w-4 h-4" />Editar Usuario — @{editUser?.username}</DialogTitle>
-          </DialogHeader>
-          <form onSubmit={handleUpdateUser} className="space-y-4">
-            <div className="space-y-2">
-              <Label>Nombre completo</Label>
-              <Input placeholder="ej: Juan Pérez" value={userForm.displayName} onChange={e => setUserForm(f => ({ ...f, displayName: e.target.value }))} />
-            </div>
-            <div className="space-y-2">
-              <Label>Permiso base</Label>
-              <Select value={userForm.role} onValueChange={(v) => setUserForm(f => ({ ...f, role: v as "user" | "admin" }))}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="user"><div className="flex items-center gap-2"><User className="w-3.5 h-3.5 text-blue-500" />Usuario</div></SelectItem>
-                  <SelectItem value="admin"><div className="flex items-center gap-2"><Shield className="w-3.5 h-3.5 text-amber-500" />Administrador</div></SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            {roles && roles.length > 0 && (
-              <div className="space-y-2">
-                <Label>Rol asignado <span className="text-muted-foreground text-xs">(opcional)</span></Label>
-                <Select value={userForm.roleId?.toString() ?? "none"} onValueChange={(v) => setUserForm(f => ({ ...f, roleId: v === "none" ? null : Number(v) }))}>
-                  <SelectTrigger><SelectValue placeholder="Sin rol" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Sin rol</SelectItem>
-                    {roles.map((r: RoleItem) => <SelectItem key={r.id} value={r.id.toString()}>{r.label}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-            <DialogFooter className="pt-2">
-              <Button type="button" variant="outline" onClick={() => setEditUser(null)}>Cancelar</Button>
-              <Button type="submit" disabled={updateUserMut.isPending}>
-                {updateUserMut.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Pencil className="w-4 h-4 mr-2" />}Guardar Cambios
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+      {/* ── Modal Editar Usuario ── key={editUser.id} hace que React remonte el
+           componente al cambiar de usuario, lo que permite usar useState(initialRoles)
+           directamente sin necesidad de useEffect para sincronizar estado derivado. */}
+      {editUser && roles && (
+        <EditUserModal
+          key={editUser.id}
+          user={editUser}
+          roles={roles as any[]}
+          onClose={() => setEditUser(null)}
+          onSaved={() => refetchUsers()}
+        />
+      )}
 
       {/* ── Modal Crear Rol ── */}
       <Dialog open={showCreateRole} onOpenChange={setShowCreateRole}>

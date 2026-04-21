@@ -15,7 +15,7 @@ import * as jose from "jose";
 import type { Express } from "express";
 import { eq } from "drizzle-orm";
 import { getDb } from "./db";
-import { users, type User, type InsertUser } from "../drizzle/schema";
+import { users, roles, userRoles, type User, type InsertUser } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 
 const SALT_ROUNDS = 12;
@@ -139,7 +139,32 @@ export const getAllLocalUsers = getAllUsers;
 // ─── Seed de usuarios predefinidos ───────────────────────────────────────────
 
 /**
- * Crea los usuarios predefinidos si no existen.
+ * Crea los roles base si no existen (idempotente).
+ * Incluye el rol gestor_horarios para la pantalla de Gestor de Horarios.
+ */
+export async function seedDefaultRoles(): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+
+  const defaultRoles: Array<{ nombre: string; label: string; descripcion: string }> = [
+    { nombre: "admin",            label: "Administrador",      descripcion: "Acceso total al sistema" },
+    { nombre: "manager",          label: "Gerente",             descripcion: "Puede ver todo, no puede gestionar usuarios" },
+    { nombre: "viewer",           label: "Solo lectura",        descripcion: "Acceso de solo lectura" },
+    { nombre: "user",             label: "Usuario",             descripcion: "Acceso basico al sistema" },
+    { nombre: "gestor_horarios",  label: "Gestor de Horarios",  descripcion: "Acceso a la pantalla de gestion de horarios" },
+  ];
+
+  for (const r of defaultRoles) {
+    const existing = await db.select().from(roles).where(eq(roles.nombre, r.nombre)).limit(1);
+    if (existing.length === 0) {
+      await db.insert(roles).values({ nombre: r.nombre, label: r.label, descripcion: r.descripcion, activo: 1 });
+      console.log(`[LocalAuth] Created default role: ${r.nombre}`);
+    }
+  }
+}
+
+/**
+ * Crea los usuarios predefinidos si no existen y sincroniza sus roles en user_roles.
  * Se llama al iniciar el servidor.
  *
  * Credenciales:
@@ -161,8 +186,8 @@ export async function seedDefaultUsers(): Promise<void> {
   ];
 
   for (const u of defaultUsers) {
-    const existing = await findUserByUsername(u.username);
-    if (!existing) {
+    let dbUser = await findUserByUsername(u.username);
+    if (!dbUser) {
       const passwordHash = await hashPassword(u.password);
       await createUser({
         username: u.username,
@@ -171,7 +196,21 @@ export async function seedDefaultUsers(): Promise<void> {
         role: u.role,
         isActive: 1,
       });
+      dbUser = await findUserByUsername(u.username);
       console.log(`[LocalAuth] Created default user: ${u.username} (${u.role})`);
+    }
+
+    // Sincronizar user_roles: asignar el rol correspondiente si no lo tiene
+    if (dbUser) {
+      const roleRow = await db.select().from(roles).where(eq(roles.nombre, u.role)).limit(1);
+      if (roleRow.length > 0) {
+        const existing = await db.select().from(userRoles)
+          .where(eq(userRoles.userId, dbUser.id)).limit(1);
+        if (existing.length === 0) {
+          await db.insert(userRoles).values({ userId: dbUser.id, roleId: roleRow[0].id });
+          console.log(`[LocalAuth] Assigned role '${u.role}' to user '${u.username}' in user_roles`);
+        }
+      }
     }
   }
 }

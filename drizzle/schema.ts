@@ -137,6 +137,61 @@ export type LocalUser = User;
 /** @deprecated Usar User e InsertUser */
 export type InsertLocalUser = InsertUser;
 
+// ─── Relación N:N usuarios ↔ roles (RBAC) ────────────────────────────────────────────
+export const userRoles = sqliteTable("user_roles", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  userId: integer("userId").notNull(),
+  roleId: integer("roleId").notNull(),
+  assignedAt: integer("assignedAt", { mode: "timestamp" }).default(sql`(strftime('%s', 'now'))`).notNull(),
+});
+
+export type UserRole = typeof userRoles.$inferSelect;
+export type InsertUserRole = typeof userRoles.$inferInsert;
+
+// --- MODULO: GESTOR DE HORARIOS ---
+
+export const schEmpleados = sqliteTable("sch_empleados", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  nombre: text("nombre").notNull(),
+  apellido: text("apellido").notNull(),
+  cargo: text("cargo"),
+  activo: integer("activo").default(1).notNull(),
+  createdAt: integer("createdAt", { mode: "timestamp" }).default(sql`(strftime('%s', 'now'))`).notNull(),
+  updatedAt: integer("updatedAt", { mode: "timestamp" }).default(sql`(strftime('%s', 'now'))`).notNull(),
+});
+
+export type SchEmpleado = typeof schEmpleados.$inferSelect;
+export type InsertSchEmpleado = typeof schEmpleados.$inferInsert;
+
+export const schContratos = sqliteTable("sch_contratos", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  empleadoId: integer("empleadoId").notNull(),
+  fechaInicio: text("fechaInicio").notNull(),
+  fechaFin: text("fechaFin"),
+  horasDiarias: real("horasDiarias").notNull(),
+  diasSemana: text("diasSemana", { mode: "json" }).notNull(),
+  tipoDistribucion: text("tipoDistribucion").default("normal").notNull(),
+  mismasHorasDiarias: integer("mismasHorasDiarias").default(1).notNull(),
+  activo: integer("activo").default(1).notNull(),
+  createdAt: integer("createdAt", { mode: "timestamp" }).default(sql`(strftime('%s', 'now'))`).notNull(),
+  updatedAt: integer("updatedAt", { mode: "timestamp" }).default(sql`(strftime('%s', 'now'))`).notNull(),
+});
+
+export type SchContrato = typeof schContratos.$inferSelect;
+export type InsertSchContrato = typeof schContratos.$inferInsert;
+
+export const schBloquesHorario = sqliteTable("sch_bloques_horario", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  contratoId: integer("contratoId").notNull(),
+  diaSemana: integer("diaSemana").notNull(),
+  horaInicio: text("horaInicio").notNull(),
+  horaFin: text("horaFin").notNull(),
+  createdAt: integer("createdAt", { mode: "timestamp" }).default(sql`(strftime('%s', 'now'))`).notNull(),
+});
+
+export type SchBloqueHorario = typeof schBloquesHorario.$inferSelect;
+export type InsertSchBloqueHorario = typeof schBloquesHorario.$inferInsert;
+
 // ─── Tipos compartidos para JSON fields (¡Estas eran las que faltaban!) ──────
 
 export interface ServicioContratado {

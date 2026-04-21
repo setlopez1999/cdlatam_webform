@@ -8,13 +8,18 @@ import { existsSync, mkdirSync } from 'fs';
 // Importamos los esquemas (asegúrate de que esta ruta sea correcta)
 import {
   InsertUser, users, roles, type Role, type InsertRole,
+  userRoles, type UserRole, type InsertUserRole,
   actas, evaluaciones, InsertActa, InsertEvaluacion,
   catalogMeta,
   // Catálogos
   catalogMonedas, catalogPaises, catalogEmpresas, catalogDocumentoIdentidad,
   catalogUnidadesNegocio, catalogSoluciones, catalogDetalleServicio,
   catalogTipoVenta, catalogPlazos, catalogDocumentos, catalogCecos,
-  catalogDepartamentos, catalogAreas, catalogNombres
+  catalogDepartamentos, catalogAreas, catalogNombres,
+  // Gestor de Horarios
+  schEmpleados, type SchEmpleado, type InsertSchEmpleado,
+  schContratos, type SchContrato, type InsertSchContrato,
+  schBloquesHorario, type SchBloqueHorario, type InsertSchBloqueHorario,
 } from "../drizzle/schema";
 
 // 1. Inicializar conexión al archivo local "gestion.db"
@@ -54,7 +59,7 @@ export async function getDb() {
   return _db;
 }
 
-// ─── METADATOS DE CATÁLOGOS ──────────────────────────────────────────────────
+// --- METADATOS DE CATÁLOGOS --------------------------------------------------
 
 // Tablas fijas del sistema (no eliminables)
 const FIXED_CATALOGS = [
@@ -125,7 +130,7 @@ export async function deleteCatalogTable(tableName: string) {
   await db.delete(catalogMeta).where(eq(catalogMeta.tableName, tableName));
 }
 
-// ─── HELPER GENÉRICO PARA CATÁLOGOS ──────────────────────────────────────────
+// --- HELPER GENÉRICO PARA CATÁLOGOS ------------------------------------------
 
 const catalogMap: Record<string, any> = {
   monedas: catalogMonedas,
@@ -252,7 +257,147 @@ export async function bulkDeleteCatalogRecords(tableName: string, ids: number[])
   return await db.delete(table).where(inArray(table.id, ids));
 }
 
+/**
+ * Detecta si la tabla users tiene el schema v1 (openId) y la migra al v2 (username/passwordHash).
+ * Se ejecuta ANTES de las migraciones de Drizzle para que la BD siempre quede en estado correcto.
+ * Es idempotente: si ya tiene el schema v2, no hace nada.
+ */
+function autoMigrateUsersSchemaIfNeeded(): void {
+  try {
+    // Leer las columnas actuales de la tabla users
+    const cols = sqlite
+      .prepare("SELECT name FROM pragma_table_info('users')")
+      .all() as Array<{ name: string }>;
+    const colNames = cols.map(c => c.name);
+
+    // Si ya tiene username, el schema es v2 — verificar tablas opcionales
+    if (colNames.includes("username")) {
+      console.log("[DB] users schema v2 detected — no migration needed");
+      // Asegurar que user_roles existe (puede faltar en instalaciones anteriores a RBAC)
+      sqlite.exec(`
+        CREATE TABLE IF NOT EXISTS user_roles (
+          id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+          userId INTEGER NOT NULL,
+          roleId INTEGER NOT NULL,
+          assignedAt INTEGER DEFAULT (strftime('%s', 'now')) NOT NULL,
+          UNIQUE(userId, roleId)
+        );
+      `);
+      // Asegurar que las tablas del módulo Gestor de Horarios existen
+      sqlite.exec(`
+        CREATE TABLE IF NOT EXISTS sch_empleados (
+          id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+          nombre TEXT NOT NULL,
+          apellido TEXT NOT NULL,
+          cargo TEXT,
+          activo INTEGER DEFAULT 1 NOT NULL,
+          createdAt INTEGER DEFAULT (strftime('%s', 'now')) NOT NULL,
+          updatedAt INTEGER DEFAULT (strftime('%s', 'now')) NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS sch_contratos (
+          id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+          empleadoId INTEGER NOT NULL,
+          fechaInicio TEXT NOT NULL,
+          fechaFin TEXT,
+          horasDiarias REAL NOT NULL,
+          diasSemana TEXT NOT NULL,
+          tipoDistribucion TEXT DEFAULT 'normal' NOT NULL,
+          mismasHorasDiarias INTEGER DEFAULT 1 NOT NULL,
+          activo INTEGER DEFAULT 1 NOT NULL,
+          createdAt INTEGER DEFAULT (strftime('%s', 'now')) NOT NULL,
+          updatedAt INTEGER DEFAULT (strftime('%s', 'now')) NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS sch_bloques_horario (
+          id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+          contratoId INTEGER NOT NULL,
+          diaSemana INTEGER NOT NULL,
+          horaInicio TEXT NOT NULL,
+          horaFin TEXT NOT NULL,
+          createdAt INTEGER DEFAULT (strftime('%s', 'now')) NOT NULL
+        );
+      `);
+      console.log("[DB] Gestor de Horarios tables ensured");
+      return;
+    }
+
+    // Si tiene openId, es el schema v1 - migrar
+    if (colNames.includes("openId")) {
+      console.warn("[DB] users schema v1 (openId) detected - migrating to v2 (username/password)...");
+
+      sqlite.exec(`
+        -- Renombrar tabla vieja para preservar datos
+        ALTER TABLE users RENAME TO users_v1_backup;
+
+        -- Crear tabla roles si no existe
+        CREATE TABLE IF NOT EXISTS roles (
+          id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+          nombre TEXT NOT NULL UNIQUE,
+          label TEXT NOT NULL,
+          descripcion TEXT,
+          activo INTEGER DEFAULT 1 NOT NULL,
+          createdAt INTEGER DEFAULT (strftime('%s', 'now')) NOT NULL,
+          updatedAt INTEGER DEFAULT (strftime('%s', 'now')) NOT NULL
+        );
+
+        -- Insertar roles base
+        INSERT OR IGNORE INTO roles (nombre, label, descripcion, activo) VALUES
+          ('admin',   'Administrador', 'Acceso total al sistema', 1),
+          ('manager', 'Gerente',       'Puede ver todo, no puede gestionar usuarios', 1),
+          ('viewer',  'Solo lectura',  'Acceso de solo lectura', 1),
+          ('user',    'Usuario',       'Acceso basico al sistema', 1);
+
+        -- Crear nueva tabla users con schema v2
+        CREATE TABLE users (
+          id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+          username TEXT NOT NULL UNIQUE,
+          passwordHash TEXT NOT NULL,
+          displayName TEXT,
+          role TEXT DEFAULT 'user' NOT NULL,
+          roleId INTEGER,
+          isActive INTEGER DEFAULT 1 NOT NULL,
+          createdAt INTEGER DEFAULT (strftime('%s', 'now')) NOT NULL,
+          updatedAt INTEGER DEFAULT (strftime('%s', 'now')) NOT NULL,
+          lastSignedIn INTEGER
+        );
+
+        -- Crear catalog_meta si no existe
+        CREATE TABLE IF NOT EXISTS catalog_meta (
+          id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+          table_name TEXT NOT NULL UNIQUE,
+          title TEXT NOT NULL,
+          is_custom INTEGER DEFAULT 0 NOT NULL,
+          linked_field TEXT,
+          created_at INTEGER DEFAULT (strftime('%s', 'now')) NOT NULL
+        );
+
+        -- Crear user_roles si no existe
+        CREATE TABLE IF NOT EXISTS user_roles (
+          id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+          userId INTEGER NOT NULL,
+          roleId INTEGER NOT NULL,
+          assignedAt INTEGER DEFAULT (strftime('%s', 'now')) NOT NULL,
+          UNIQUE(userId, roleId)
+        );
+      `);
+
+      console.log("[DB] users schema migrated to v2 successfully. Old data backed up in users_v1_backup.");
+      return;
+    }
+
+    // Si la tabla no existe aún, no hacer nada - Drizzle la creará
+    if (colNames.length === 0) {
+      console.log("[DB] users table does not exist yet - will be created by Drizzle migrations");
+    }
+  } catch (err: any) {
+    // Si la tabla no existe, pragma_table_info devuelve vacío sin error - esto no debería ocurrir
+    console.warn("[DB] autoMigrateUsersSchemaIfNeeded skipped:", err?.message ?? err);
+  }
+}
+
 export async function runMigrations() {
+  // Paso 0: Migrar schema viejo automáticamente si es necesario (idempotente)
+  autoMigrateUsersSchemaIfNeeded();
+
   try {
     // Intentar migración estándar de Drizzle primero
     const db = await getDb();
@@ -332,6 +477,43 @@ export async function runMigrations() {
         CREATE TABLE IF NOT EXISTS catalog_departamentos (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, valor TEXT NOT NULL UNIQUE, activo INTEGER DEFAULT 1 NOT NULL);
         CREATE TABLE IF NOT EXISTS catalog_areas (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, valor TEXT NOT NULL UNIQUE, activo INTEGER DEFAULT 1 NOT NULL);
         CREATE TABLE IF NOT EXISTS catalog_nombres (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, valor TEXT NOT NULL, activo INTEGER DEFAULT 1 NOT NULL);
+        CREATE TABLE IF NOT EXISTS user_roles (
+          id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+          userId INTEGER NOT NULL,
+          roleId INTEGER NOT NULL,
+          assignedAt INTEGER DEFAULT (strftime('%s', 'now')) NOT NULL,
+          UNIQUE(userId, roleId)
+        );
+        CREATE TABLE IF NOT EXISTS sch_empleados (
+          id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+          nombre TEXT NOT NULL,
+          apellido TEXT NOT NULL,
+          cargo TEXT,
+          activo INTEGER DEFAULT 1 NOT NULL,
+          createdAt INTEGER DEFAULT (strftime('%s', 'now')) NOT NULL,
+          updatedAt INTEGER DEFAULT (strftime('%s', 'now')) NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS sch_contratos (
+          id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+          empleadoId INTEGER NOT NULL,
+          fechaInicio TEXT NOT NULL,
+          fechaFin TEXT,
+          horasDiarias REAL NOT NULL,
+          diasSemana TEXT NOT NULL,
+          tipoDistribucion TEXT DEFAULT 'normal' NOT NULL,
+          mismasHorasDiarias INTEGER DEFAULT 1 NOT NULL,
+          activo INTEGER DEFAULT 1 NOT NULL,
+          createdAt INTEGER DEFAULT (strftime('%s', 'now')) NOT NULL,
+          updatedAt INTEGER DEFAULT (strftime('%s', 'now')) NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS sch_bloques_horario (
+          id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+          contratoId INTEGER NOT NULL,
+          diaSemana INTEGER NOT NULL,
+          horaInicio TEXT NOT NULL,
+          horaFin TEXT NOT NULL,
+          createdAt INTEGER DEFAULT (strftime('%s', 'now')) NOT NULL
+        );
       `);
       console.log("[DB] Schema applied manually (fallback)");
     } catch (fallbackError) {
@@ -340,7 +522,7 @@ export async function runMigrations() {
   }
 }
 
-// ─── USERS (Username/Password) ────────────────────────────────────────────────────
+// --- USERS (Username/Password) ----------------------------------------------------
 
 export async function getUsers() {
   const db = await getDb();
@@ -384,7 +566,7 @@ export async function updateUser(id: number, data: { displayName?: string; roleI
   return await db.update(users).set({ ...data, updatedAt: new Date() }).where(eq(users.id, id));
 }
 
-// ─── ROLES ────────────────────────────────────────────────────────────────────
+// --- ROLES --------------------------------------------------------------------
 
 export async function getRoles() {
   const db = await getDb();
@@ -419,6 +601,73 @@ export async function getUsersByRoleId(roleId: number) {
     .where(eq(users.roleId, roleId));
 }
 
+// ─── USER_ROLES (RBAC N:N) ──────────────────────────────────────────────────
+
+/** Obtiene todos los roles asignados a un usuario */
+export async function getUserRoles(userId: number): Promise<UserRole[]> {
+  const db = await getDb();
+  return await db.select().from(userRoles).where(eq(userRoles.userId, userId));
+}
+
+/** Obtiene los nombres de roles de un usuario (join con tabla roles) */
+export async function getUserRoleNames(userId: number): Promise<string[]> {
+  const db = await getDb();
+  const result = await db
+    .select({ nombre: roles.nombre })
+    .from(userRoles)
+    .innerJoin(roles, eq(userRoles.roleId, roles.id))
+    .where(eq(userRoles.userId, userId));
+  return result.map(r => r.nombre);
+}
+
+/** Asigna un rol a un usuario (idempotente — ignora si ya existe) */
+export async function assignRoleToUser(userId: number, roleId: number): Promise<void> {
+  const db = await getDb();
+  await db.insert(userRoles).values({ userId, roleId }).onConflictDoNothing();
+}
+
+/** Revoca un rol de un usuario */
+export async function revokeRoleFromUser(userId: number, roleId: number): Promise<void> {
+  const db = await getDb();
+  await db.delete(userRoles)
+    .where(and(eq(userRoles.userId, userId), eq(userRoles.roleId, roleId)));
+}
+
+/** Reemplaza todos los roles de un usuario por un nuevo set */
+export async function setUserRoles(userId: number, roleIds: number[]): Promise<void> {
+  const db = await getDb();
+  // Borrar todos los roles actuales del usuario
+  await db.delete(userRoles).where(eq(userRoles.userId, userId));
+  // Insertar los nuevos
+  if (roleIds.length > 0) {
+    await db.insert(userRoles).values(roleIds.map(roleId => ({ userId, roleId })));
+  }
+}
+
+/** Verifica si un usuario tiene un rol específico */
+export async function userHasRole(userId: number, roleName: string): Promise<boolean> {
+  const db = await getDb();
+  const result = await db
+    .select({ id: userRoles.id })
+    .from(userRoles)
+    .innerJoin(roles, eq(userRoles.roleId, roles.id))
+    .where(and(eq(userRoles.userId, userId), eq(roles.nombre, roleName)))
+    .limit(1);
+  return result.length > 0;
+}
+
+/** Verifica si un usuario tiene al menos uno de los roles dados */
+export async function userHasAnyRole(userId: number, roleNames: string[]): Promise<boolean> {
+  const db = await getDb();
+  const result = await db
+    .select({ id: userRoles.id })
+    .from(userRoles)
+    .innerJoin(roles, eq(userRoles.roleId, roles.id))
+    .where(and(eq(userRoles.userId, userId), inArray(roles.nombre, roleNames)))
+    .limit(1);
+  return result.length > 0;
+}
+
 // ─── Actas ────────────────────────────────────────────────────────────────────
 export async function getActasByUserId(userId: number) {
   const db = await getDb();
@@ -447,7 +696,7 @@ export async function deleteActa(id: number) {
   return db.delete(actas).where(eq(actas.id, id));
 }
 
-// ─── Evaluaciones de Proyecto ─────────────────────────────────────────────────
+// --- Evaluaciones de Proyecto -------------------------------------------------
 export async function getEvaluacionesByUserId(userId: number) {
   const db = await getDb();
   return db.select().from(evaluaciones).where(eq(evaluaciones.userId, userId)).orderBy(desc(evaluaciones.createdAt));
@@ -511,3 +760,104 @@ export async function searchRegistros(userId: number, query: string) {
   return { actas: actasResult, evaluaciones: evaluacionesResult };
 }
 
+
+// --- GESTOR DE HORARIOS -------------------------------------------------------
+
+// Empleados
+export async function getEmpleados(): Promise<SchEmpleado[]> {
+  const db = await getDb();
+  return db.select().from(schEmpleados).orderBy(schEmpleados.apellido, schEmpleados.nombre);
+}
+
+export async function getEmpleadoById(id: number): Promise<SchEmpleado | undefined> {
+  const db = await getDb();
+  const result = await db.select().from(schEmpleados).where(eq(schEmpleados.id, id)).limit(1);
+  return result[0];
+}
+
+export async function createEmpleado(data: InsertSchEmpleado): Promise<SchEmpleado> {
+  const db = await getDb();
+  const result = await db.insert(schEmpleados).values(data).returning();
+  return result[0];
+}
+
+export async function updateEmpleado(id: number, data: Partial<InsertSchEmpleado>): Promise<void> {
+  const db = await getDb();
+  await db.update(schEmpleados).set({ ...data, updatedAt: new Date() }).where(eq(schEmpleados.id, id));
+}
+
+export async function toggleEmpleadoStatus(id: number, activo: number): Promise<void> {
+  const db = await getDb();
+  await db.update(schEmpleados).set({ activo, updatedAt: new Date() }).where(eq(schEmpleados.id, id));
+}
+
+// Contratos
+export async function getContratosByEmpleado(empleadoId: number): Promise<SchContrato[]> {
+  const db = await getDb();
+  return db.select().from(schContratos)
+    .where(eq(schContratos.empleadoId, empleadoId))
+    .orderBy(desc(schContratos.createdAt));
+}
+
+export async function getContratoActivoByEmpleado(empleadoId: number): Promise<SchContrato | undefined> {
+  const db = await getDb();
+  const result = await db.select().from(schContratos)
+    .where(and(eq(schContratos.empleadoId, empleadoId), eq(schContratos.activo, 1)))
+    .limit(1);
+  return result[0];
+}
+
+export async function createContrato(data: InsertSchContrato): Promise<SchContrato> {
+  const db = await getDb();
+  // Desactivar contratos anteriores del mismo empleado
+  await db.update(schContratos)
+    .set({ activo: 0 })
+    .where(eq(schContratos.empleadoId, data.empleadoId));
+  const result = await db.insert(schContratos).values({ ...data, activo: 1 }).returning();
+  return result[0];
+}
+
+export async function updateContrato(id: number, data: Partial<InsertSchContrato>): Promise<void> {
+  const db = await getDb();
+  await db.update(schContratos).set({ ...data, updatedAt: new Date() }).where(eq(schContratos.id, id));
+}
+
+// Bloques de horario
+export async function getBloquesByContrato(contratoId: number): Promise<SchBloqueHorario[]> {
+  const db = await getDb();
+  return db.select().from(schBloquesHorario)
+    .where(eq(schBloquesHorario.contratoId, contratoId))
+    .orderBy(schBloquesHorario.diaSemana, schBloquesHorario.horaInicio);
+}
+
+export async function setBloques(contratoId: number, bloques: Omit<InsertSchBloqueHorario, "contratoId">[]): Promise<void> {
+  const db = await getDb();
+  // Reemplazar todos los bloques del contrato
+  await db.delete(schBloquesHorario).where(eq(schBloquesHorario.contratoId, contratoId));
+  if (bloques.length > 0) {
+    await db.insert(schBloquesHorario).values(bloques.map(b => ({ ...b, contratoId })));
+  }
+}
+
+// Vista semanal: obtener todos los bloques activos de la semana con info del empleado
+export async function getBloquesSemanales(): Promise<Array<SchBloqueHorario & { empleadoId: number; empleadoNombre: string; empleadoApellido: string }>> {
+  const db = await getDb();
+  const result = await db
+    .select({
+      id: schBloquesHorario.id,
+      contratoId: schBloquesHorario.contratoId,
+      diaSemana: schBloquesHorario.diaSemana,
+      horaInicio: schBloquesHorario.horaInicio,
+      horaFin: schBloquesHorario.horaFin,
+      createdAt: schBloquesHorario.createdAt,
+      empleadoId: schEmpleados.id,
+      empleadoNombre: schEmpleados.nombre,
+      empleadoApellido: schEmpleados.apellido,
+    })
+    .from(schBloquesHorario)
+    .innerJoin(schContratos, eq(schBloquesHorario.contratoId, schContratos.id))
+    .innerJoin(schEmpleados, eq(schContratos.empleadoId, schEmpleados.id))
+    .where(and(eq(schContratos.activo, 1), eq(schEmpleados.activo, 1)))
+    .orderBy(schBloquesHorario.diaSemana, schBloquesHorario.horaInicio);
+  return result;
+}

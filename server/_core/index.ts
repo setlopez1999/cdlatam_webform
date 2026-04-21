@@ -6,7 +6,7 @@ import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
-import { seedDefaultUsers, registerLocalAuthRoutes } from "../localAuth";
+import { seedDefaultUsers, seedDefaultRoles, registerLocalAuthRoutes } from "../localAuth";
 import { runMigrations, seedCatalogMeta } from "../db";
 import { registerDbManagementRoutes } from "./dbManagement";
 import { ENV } from "./env";
@@ -44,8 +44,10 @@ async function startServer() {
   // Seed catalog_meta (tablas fijas del sistema)
   seedCatalogMeta();
 
+  // Seed default roles (admin, manager, viewer, user, gestor_horarios)
+  await seedDefaultRoles().catch(err => console.error("[Seed] Roles failed:", err));
   // Seed default users (admin/1234 and usuario/5678)
-  await seedDefaultUsers().catch(err => console.error("[Seed] Failed:", err));
+  await seedDefaultUsers().catch(err => console.error("[Seed] Users failed:", err));
 
   // Custom REST auth routes
   registerLocalAuthRoutes(app);
@@ -59,9 +61,7 @@ async function startServer() {
   app.get("/config.js", (_req: Request, res: Response) => {
     res.setHeader("Content-Type", "application/javascript");
     res.setHeader("Cache-Control", "no-store"); // nunca cachear — siempre fresco
-    res.send(`window.__ENV__ = ${JSON.stringify({
-      APP_DEBUG: ENV.appDebug,
-    })};`);
+    res.send(`window.__ENV__ = ${JSON.stringify({ APP_DEBUG: ENV.appDebug, USE_API: ENV.useApi })};`);
   });
 
   // tRPC API

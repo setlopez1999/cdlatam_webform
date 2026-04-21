@@ -15,11 +15,12 @@ import type { User } from "../drizzle/schema";
 function createMockContext(overrides?: Partial<TrpcContext>): TrpcContext {
   const user: User = {
     id: 1,
-    openId: "test-user-001",
-    name: "Test User",
-    email: "test@example.com",
-    loginMethod: "manus",
+    username: "test-user-001",
+    passwordHash: "hash",
+    displayName: "Test User",
     role: "user",
+    roleId: null,
+    isActive: 1,
     createdAt: new Date(),
     updatedAt: new Date(),
     lastSignedIn: new Date(),
@@ -84,7 +85,7 @@ describe("auth.me", () => {
 
     expect(user).toBeDefined();
     expect(user?.id).toBe(1);
-    expect(user?.openId).toBe("test-user-001");
+    expect(user?.username).toBe("test-user-001");
   });
 
   it("returns null when not authenticated", async () => {
