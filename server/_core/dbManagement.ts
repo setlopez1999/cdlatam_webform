@@ -7,9 +7,10 @@ import { existsSync, writeFileSync } from "fs";
  * Útil para copias de seguridad rápidas y restauración manual.
  */
 export function registerDbManagementRoutes(app: Express) {
+  // Mismo path que usa db.ts: raíz del proyecto, no subcarpeta data/
   const dbPath = process.env.DATABASE_URL
     ? process.env.DATABASE_URL.replace(/^file:/, "")
-    : join(process.cwd(), "data", "gestion.db");
+    : join(process.cwd(), "gestion.db");
 
   // Exportar (Descargar) la base de datos
   app.get("/api/db/export", (_req: Request, res: Response) => {

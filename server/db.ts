@@ -411,8 +411,10 @@ export async function runMigrations() {
       rawDb.exec(`
         CREATE TABLE IF NOT EXISTS roles (
           id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
-          name TEXT NOT NULL UNIQUE,
-          description TEXT,
+          nombre TEXT NOT NULL UNIQUE,
+          label TEXT NOT NULL DEFAULT '',
+          descripcion TEXT,
+          activo INTEGER DEFAULT 1 NOT NULL,
           createdAt INTEGER DEFAULT (strftime('%s', 'now')) NOT NULL,
           updatedAt INTEGER DEFAULT (strftime('%s', 'now')) NOT NULL
         );
