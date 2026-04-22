@@ -12,10 +12,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { Users, Plus, Shield, User, Clock, Loader2, RefreshCw, Power, Pencil, Tag, Trash2, AlertTriangle } from "lucide-react";
+import { Users, Plus, Shield, User, Clock, Loader2, RefreshCw, Power, Pencil, Tag, Trash2, AlertTriangle, KeyRound } from "lucide-react";
 import { PageLayout } from "@/components/PageLayout";
 import { EditUserModal } from "@/components/EditUserModal";
 import { CreateUserModal } from "@/components/CreateUserModal";
+import { ChangeCredentialsModal } from "@/components/ChangeCredentialsModal";
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 type UserItem = {
@@ -44,6 +45,7 @@ export default function Usuarios() {
   // ── Estado modales usuarios ──
   const [showCreateUser, setShowCreateUser] = useState(false);
   const [editUser, setEditUser] = useState<UserItem | null>(null);
+  const [credentialsUser, setCredentialsUser] = useState<UserItem | null>(null);
 
   // ── Estado modales roles ──
   const [showCreateRole, setShowCreateRole] = useState(false);
@@ -237,6 +239,10 @@ export default function Usuarios() {
                         className="h-8 w-8 text-muted-foreground hover:text-foreground">
                         <Pencil className="w-4 h-4" />
                       </Button>
+                      <Button variant="ghost" size="icon" onClick={() => setCredentialsUser(u)} title="Cambiar contraseña o usuario"
+                        className="h-8 w-8 text-muted-foreground hover:text-sky-500 hover:bg-sky-500/10">
+                        <KeyRound className="w-4 h-4" />
+                      </Button>
                       <Button variant="ghost" size="icon" onClick={() => handleToggleStatus(u)} disabled={toggleStatusMut.isPending}
                         title={u.isActive ? "Desactivar" : "Activar"}
                         className={`h-8 w-8 ${u.isActive ? "text-orange-400 hover:text-orange-300 hover:bg-orange-500/10" : "text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10"}`}>
@@ -318,6 +324,16 @@ export default function Usuarios() {
           user={editUser}
           roles={roles as any[]}
           onClose={() => setEditUser(null)}
+          onSaved={() => refetchUsers()}
+        />
+      )}
+
+      {/* ── Modal Cambiar Credenciales (contraseña / username) ── */}
+      {credentialsUser && (
+        <ChangeCredentialsModal
+          key={credentialsUser.id}
+          user={credentialsUser}
+          onClose={() => setCredentialsUser(null)}
           onSaved={() => refetchUsers()}
         />
       )}

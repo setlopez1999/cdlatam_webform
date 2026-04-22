@@ -21,6 +21,7 @@ import {
   findUserById,
   toggleUserStatus,
   updateUser,
+  updateUserCredentials,
   getRoles,
   getRoleById,
   createRole,
@@ -230,6 +231,21 @@ export const ds_toggleLocalUserStatus = ds_toggleUserStatus;
 export async function ds_updateUser(id: number, data: { displayName?: string; roleId?: number | null; role?: string }) {
   if (USE_API) return apiFetch<any>(`/users/${id}`, { method: "PUT", body: JSON.stringify(data) });
   return updateUser(id, data);
+}
+
+/**
+ * Actualiza credenciales (username y/o passwordHash) de un usuario.
+ * Cuando USE_API=true apunta a PUT /users/:id/credentials.
+ */
+export async function ds_updateUserCredentials(
+  id: number,
+  data: { username?: string; passwordHash?: string },
+): Promise<void> {
+  if (USE_API) {
+    await apiFetch<void>(`/users/${id}/credentials`, { method: "PUT", body: JSON.stringify(data) });
+    return;
+  }
+  return updateUserCredentials(id, data);
 }
 
 // ─── Roles ────────────────────────────────────────────────────────────────────
