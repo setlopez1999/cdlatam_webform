@@ -244,7 +244,15 @@ export async function deleteCatalogRecord(tableName: string, id: number) {
 export async function bulkUpdateCatalogRecords(tableName: string, ids: number[], data: any) {
   if (!ids.length) return;
   const table = getCatalogTable(tableName);
-  if (!table) return; // tablas dinámicas no tienen bulk update por ahora
+  if (!table) {
+    // Tablas dinámicas (catalog_custom_*): usar SQL raw
+    const realTable = tableName.startsWith('catalog_custom_') ? tableName : `catalog_custom_${tableName}`;
+    const sets = Object.keys(data).map(k => `${k} = ?`).join(', ');
+    const placeholders = ids.map(() => '?').join(',');
+    const vals = [...Object.values(data), ...ids];
+    sqlite.prepare(`UPDATE "${realTable}" SET ${sets} WHERE id IN (${placeholders})`).run(...vals);
+    return;
+  }
   const db = await getDb();
   return await db.update(table).set(data).where(inArray(table.id, ids));
 }
