@@ -41,7 +41,7 @@ export function F1Servicios({ servicios, catalogs, moneda, onAdd, onRemove, onUp
 
         {/* Tabla con scroll horizontal — SelectContent usa portal para no quedar recortado */}
         <div className="overflow-x-auto rounded-lg border border-border/40">
-          <table className="w-full min-w-[920px] border-collapse text-xs">
+          <table className="w-full min-w-[1100px] border-collapse text-xs">
             <thead>
               <tr className="bg-muted/60 text-muted-foreground">
                 <th className="px-2 py-2 text-left font-medium w-8 border-b border-border/40">#</th>
@@ -49,10 +49,10 @@ export function F1Servicios({ servicios, catalogs, moneda, onAdd, onRemove, onUp
                 <th className="px-2 py-2 text-left font-medium w-[160px] border-b border-border/40">Solución</th>
                 <th className="px-2 py-2 text-left font-medium w-[160px] border-b border-border/40">Detalle Servicio</th>
                 <th className="px-2 py-2 text-left font-medium w-[110px] border-b border-border/40">Tipo Venta</th>
-                <th className="px-2 py-2 text-right font-medium w-[90px] border-b border-border/40">Valor Unit.</th>
-                <th className="px-2 py-2 text-right font-medium w-[60px] border-b border-border/40">Cant.</th>
-                <th className="px-2 py-2 text-right font-medium w-[90px] border-b border-border/40">Total</th>
-                <th className="px-2 py-2 text-left font-medium w-[100px] border-b border-border/40">Plazo</th>
+                <th className="px-2 py-2 text-right font-medium w-[105px] min-w-[105px] border-b border-border/40">Valor Unit.</th>
+                <th className="px-2 py-2 text-right font-medium w-[75px] min-w-[75px] border-b border-border/40">Cant.</th>
+                <th className="px-2 py-2 text-right font-medium w-[100px] border-b border-border/40">Total</th>
+                <th className="px-2 py-2 text-left font-medium w-[110px] border-b border-border/40">Plazo</th>
                 <th className="px-2 py-2 w-8 border-b border-border/40"></th>
               </tr>
             </thead>
@@ -120,10 +120,10 @@ export function F1Servicios({ servicios, catalogs, moneda, onAdd, onRemove, onUp
                   </td>
 
                   {/* Valor Unitario */}
-                  <td className="px-1 py-1">
+                  <td className="px-1 py-1 min-w-[105px]">
                     <Input
                       type="number"
-                      className="h-8 text-xs text-right w-full"
+                      className="h-8 text-xs text-right w-full min-w-[85px]"
                       placeholder="0.00"
                       value={servicio.precioUnitario || ""}
                       onChange={e => onUpdate(servicio.id, "precioUnitario", parseNumeric(e.target.value))}
@@ -131,10 +131,10 @@ export function F1Servicios({ servicios, catalogs, moneda, onAdd, onRemove, onUp
                   </td>
 
                   {/* Cantidad */}
-                  <td className="px-1 py-1">
+                  <td className="px-1 py-1 min-w-[75px]">
                     <Input
                       type="number"
-                      className="h-8 text-xs text-right w-full"
+                      className="h-8 text-xs text-right w-full min-w-[58px]"
                       placeholder="1"
                       value={servicio.cantidad || ""}
                       onChange={e => onUpdate(servicio.id, "cantidad", parseNumeric(e.target.value))}
