@@ -1,14 +1,18 @@
 /**
- * ActaFormasPago — Formas de Pago del Acta
- * Dos tablas separadas: Implementación y Mantención
- * Estructura exacta del Excel: ITEM | Tipo Venta | N°Cuotas | 1aCuota(Monto+Fecha) | 2aCuota | 3aCuota
+ * features/expedientes/f1/sections/F1FormasPago.tsx
+ *
+ * Obs. 8: Solo muestra la tabla de Implementación si hay servicios de tipo Implementación,
+ *         y la de Mantención solo si hay servicios de tipo Mantención.
+ * Obs. 9: El campo tipoVenta de cada fila se pre-selecciona automáticamente
+ *         según los tipos de venta presentes en serviciosContratados.
+ * Obs. 10: El campo Fecha de cada cuota tiene la opción "Contra entrega" además de fecha.
  */
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { FormSection } from "@/components/FormSection";
+import { FormSection, FieldGroup } from "@/components/FormSection";
 import { CreditCard, Plus, Trash2 } from "lucide-react";
-import type { ActaData, FormaPago } from "@/hooks/useFormStore";
+import type { F1Data, FormaPago } from "../../types";
 import { formatCurrency, getCurrencyCode, parseNumeric } from "@/lib/formatters";
 
 interface CatalogItem { value: string; label: string; }
@@ -17,11 +21,11 @@ interface Catalogs {
 }
 
 interface Props {
-  acta: ActaData;
+  data: F1Data;
   catalogs?: Catalogs;
   moneda?: string;
   onUpdate: (
-    type: "formasPagoImplementacion" | "formasPagoMantencion",
+    tipo: "formasPagoImplementacion" | "formasPagoMantencion",
     id: string,
     field: string,
     value: string | number
@@ -29,6 +33,44 @@ interface Props {
   onAdd?: (tipo: "formasPagoImplementacion" | "formasPagoMantencion") => void;
   onRemove?: (tipo: "formasPagoImplementacion" | "formasPagoMantencion", id: string) => void;
 }
+
+// ─── Subcomponente: campo de fecha con opción "Contra entrega" ────────────────
+
+interface FechaContraEntregaProps {
+  value: string;
+  onChange: (v: string) => void;
+}
+
+function FechaContraEntrega({ value, onChange }: FechaContraEntregaProps) {
+  const isContraEntrega = value === "contra_entrega";
+  return (
+    <div className="flex gap-1 items-center">
+      {!isContraEntrega && (
+        <Input
+          type="date"
+          className="h-7 text-xs border-0 bg-transparent focus-visible:ring-0 min-w-[110px]"
+          value={value}
+          onChange={e => onChange(e.target.value)}
+        />
+      )}
+      {isContraEntrega && (
+        <span className="text-xs text-muted-foreground italic px-1">Contra entrega</span>
+      )}
+      <Button
+        type="button"
+        variant={isContraEntrega ? "default" : "ghost"}
+        size="sm"
+        className="h-6 px-1.5 text-[10px] shrink-0"
+        onClick={() => onChange(isContraEntrega ? "" : "contra_entrega")}
+        title="Contra entrega"
+      >
+        CE
+      </Button>
+    </div>
+  );
+}
+
+// ─── Subcomponente: tabla de formas de pago ───────────────────────────────────
 
 interface PagoTableProps {
   title: string;
@@ -42,9 +84,13 @@ interface PagoTableProps {
   terceraCuotaLabel?: string;
 }
 
-function PagoTable({ title, items, tipo, catalogs, currencyCode = "USD", onUpdate, onAdd, onRemove, terceraCuotaLabel = "Tercera Cuota" }: PagoTableProps) {
-  const totalMonto = items.reduce((sum, i) =>
-    sum + i.primeraCuota.monto + i.segundaCuota.monto + i.terceraCuota.monto, 0);
+function PagoTable({
+  title, items, tipo, catalogs, currencyCode = "USD",
+  onUpdate, onAdd, onRemove, terceraCuotaLabel = "Tercera Cuota",
+}: PagoTableProps) {
+  const totalMonto = items.reduce(
+    (sum, i) => sum + i.primeraCuota.monto + i.segundaCuota.monto + i.terceraCuota.monto, 0
+  );
 
   return (
     <div className="space-y-2">
@@ -58,7 +104,7 @@ function PagoTable({ title, items, tipo, catalogs, currencyCode = "USD", onUpdat
       </div>
 
       <div className="overflow-x-auto rounded-lg border border-border/60">
-        <table className="w-full min-w-[780px] text-xs border-collapse">
+        <table className="w-full min-w-[860px] text-xs border-collapse">
           <thead>
             <tr className="bg-muted/60">
               <th className="border-b border-r border-border/60 px-2 py-2 text-left font-medium w-10">ITEM</th>
@@ -87,7 +133,7 @@ function PagoTable({ title, items, tipo, catalogs, currencyCode = "USD", onUpdat
               <tr key={pago.id} className="hover:bg-muted/20 transition-colors">
                 <td className="border-b border-r border-border/40 px-2 py-1 text-center text-muted-foreground">{idx + 1}</td>
 
-                {/* Tipo Venta — combobox BD */}
+                {/* Tipo Venta */}
                 <td className="border-b border-r border-border/40 px-1 py-0.5">
                   {catalogs?.tipoVenta && catalogs.tipoVenta.length > 0 ? (
                     <Select value={pago.tipoVenta} onValueChange={v => onUpdate(tipo, pago.id, "tipoVenta", v)}>
@@ -101,8 +147,9 @@ function PagoTable({ title, items, tipo, catalogs, currencyCode = "USD", onUpdat
                       </SelectContent>
                     </Select>
                   ) : (
-                    <Input className="h-7 text-xs border-0 bg-transparent focus-visible:ring-0" placeholder="Tipo venta"
-                      value={pago.tipoVenta} onChange={e => onUpdate(tipo, pago.id, "tipoVenta", e.target.value)} />
+                    <Input className="h-7 text-xs border-0 bg-transparent focus-visible:ring-0"
+                      placeholder="Tipo venta" value={pago.tipoVenta}
+                      onChange={e => onUpdate(tipo, pago.id, "tipoVenta", e.target.value)} />
                   )}
                 </td>
 
@@ -114,45 +161,49 @@ function PagoTable({ title, items, tipo, catalogs, currencyCode = "USD", onUpdat
                     onChange={e => onUpdate(tipo, pago.id, "nCuotas", parseInt(e.target.value) || 1)} />
                 </td>
 
-                {/* Primera Cuota: Monto + Fecha */}
+                {/* Primera Cuota: Monto + Fecha/CE */}
                 <td className="border-b border-r border-border/40 px-1 py-0.5">
-                  <Input type="number" min={0} className="h-7 text-xs text-right border-0 bg-transparent focus-visible:ring-0" placeholder="0"
-                    value={pago.primeraCuota.monto || ""}
+                  <Input type="number" min={0} className="h-7 text-xs text-right border-0 bg-transparent focus-visible:ring-0"
+                    placeholder="0" value={pago.primeraCuota.monto || ""}
                     onChange={e => onUpdate(tipo, pago.id, "primeraCuota.monto", parseNumeric(e.target.value))} />
                 </td>
                 <td className="border-b border-r border-border/40 px-1 py-0.5">
-                  <Input type="date" className="h-7 text-xs border-0 bg-transparent focus-visible:ring-0"
+                  <FechaContraEntrega
                     value={pago.primeraCuota.fecha}
-                    onChange={e => onUpdate(tipo, pago.id, "primeraCuota.fecha", e.target.value)} />
+                    onChange={v => onUpdate(tipo, pago.id, "primeraCuota.fecha", v)}
+                  />
                 </td>
 
-                {/* Segunda Cuota: Monto + Fecha */}
+                {/* Segunda Cuota: Monto + Fecha/CE */}
                 <td className="border-b border-r border-border/40 px-1 py-0.5">
-                  <Input type="number" min={0} className="h-7 text-xs text-right border-0 bg-transparent focus-visible:ring-0" placeholder="0"
-                    value={pago.segundaCuota.monto || ""}
+                  <Input type="number" min={0} className="h-7 text-xs text-right border-0 bg-transparent focus-visible:ring-0"
+                    placeholder="0" value={pago.segundaCuota.monto || ""}
                     onChange={e => onUpdate(tipo, pago.id, "segundaCuota.monto", parseNumeric(e.target.value))} />
                 </td>
                 <td className="border-b border-r border-border/40 px-1 py-0.5">
-                  <Input type="date" className="h-7 text-xs border-0 bg-transparent focus-visible:ring-0"
+                  <FechaContraEntrega
                     value={pago.segundaCuota.fecha}
-                    onChange={e => onUpdate(tipo, pago.id, "segundaCuota.fecha", e.target.value)} />
+                    onChange={v => onUpdate(tipo, pago.id, "segundaCuota.fecha", v)}
+                  />
                 </td>
 
-                {/* Tercera Cuota: Monto + Fecha */}
+                {/* Tercera Cuota: Monto + Fecha/CE */}
                 <td className="border-b border-r border-border/40 px-1 py-0.5">
-                  <Input type="number" min={0} className="h-7 text-xs text-right border-0 bg-transparent focus-visible:ring-0" placeholder="0"
-                    value={pago.terceraCuota.monto || ""}
+                  <Input type="number" min={0} className="h-7 text-xs text-right border-0 bg-transparent focus-visible:ring-0"
+                    placeholder="0" value={pago.terceraCuota.monto || ""}
                     onChange={e => onUpdate(tipo, pago.id, "terceraCuota.monto", parseNumeric(e.target.value))} />
                 </td>
                 <td className="border-b border-border/40 px-1 py-0.5">
-                  <Input type="date" className="h-7 text-xs border-0 bg-transparent focus-visible:ring-0"
+                  <FechaContraEntrega
                     value={pago.terceraCuota.fecha}
-                    onChange={e => onUpdate(tipo, pago.id, "terceraCuota.fecha", e.target.value)} />
+                    onChange={v => onUpdate(tipo, pago.id, "terceraCuota.fecha", v)}
+                  />
                 </td>
 
                 {onRemove && (
                   <td className="border-b border-l border-border/40 px-1 py-0.5 text-center">
-                    <Button type="button" variant="ghost" size="icon" className="h-6 w-6 text-destructive/60 hover:text-destructive"
+                    <Button type="button" variant="ghost" size="icon"
+                      className="h-6 w-6 text-destructive/60 hover:text-destructive"
                       onClick={() => onRemove(tipo, pago.id)}>
                       <Trash2 className="w-3 h-3" />
                     </Button>
@@ -179,35 +230,69 @@ function PagoTable({ title, items, tipo, catalogs, currencyCode = "USD", onUpdat
   );
 }
 
-export function F1FormasPago({ acta, catalogs, moneda, onUpdate, onAdd, onRemove }: Props) {
+// ─── Componente principal ─────────────────────────────────────────────────────
+
+// Valores de tipoVenta que activan cada tabla (case-insensitive match parcial)
+const IMPLEMENTACION_KEYWORDS = ["implementacion", "implementación", "impl"];
+const MANTENCION_KEYWORDS     = ["mantencion", "mantención", "mant", "mantención"];
+
+function matchesKeywords(value: string, keywords: string[]): boolean {
+  const v = value.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  return keywords.some(k => v.includes(k));
+}
+
+export function F1FormasPago({ data, catalogs, moneda, onUpdate, onAdd, onRemove }: Props) {
   const currencyCode = getCurrencyCode(moneda ?? "");
+
+  // Detectar qué tipos de venta están presentes en serviciosContratados
+  const tiposPresentes = data.serviciosContratados.map(s => s.tipoVenta);
+  const tieneImplementacion = tiposPresentes.some(t => matchesKeywords(t, IMPLEMENTACION_KEYWORDS));
+  const tieneMantencion     = tiposPresentes.some(t => matchesKeywords(t, MANTENCION_KEYWORDS));
+
+  // Si no hay servicios o ninguno coincide con impl/mant → no mostrar nada
+  const mostrarAlguna = tieneImplementacion || tieneMantencion;
+
+  if (!mostrarAlguna) {
+    return (
+      <FormSection title="Formas de Pago" icon={CreditCard} accent="indigo">
+        <p className="text-sm text-muted-foreground italic">
+          Agrega servicios de tipo <strong>Implementación</strong> o <strong>Mantención</strong> para habilitar las formas de pago.
+        </p>
+      </FormSection>
+    );
+  }
+
   return (
     <FormSection title="Formas de Pago" icon={CreditCard} accent="indigo">
       <div className="space-y-8">
-        <PagoTable
-          title="Formas de Pago Implementación"
-          items={acta.formasPagoImplementacion}
-          tipo="formasPagoImplementacion"
-          catalogs={catalogs}
-          currencyCode={currencyCode}
-          onUpdate={onUpdate}
-          onAdd={onAdd}
-          onRemove={onRemove}
-          terceraCuotaLabel="Tercera Cuota"
-        />
-        <div className="border-t border-border/40 pt-6">
+        {tieneImplementacion && (
           <PagoTable
-            title="Formas de Pago Mantención"
-            items={acta.formasPagoMantencion}
-            tipo="formasPagoMantencion"
+            title="Formas de Pago — Implementación"
+            items={data.formasPagoImplementacion}
+            tipo="formasPagoImplementacion"
             catalogs={catalogs}
             currencyCode={currencyCode}
             onUpdate={onUpdate}
             onAdd={onAdd}
             onRemove={onRemove}
-            terceraCuotaLabel="Tercera Cuota en adelante"
+            terceraCuotaLabel="Tercera Cuota"
           />
-        </div>
+        )}
+        {tieneMantencion && (
+          <div className={tieneImplementacion ? "border-t border-border/40 pt-6" : ""}>
+            <PagoTable
+              title="Formas de Pago — Mantención"
+              items={data.formasPagoMantencion}
+              tipo="formasPagoMantencion"
+              catalogs={catalogs}
+              currencyCode={currencyCode}
+              onUpdate={onUpdate}
+              onAdd={onAdd}
+              onRemove={onRemove}
+              terceraCuotaLabel="Tercera Cuota en adelante"
+            />
+          </div>
+        )}
       </div>
     </FormSection>
   );

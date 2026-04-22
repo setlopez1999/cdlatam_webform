@@ -186,11 +186,10 @@ function buildActaHTML(acta: ActaData): string {
 
   <!-- Encabezado: Sres + Atención + Texto introductorio -->
   <div class="section">
-    <div class="grid-4" style="margin-bottom:8px;">
+    <div class="grid-3" style="margin-bottom:8px;">
       ${field("Sres.", acta.sres)}
       ${field("Atención", acta.atencion)}
       ${field("Fecha", formatDate(acta.fecha))}
-      ${field("N° Acta", acta.noActa)}
     </div>
     <div class="intro-text">${textoIntro}</div>
   </div>

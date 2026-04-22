@@ -14,7 +14,7 @@ import { FileText, RotateCcw } from "lucide-react";
 import type { F1Data } from "../../types";
 
 const TEXTO_INTRODUCTORIO_DEFAULT =
-  "Tengo el agrado de comunicar nuestra aceptación a la propuesta comercial número en las condiciones y términos de la misma.";
+  "Por medio de la presente, confirmo la recepción y aprobación de la propuesta comercial, en los términos y condiciones aquí expresados.";
 
 export interface CatalogItem { value: string; label: string; }
 

@@ -34,7 +34,7 @@ export function F1Empresa({ data, onUpdate, catalogs }: Props) {
   const tiposDoc = catalogs?.documentoIdentidad?.length ? catalogs.documentoIdentidad : TIPOS_DOC_DEFAULT;
 
   return (
-    <FormSection title="Datos de la Empresa" icon={Building2} accent="indigo">
+    <FormSection title="Información Legal de Cliente" icon={Building2} accent="indigo">
       {/* Fila 1: Razón Social + Nombre Fantasía */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
         <FieldGroup label="Razón Social" required>
@@ -44,7 +44,7 @@ export function F1Empresa({ data, onUpdate, catalogs }: Props) {
             onChange={e => onUpdate({ razonSocial: e.target.value })}
           />
         </FieldGroup>
-        <FieldGroup label="Nombre de Fantasía">
+        <FieldGroup label="Nombre de Fantasía o Marca">
           <Input
             placeholder="Nombre comercial"
             value={data.nombreFantasia}
@@ -63,7 +63,7 @@ export function F1Empresa({ data, onUpdate, catalogs }: Props) {
             </SelectContent>
           </Select>
         </FieldGroup>
-        <FieldGroup label="RUC / DNI / RUT" required>
+        <FieldGroup label="Número de Identificación Fiscal" required>
           <Input
             id="f1-rucDniRut" placeholder="Número de identificación fiscal"
             value={data.rucDniRut}

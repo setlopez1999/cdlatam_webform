@@ -70,19 +70,26 @@ export interface F1Data {
   moneda: string;           // Catálogo
   // Contactos
   representanteLegal: string;
-  representanteDni: string;
+  representanteTipoDoc: string;      // Tipo de documento (obs. 6)
+  representanteDni: string;          // Número de Identificación Fiscal (obs. 5)
   representanteEmail: string;
-  representanteFono: string;
+  representanteTelefonoFijo: string;  // Teléfono fijo (obs. 7)
+  representanteTelefonoMovil: string; // Teléfono móvil (obs. 7)
   contactoTecnico: string;
   contactoTecnicoEmail: string;
-  contactoTecnicoFono: string;
+  contactoTecnicoTelefonoFijo: string;
+  contactoTecnicoTelefonoMovil: string;
   contactoFacturacion: string;
   contactoFacturacionEmail: string;
-  contactoFacturacionFono: string;
+  contactoFacturacionTelefonoFijo: string;
+  contactoFacturacionTelefonoMovil: string;
   // Servicios y pagos
   serviciosContratados: ServicioContratado[];
   formasPagoImplementacion: FormaPago[];
   formasPagoMantencion: FormaPago[];
+  // Consideraciones y cláusulas
+  consideracionesPersonalizadas: string[];  // ítems editables adicionales (obs. 11)
+  clausulasLegales: string;                 // texto libre de cláusulas legales
   // Firma
   firmaImagen?: string;     // base64 data URL
 }
@@ -91,10 +98,14 @@ export const F1_INITIAL: F1Data = {
   sres: "", noActa: "", atencion: "", activacionNueva: "", fecha: "",
   razonSocial: "", nombreFantasia: "", rucDniRut: "", tipoDocumento: "",
   direccionComercial: "", pais: "", moneda: "",
-  representanteLegal: "", representanteDni: "", representanteEmail: "", representanteFono: "",
-  contactoTecnico: "", contactoTecnicoEmail: "", contactoTecnicoFono: "",
-  contactoFacturacion: "", contactoFacturacionEmail: "", contactoFacturacionFono: "",
+  representanteLegal: "", representanteTipoDoc: "", representanteDni: "", representanteEmail: "",
+  representanteTelefonoFijo: "", representanteTelefonoMovil: "",
+  contactoTecnico: "", contactoTecnicoEmail: "",
+  contactoTecnicoTelefonoFijo: "", contactoTecnicoTelefonoMovil: "",
+  contactoFacturacion: "", contactoFacturacionEmail: "",
+  contactoFacturacionTelefonoFijo: "", contactoFacturacionTelefonoMovil: "",
   serviciosContratados: [], formasPagoImplementacion: [], formasPagoMantencion: [],
+  consideracionesPersonalizadas: [], clausulasLegales: "",
   firmaImagen: undefined,
 };
 

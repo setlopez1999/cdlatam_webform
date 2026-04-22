@@ -244,7 +244,7 @@ export default function F1Form({ expedienteId }: Props) {
       />
 
       <F1FormasPago
-        acta={data as any}
+        data={data}
         moneda={data.moneda}
         catalogs={{ tipoVenta: catalogs?.tipoVenta as any }}
         onUpdate={updateFormaPago}
@@ -252,7 +252,7 @@ export default function F1Form({ expedienteId }: Props) {
         onRemove={removeFormaPago}
       />
 
-      <F1Consideraciones acta={data as any} onUpdate={update as any} />
+      <F1Consideraciones data={data} onUpdate={update} />
 
       <F1Firmas data={data} onUpdate={update} />
 
