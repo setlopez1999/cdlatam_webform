@@ -1,0 +1,126 @@
+/**
+ * features/expedientes/f1/sections/F1Encabezado.tsx
+ *
+ * Sección de encabezado del Acta (F1).
+ * Campos: Sres (catálogo), Atención (catálogo), Texto introductorio, Fecha, N° Acta.
+ */
+import { useState } from "react";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { FormSection, FieldGroup } from "@/components/FormSection";
+import { FileText, RotateCcw } from "lucide-react";
+import type { F1Data } from "../../types";
+
+const TEXTO_INTRODUCTORIO_DEFAULT =
+  "Tengo el agrado de comunicar nuestra aceptación a la propuesta comercial número en las condiciones y términos de la misma.";
+
+export interface CatalogItem { value: string; label: string; }
+
+interface Props {
+  data: F1Data;
+  onUpdate: (partial: Partial<F1Data>) => void;
+  catalogs?: {
+    sres?: CatalogItem[];
+    atencion?: CatalogItem[];
+  };
+}
+
+export function F1Encabezado({ data, onUpdate, catalogs }: Props) {
+  const hasSres     = (catalogs?.sres?.length ?? 0) > 0;
+  const hasAtencion = (catalogs?.atencion?.length ?? 0) > 0;
+
+  const textoIntro = (data as any).textoIntroductorio ?? TEXTO_INTRODUCTORIO_DEFAULT;
+
+  return (
+    <FormSection title="Acta de Aceptación de Servicios" icon={FileText} accent="indigo">
+      {/* Fila 1: Sres + Atención */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+        <FieldGroup label="Sres." required>
+          {hasSres ? (
+            <Select value={data.sres} onValueChange={v => onUpdate({ sres: v })}>
+              <SelectTrigger id="f1-sres">
+                <SelectValue placeholder="Seleccionar empresa..." />
+              </SelectTrigger>
+              <SelectContent>
+                {catalogs!.sres!.map(s => (
+                  <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : (
+            <Input
+              id="f1-sres"
+              placeholder="Empresa destinataria"
+              value={data.sres}
+              onChange={e => onUpdate({ sres: e.target.value })}
+            />
+          )}
+        </FieldGroup>
+
+        <FieldGroup label="Atención">
+          {hasAtencion ? (
+            <Select value={data.atencion} onValueChange={v => onUpdate({ atencion: v })}>
+              <SelectTrigger id="f1-atencion">
+                <SelectValue placeholder="Seleccionar persona..." />
+              </SelectTrigger>
+              <SelectContent>
+                {catalogs!.atencion!.map(a => (
+                  <SelectItem key={a.value} value={a.value}>{a.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : (
+            <Input
+              id="f1-atencion"
+              placeholder="Nombre del destinatario"
+              value={data.atencion}
+              onChange={e => onUpdate({ atencion: e.target.value })}
+            />
+          )}
+        </FieldGroup>
+      </div>
+
+      {/* Texto introductorio editable */}
+      <div className="mb-4">
+        <div className="flex items-center justify-between mb-1.5">
+          <label className="text-xs font-medium text-muted-foreground">Texto introductorio</label>
+          <Button
+            type="button" variant="ghost" size="sm"
+            className="h-6 px-2 text-xs text-muted-foreground hover:text-foreground gap-1"
+            onClick={() => onUpdate({ textoIntroductorio: TEXTO_INTRODUCTORIO_DEFAULT } as any)}
+            title="Restaurar texto original"
+          >
+            <RotateCcw className="w-3 h-3" /> Restaurar
+          </Button>
+        </div>
+        <Textarea
+          value={textoIntro}
+          onChange={e => onUpdate({ textoIntroductorio: e.target.value } as any)}
+          rows={2}
+          className="text-sm resize-none bg-muted/30 border-border/50"
+          placeholder="Texto introductorio del acta..."
+        />
+      </div>
+
+      {/* Fila 2: Fecha + N° Acta */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <FieldGroup label="Fecha" required>
+          <Input
+            id="f1-fecha" type="date"
+            value={data.fecha}
+            onChange={e => onUpdate({ fecha: e.target.value })}
+          />
+        </FieldGroup>
+        <FieldGroup label="N° Acta" required>
+          <Input
+            id="f1-noActa" placeholder="Ej: 2026-001"
+            value={data.noActa}
+            onChange={e => onUpdate({ noActa: e.target.value })}
+          />
+        </FieldGroup>
+      </div>
+    </FormSection>
+  );
+}

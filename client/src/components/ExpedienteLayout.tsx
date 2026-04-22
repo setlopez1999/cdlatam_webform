@@ -5,12 +5,12 @@
  */
 
 import { useState, useEffect } from "react";
-import { useLocation, useRoute } from "wouter";
+import { useLocation } from "wouter";
 import { FileText, BarChart2, ClipboardList, Pencil, Check, X, ChevronLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
-import { useExpediente, type Expediente } from "../hooks/useFormStore";
+import { useExpedienteStore } from "@/features/expedientes/store";
+import type { FormStatus } from "@/features/expedientes/types";
 import { cn } from "@/lib/utils";
 
 interface Tab {
@@ -41,19 +41,20 @@ const TABS: Tab[] = [
   },
 ];
 
-function estadoBadge(exp: Expediente, tab: "acta" | "ep") {
-  const data = tab === "acta" ? exp.acta : exp.ep;
-  if (!data) return null;
-  const color =
-    data.status === "completado" ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30" :
-    data.status === "exportado"  ? "bg-blue-500/20 text-blue-400 border-blue-500/30" :
-                                   "bg-amber-500/20 text-amber-400 border-amber-500/30";
-  const label =
-    data.status === "completado" ? "Completo" :
-    data.status === "exportado"  ? "Exportado" : "Borrador";
+function StatusBadge({ status }: { status: FormStatus }) {
+  const styles: Record<FormStatus, string> = {
+    nuevo:        "bg-muted/60 text-muted-foreground border-border/40",
+    sin_guardar:  "bg-amber-500/20 text-amber-400 border-amber-500/30",
+    guardado:     "bg-emerald-500/20 text-emerald-400 border-emerald-500/30",
+  };
+  const labels: Record<FormStatus, string> = {
+    nuevo:        "Nuevo",
+    sin_guardar:  "Sin guardar",
+    guardado:     "Guardado",
+  };
   return (
-    <span className={cn("ml-1.5 text-[10px] px-1.5 py-0.5 rounded border font-medium", color)}>
-      {label}
+    <span className={cn("ml-1.5 text-[10px] px-1.5 py-0.5 rounded border font-medium", styles[status])}>
+      {labels[status]}
     </span>
   );
 }
@@ -66,8 +67,8 @@ interface Props {
 
 export default function ExpedienteLayout({ expedienteId, activeTab, children }: Props) {
   const [, navigate] = useLocation();
-  const { expedientes, renombrar } = useExpediente();
-  const expediente = expedientes.find(e => e.id === expedienteId);
+  const { getExpediente, renombrar } = useExpedienteStore();
+  const expediente = getExpediente(expedienteId);
 
   const [editando, setEditando] = useState(false);
   const [nombreTemp, setNombreTemp] = useState(expediente?.nombre ?? "");
@@ -156,7 +157,8 @@ export default function ExpedienteLayout({ expedienteId, activeTab, children }: 
           >
             {tab.icon}
             {tab.label}
-            {tab.id !== "resultados" && estadoBadge(expediente, tab.id)}
+            {tab.id === "acta" && <StatusBadge status={expediente.f1.status} />}
+            {tab.id === "ep"   && <StatusBadge status={expediente.f2.status} />}
           </button>
         ))}
       </div>

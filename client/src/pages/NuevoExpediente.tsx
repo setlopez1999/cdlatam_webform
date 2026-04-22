@@ -11,14 +11,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { useExpediente, loadExpedientes } from "../hooks/useFormStore";
+import { useExpedienteStore } from "@/features/expedientes/store";
 
 export default function NuevoExpediente() {
   const [, navigate] = useLocation();
-  const { crear } = useExpediente();
+  const { expedientes, crear } = useExpedienteStore();
 
   // Calcular nombre sugerido
-  const num = loadExpedientes().length + 1;
+  const num = expedientes.length + 1;
   const [nombre, setNombre] = useState(`Expediente #${num}`);
 
   const handleCrear = () => {

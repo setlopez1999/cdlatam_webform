@@ -5,7 +5,7 @@
 
 import { useParams } from "wouter";
 import ExpedienteLayout from "@/components/ExpedienteLayout";
-import ActaForm from "./ActaForm";
+import F1Form from "@/features/expedientes/f1/F1Form";
 
 export default function ExpedienteActa() {
   const params = useParams<{ id: string }>();
@@ -13,7 +13,7 @@ export default function ExpedienteActa() {
 
   return (
     <ExpedienteLayout expedienteId={expedienteId} activeTab="acta">
-      <ActaForm />
+      <F1Form expedienteId={expedienteId} />
     </ExpedienteLayout>
   );
 }
