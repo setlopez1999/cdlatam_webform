@@ -240,12 +240,15 @@ const TASA_IMPUESTO    = 0.19;  // 19%
  * Calcula el Resultado Evaluación (F3) a partir de los datos de F2.
  * Función pura — sin efectos secundarios, fácil de testear.
  */
-export function calcularResultadoF3(f2: F2Data): F3Calculado {
+export function calcularResultadoF3(f2: F2Data, f1?: F1Data): F3Calculado {
   const hardware    = f2.hardware    ?? [];
   const materiales  = f2.materiales  ?? [];
   const rrhh        = f2.rrhh        ?? [];
   const otrosGastos = f2.otrosGastos ?? [];
-  const montoProyecto = f2.montoProyecto ?? 0;
+  // F3-a: si se pasa f1, el ingreso viene de la suma de servicios contratados en F1
+  const montoProyecto = f1
+    ? (f1.serviciosContratados ?? []).reduce((s, sv) => s + (sv.total ?? 0), 0)
+    : (f2.montoProyecto ?? 0);
 
   const totalHardware   = hardware.reduce((s, r) => s + r.total, 0);
   const totalMateriales = materiales.reduce((s, r) => s + r.total, 0);
