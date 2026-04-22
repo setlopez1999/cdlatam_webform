@@ -104,11 +104,11 @@ function PagoTable({
       </div>
 
       <div className="overflow-x-auto rounded-lg border border-border/60">
-        <table className="w-full min-w-[860px] text-xs border-collapse">
+        <table className="w-full min-w-[1050px] text-xs border-collapse">
           <thead>
             <tr className="bg-muted/60">
               <th className="border-b border-r border-border/60 px-2 py-2 text-left font-medium w-10">ITEM</th>
-              <th className="border-b border-r border-border/60 px-2 py-2 text-left font-medium min-w-[120px]">Tipo Venta</th>
+              <th className="border-b border-r border-border/60 px-2 py-2 text-left font-medium w-[130px] min-w-[130px]">Tipo Venta</th>
               <th className="border-b border-r border-border/60 px-2 py-2 text-center font-medium w-16">N° Cuotas</th>
               <th className="border-b border-r border-border/60 px-2 py-2 text-center font-medium" colSpan={2}>Primera Cuota</th>
               <th className="border-b border-r border-border/60 px-2 py-2 text-center font-medium" colSpan={2}>Segunda Cuota</th>
@@ -119,12 +119,12 @@ function PagoTable({
               <th className="border-b border-r border-border/60 px-1 py-1"></th>
               <th className="border-b border-r border-border/60 px-1 py-1"></th>
               <th className="border-b border-r border-border/60 px-1 py-1"></th>
-              <th className="border-b border-r border-border/60 px-2 py-1 text-center font-normal">Monto</th>
-              <th className="border-b border-r border-border/60 px-2 py-1 text-center font-normal">Fecha</th>
-              <th className="border-b border-r border-border/60 px-2 py-1 text-center font-normal">Monto</th>
-              <th className="border-b border-r border-border/60 px-2 py-1 text-center font-normal">Fecha</th>
-              <th className="border-b border-r border-border/60 px-2 py-1 text-center font-normal">Monto</th>
-              <th className="border-b border-border/60 px-2 py-1 text-center font-normal">Fecha</th>
+              <th className="border-b border-r border-border/60 px-2 py-1 text-center font-normal w-[90px] min-w-[90px]">Monto</th>
+              <th className="border-b border-r border-border/60 px-2 py-1 text-center font-normal min-w-[140px]">Fecha</th>
+              <th className="border-b border-r border-border/60 px-2 py-1 text-center font-normal w-[90px] min-w-[90px]">Monto</th>
+              <th className="border-b border-r border-border/60 px-2 py-1 text-center font-normal min-w-[140px]">Fecha</th>
+              <th className="border-b border-r border-border/60 px-2 py-1 text-center font-normal w-[90px] min-w-[90px]">Monto</th>
+              <th className="border-b border-border/60 px-2 py-1 text-center font-normal min-w-[140px]">Fecha</th>
               {onRemove && <th className="border-b border-l border-border/60"></th>}
             </tr>
           </thead>
@@ -134,7 +134,7 @@ function PagoTable({
                 <td className="border-b border-r border-border/40 px-2 py-1 text-center text-muted-foreground">{idx + 1}</td>
 
                 {/* Tipo Venta */}
-                <td className="border-b border-r border-border/40 px-1 py-0.5">
+                <td className="border-b border-r border-border/40 px-1 py-0.5 min-w-[130px]">
                   {catalogs?.tipoVenta && catalogs.tipoVenta.length > 0 ? (
                     <Select value={pago.tipoVenta} onValueChange={v => onUpdate(tipo, pago.id, "tipoVenta", v)}>
                       <SelectTrigger className="h-7 text-xs border-0 bg-transparent focus:ring-0 max-w-full overflow-hidden">
@@ -162,12 +162,12 @@ function PagoTable({
                 </td>
 
                 {/* Primera Cuota: Monto + Fecha/CE */}
-                <td className="border-b border-r border-border/40 px-1 py-0.5">
-                  <Input type="number" min={0} className="h-7 text-xs text-right border-0 bg-transparent focus-visible:ring-0"
+                <td className="border-b border-r border-border/40 px-1 py-0.5 min-w-[90px]">
+                  <Input type="number" min={0} className="h-7 text-xs text-right border-0 bg-transparent focus-visible:ring-0 min-w-[72px]"
                     placeholder="0" value={pago.primeraCuota.monto || ""}
                     onChange={e => onUpdate(tipo, pago.id, "primeraCuota.monto", parseNumeric(e.target.value))} />
                 </td>
-                <td className="border-b border-r border-border/40 px-1 py-0.5">
+                <td className="border-b border-r border-border/40 px-1 py-0.5 min-w-[140px]">
                   <FechaContraEntrega
                     value={pago.primeraCuota.fecha}
                     onChange={v => onUpdate(tipo, pago.id, "primeraCuota.fecha", v)}
@@ -175,12 +175,12 @@ function PagoTable({
                 </td>
 
                 {/* Segunda Cuota: Monto + Fecha/CE */}
-                <td className="border-b border-r border-border/40 px-1 py-0.5">
-                  <Input type="number" min={0} className="h-7 text-xs text-right border-0 bg-transparent focus-visible:ring-0"
+                <td className="border-b border-r border-border/40 px-1 py-0.5 min-w-[90px]">
+                  <Input type="number" min={0} className="h-7 text-xs text-right border-0 bg-transparent focus-visible:ring-0 min-w-[72px]"
                     placeholder="0" value={pago.segundaCuota.monto || ""}
                     onChange={e => onUpdate(tipo, pago.id, "segundaCuota.monto", parseNumeric(e.target.value))} />
                 </td>
-                <td className="border-b border-r border-border/40 px-1 py-0.5">
+                <td className="border-b border-r border-border/40 px-1 py-0.5 min-w-[140px]">
                   <FechaContraEntrega
                     value={pago.segundaCuota.fecha}
                     onChange={v => onUpdate(tipo, pago.id, "segundaCuota.fecha", v)}
@@ -188,12 +188,12 @@ function PagoTable({
                 </td>
 
                 {/* Tercera Cuota: Monto + Fecha/CE */}
-                <td className="border-b border-r border-border/40 px-1 py-0.5">
-                  <Input type="number" min={0} className="h-7 text-xs text-right border-0 bg-transparent focus-visible:ring-0"
+                <td className="border-b border-r border-border/40 px-1 py-0.5 min-w-[90px]">
+                  <Input type="number" min={0} className="h-7 text-xs text-right border-0 bg-transparent focus-visible:ring-0 min-w-[72px]"
                     placeholder="0" value={pago.terceraCuota.monto || ""}
                     onChange={e => onUpdate(tipo, pago.id, "terceraCuota.monto", parseNumeric(e.target.value))} />
                 </td>
-                <td className="border-b border-border/40 px-1 py-0.5">
+                <td className="border-b border-border/40 px-1 py-0.5 min-w-[140px]">
                   <FechaContraEntrega
                     value={pago.terceraCuota.fecha}
                     onChange={v => onUpdate(tipo, pago.id, "terceraCuota.fecha", v)}
