@@ -31,6 +31,8 @@ import {
   ds_createUser,
   ds_toggleUserStatus,
   ds_updateUser,
+  ds_updateUserCredentials,
+  ds_findUserById,
   ds_getRoles,
   ds_createRole,
   ds_updateRole,
@@ -294,6 +296,82 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         await requireRole(ctx, "admin");
         await ds_toggleUserStatus(input.id, input.isActive);
+        return { success: true };
+      }),
+
+    /**
+     * Cambia la contraseña de un usuario.
+     * - Admin: puede cambiar la de cualquier usuario sin verificar la actual.
+     * - Usuario normal: solo puede cambiar la suya propia, debe proveer la contraseña actual.
+     */
+    changePassword: protectedProcedure
+      .input(z.object({
+        targetUserId: z.number().int().positive(),
+        currentPassword: z.string().optional(), // requerido si no es admin
+        newPassword: z.string().min(4, "La contraseña debe tener al menos 4 caracteres"),
+        confirmPassword: z.string().min(4),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const isAdmin = ctx.localUser?.role === "admin";
+        const isSelf = ctx.localUser?.id === input.targetUserId;
+
+        // Solo admin puede cambiar la contraseña de otro usuario
+        if (!isSelf && !isAdmin) {
+          throw new Error("No tenés permiso para cambiar la contraseña de otro usuario");
+        }
+
+        // Validar que las contraseñas coincidan
+        if (input.newPassword !== input.confirmPassword) {
+          throw new Error("Las contraseñas no coinciden");
+        }
+
+        // Si no es admin cambiando a otro, verificar contraseña actual
+        if (!isAdmin || isSelf) {
+          if (!input.currentPassword) {
+            throw new Error("Debés ingresar tu contraseña actual");
+          }
+          const target = await ds_findUserById(input.targetUserId);
+          if (!target) throw new Error("Usuario no encontrado");
+          const valid = await verifyPassword(input.currentPassword, target.passwordHash);
+          if (!valid) throw new Error("La contraseña actual es incorrecta");
+        }
+
+        const passwordHash = await hashPassword(input.newPassword);
+        await ds_updateUserCredentials(input.targetUserId, { passwordHash });
+        return { success: true };
+      }),
+
+    /**
+     * Cambia el username de un usuario.
+     * - Admin: puede cambiar el de cualquier usuario.
+     * - Usuario normal: solo puede cambiar el suyo propio.
+     * Verifica que el nuevo username no esté ya en uso.
+     */
+    changeUsername: protectedProcedure
+      .input(z.object({
+        targetUserId: z.number().int().positive(),
+        newUsername: z
+          .string()
+          .min(3, "El usuario debe tener al menos 3 caracteres")
+          .max(64, "El usuario no puede superar 64 caracteres")
+          .regex(/^[a-zA-Z0-9_.-]+$/, "Solo se permiten letras, números, puntos, guiones y guiones bajos"),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const isAdmin = ctx.localUser?.role === "admin";
+        const isSelf = ctx.localUser?.id === input.targetUserId;
+
+        // Solo admin puede cambiar el username de otro usuario
+        if (!isSelf && !isAdmin) {
+          throw new Error("No tenés permiso para cambiar el usuario de otra persona");
+        }
+
+        // Verificar que el nuevo username no esté en uso
+        const existing = await ds_findUserByUsername(input.newUsername);
+        if (existing && existing.id !== input.targetUserId) {
+          throw new Error(`El nombre de usuario "${input.newUsername}" ya está en uso`);
+        }
+
+        await ds_updateUserCredentials(input.targetUserId, { username: input.newUsername });
         return { success: true };
       }),
   }),

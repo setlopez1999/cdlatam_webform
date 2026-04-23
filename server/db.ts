@@ -576,6 +576,18 @@ export async function updateUser(id: number, data: { displayName?: string; roleI
   return await db.update(users).set({ ...data, updatedAt: new Date() }).where(eq(users.id, id));
 }
 
+/**
+ * Actualiza credenciales de un usuario (username y/o passwordHash).
+ * Separado de updateUser intencionalmente: no mezcla datos de perfil con credenciales.
+ */
+export async function updateUserCredentials(
+  id: number,
+  data: { username?: string; passwordHash?: string },
+): Promise<void> {
+  const db = await getDb();
+  await db.update(users).set({ ...data, updatedAt: new Date() }).where(eq(users.id, id));
+}
+
 // --- ROLES --------------------------------------------------------------------
 
 export async function getRoles() {
