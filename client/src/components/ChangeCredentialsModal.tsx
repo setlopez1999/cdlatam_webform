@@ -8,6 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { KeyRound, AtSign, Loader2, Eye, EyeOff } from "lucide-react";
 import { useLocalAuth } from "@/hooks/useLocalAuth";
+import { useCan } from "@/hooks/useCan";
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
@@ -41,10 +42,17 @@ const INITIAL_USERNAME_FORM = {
 
 // ─── Componente ───────────────────────────────────────────────────────────────
 
+/**
+ * Modal para cambiar contraseña o username de un usuario.
+ * Permisos controlados por ACTION_PERMISSIONS en permissions.ts.
+ */
 export function ChangeCredentialsModal({ user, onClose, onSaved }: Props) {
-  const { currentUser, isAdmin } = useLocalAuth();
+  const { currentUser } = useLocalAuth();
+  const can = useCan();
   // Normalizar a number para evitar fallos de comparación string vs number
   const isSelf = currentUser ? Number(currentUser.id) === Number(user.id) : false;
+  // Admin puede cambiar credenciales de otros sin verificar contraseña actual
+  const canChangeOthers = can("users:change_credentials_others");
 
   // ── Estado formulario contraseña ──
   const [passwordForm, setPasswordForm] = useState(INITIAL_PASSWORD_FORM);
@@ -103,8 +111,8 @@ export function ChangeCredentialsModal({ user, onClose, onSaved }: Props) {
     });
   };
 
-  // Admin cambiando a otro usuario no necesita contraseña actual
-  const requiresCurrentPassword = !isAdmin || isSelf;
+  // Si puede cambiar credenciales de otros Y no es su propia cuenta → no requiere contraseña actual
+  const requiresCurrentPassword = !canChangeOthers || isSelf;
 
   const displayName = user.displayName ?? user.username;
 
