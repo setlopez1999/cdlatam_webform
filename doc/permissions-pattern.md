@@ -1,39 +1,263 @@
 # Patrón de Centralización de Permisos y Roles (RBAC)
 
-Este documento describe el patrón arquitectónico implementado para centralizar la gestión de permisos y roles en el frontend de la aplicación. El objetivo principal de este patrón es establecer una única fuente de verdad que controle el acceso a rutas, la generación de la navegación y la visibilidad de elementos en la interfaz de usuario.
+Este documento describe el patrón arquitectónico implementado para centralizar la gestión de permisos y roles en el frontend. Su propósito es servir como referencia para cualquier desarrollador (o agente) que necesite agregar rutas, acciones o roles nuevos al proyecto.
 
-## Problema Original
+---
 
-Antes de la implementación de este patrón, la lógica de permisos se encontraba dispersa en múltiples archivos del proyecto. Las rutas protegidas definían sus requisitos de acceso directamente en el componente `App.tsx` mediante propiedades como `adminOnly` o `requiredRole`. Por otro lado, la barra de navegación lateral (`AppLayout.tsx`) mantenía sus propias listas estáticas de elementos (`ADMIN_NAV_ITEMS`, `ROLE_NAV_ITEMS`), lo que obligaba a los desarrolladores a duplicar la lógica de acceso. Además, los componentes individuales verificaban los permisos utilizando comprobaciones directas sobre el rol del usuario, lo que dificultaba la auditoría y el mantenimiento del sistema.
+## El problema que resuelve
 
-## Solución Implementada
+Antes de este patrón, la lógica de permisos estaba regada en tres lugares distintos y sin conexión entre sí:
 
-La solución consiste en centralizar toda la configuración de permisos en un único archivo, `client/src/config/permissions.ts`. Este archivo actúa como el diccionario maestro de la aplicación, definiendo qué roles tienen acceso a qué recursos.
+| Archivo | Qué tenía hardcodeado |
+|---|---|
+| `App.tsx` | `adminOnly`, `requiredRole` en cada `<Route>` |
+| `AppLayout.tsx` | `ADMIN_NAV_ITEMS`, `ROLE_NAV_ITEMS` como arrays estáticos |
+| Componentes | `if (isAdmin)`, `if (role === "gestor_horarios")` directo |
 
-### Estructura de la Fuente de Verdad
+Si querías saber qué puede hacer el rol `manager`, tenías que buscar en los tres archivos. Si agregabas una ruta nueva, tenías que actualizar al menos dos archivos. Este patrón elimina esa duplicación.
 
-El archivo `permissions.ts` exporta dos diccionarios principales. El primero es `ROUTE_PERMISSIONS`, que mapea las rutas de la aplicación con los roles autorizados para acceder a ellas, además de incluir metadatos para la generación de la interfaz, como etiquetas e iconos. El segundo es `ACTION_PERMISSIONS`, que define permisos granulares para acciones específicas dentro de los componentes, como la capacidad de gestionar usuarios o editar catálogos.
+---
 
-Para manejar casos especiales, se definieron dos constantes: `ROLE_ADMIN`, que representa el acceso de superusuario, y `ROLE_ANY`, que permite el acceso a cualquier usuario autenticado independientemente de sus roles específicos.
+## Estructura de archivos
 
-### Integración con el Enrutador
+```
+client/src/
+├── config/
+│   ├── permissions.ts          ← FUENTE ÚNICA DE VERDAD (editar solo aquí)
+│   └── routes/
+│       └── index.ts            ← Re-exporta desde permissions.ts (compatibilidad)
+├── hooks/
+│   └── useCan.ts               ← Hook para verificar acciones en componentes
+├── App.tsx                     ← ProtectedRoute lee de permissions.ts
+└── components/
+    └── AppLayout.tsx           ← Sidebar generado dinámicamente desde permissions.ts
+```
 
-El componente `ProtectedRoute` en `App.tsx` fue refactorizado para consumir directamente `ROUTE_PERMISSIONS`. En lugar de recibir los roles requeridos como propiedades, ahora recibe únicamente la ruta que intenta proteger. El componente consulta el diccionario centralizado, evalúa los roles del usuario actual contra los roles requeridos por la ruta, y determina si debe permitir el acceso o redirigir al usuario.
+---
 
-### Generación Dinámica de la Navegación
+## La fuente única de verdad: `permissions.ts`
 
-El componente `AppLayout.tsx` fue modificado para eliminar las listas estáticas de elementos de navegación. En su lugar, utiliza una función auxiliar exportada desde `permissions.ts` que filtra `ROUTE_PERMISSIONS` basándose en los roles del usuario actual y la propiedad `showInNav`. Esto garantiza que la barra lateral siempre refleje exactamente las rutas a las que el usuario tiene acceso, eliminando cualquier posibilidad de desincronización entre la navegación y el enrutador.
+El archivo `client/src/config/permissions.ts` tiene dos diccionarios:
 
-### Control de Acceso en Componentes
+### 1. `ROUTE_PERMISSIONS` — Control de acceso a rutas
 
-Para reemplazar las comprobaciones directas de roles en los componentes, se creó el hook personalizado `useCan`. Este hook expone una función que recibe el identificador de una acción (definida en `ACTION_PERMISSIONS`) y devuelve un valor booleano indicando si el usuario actual tiene permiso para ejecutarla. Esto abstrae la lógica de evaluación de roles y permite a los componentes centrarse en la presentación.
+Define quién puede entrar a cada path y si aparece en el sidebar.
 
-## Flujo de Trabajo para Futuras Modificaciones
+```ts
+export const ROUTE_PERMISSIONS: Record<string, RoutePermission> = {
 
-Cuando sea necesario agregar una nueva ruta protegida o una nueva acción restringida, el flujo de trabajo es el siguiente:
+  // Solo admin
+  "/usuarios": {
+    roles: [ROLE_ADMIN],        // ROLE_ADMIN = "admin"
+    label: "Usuarios",
+    icon: "Users",              // nombre del icono de lucide-react
+    showInNav: true,            // aparece en el sidebar
+  },
 
-1. **Definir el permiso:** Abrir `client/src/config/permissions.ts` y agregar la nueva entrada en `ROUTE_PERMISSIONS` o `ACTION_PERMISSIONS`, especificando los roles autorizados.
-2. **Registrar la ruta:** Si se trata de una ruta, agregar el componente correspondiente en el `Switch` de `App.tsx`, utilizando `ProtectedRoute` y pasando la ruta exacta definida en el paso anterior.
-3. **Aplicar en componentes:** Si se trata de una acción, utilizar el hook `useCan` en el componente correspondiente para condicionar la renderización de elementos o la ejecución de funciones.
+  // Por rol RBAC específico
+  "/gestor-horarios": {
+    roles: ["gestor_horarios"],
+    label: "Gestor de Horarios",
+    icon: "CalendarClock",
+    showInNav: true,
+  },
 
-Este patrón asegura que cualquier cambio en la política de acceso se realice en un solo lugar, propagándose automáticamente a todas las capas de la aplicación frontend.
+  // Cualquier usuario autenticado
+  "/home": {
+    roles: [ROLE_ANY],          // ROLE_ANY = "*"
+    label: "Inicio",
+    icon: "LayoutDashboard",
+    showInNav: true,
+  },
+
+  // Ruta que no aparece en sidebar pero sí está protegida
+  "/base-datos/spreadsheet": {
+    roles: [ROLE_ADMIN],
+    label: "Spreadsheet",
+    showInNav: false,
+    fullscreen: true,           // se renderiza sin AppLayout
+  },
+};
+```
+
+### 2. `ACTION_PERMISSIONS` — Control de acciones en componentes
+
+Define qué roles pueden ejecutar acciones específicas dentro de la UI.
+
+```ts
+export const ACTION_PERMISSIONS: Record<string, ActionPermission> = {
+
+  "users:manage": {
+    roles: [ROLE_ADMIN],
+    description: "Crear, editar, activar/desactivar usuarios",
+  },
+
+  "users:change_credentials_others": {
+    roles: [ROLE_ADMIN],
+    description: "Cambiar contraseña o username de otro usuario",
+  },
+
+  "expedientes:view_all": {
+    roles: [ROLE_ADMIN, "manager"],
+    description: "Ver expedientes de todos los usuarios",
+  },
+};
+```
+
+---
+
+## Cómo funciona cada capa
+
+### Capa 1: Protección de rutas (`App.tsx`)
+
+`ProtectedRoute` recibe el `routePath` y consulta `ROUTE_PERMISSIONS` automáticamente. No hay que pasarle roles.
+
+```tsx
+// ✅ Así se hace ahora
+<Route path="/usuarios">
+  {() => <ProtectedRoute component={Usuarios} routePath="/usuarios" />}
+</Route>
+
+// ❌ Así era antes (NO usar)
+<Route path="/usuarios">
+  {() => <ProtectedRoute component={Usuarios} adminOnly />}
+</Route>
+```
+
+Si la ruta no está en `ROUTE_PERMISSIONS`, `ProtectedRoute` deniega el acceso y lanza un `console.warn`.
+
+### Capa 2: Sidebar (`AppLayout.tsx`)
+
+El sidebar se genera solo a partir de `ROUTE_PERMISSIONS`. No hay que tocar `AppLayout.tsx` para agregar items al menú — solo poner `showInNav: true` en `permissions.ts`.
+
+```
+Admin ve:          Usuario normal ve:    Usuario con gestor_horarios ve:
+─────────────      ─────────────────     ───────────────────────────────
+Dashboard          Inicio                Inicio
+Base de Datos      Historial             Historial
+Usuarios                                 Gestor de Horarios
+Historial
+```
+
+### Capa 3: Acciones en componentes (`useCan`)
+
+El hook `useCan` permite verificar permisos de acciones sin hardcodear roles en los componentes.
+
+```tsx
+import { useCan } from "@/hooks/useCan";
+
+function Usuarios() {
+  const can = useCan();
+
+  return (
+    <div>
+      {/* Solo admin ve el botón de crear usuario */}
+      {can("users:manage") && <BtnCrearUsuario />}
+
+      {/* Solo admin puede cambiar credenciales de otros */}
+      {can("users:change_credentials_others") && <BtnCambiarPass />}
+    </div>
+  );
+}
+```
+
+---
+
+## Guía: cómo agregar algo nuevo
+
+### Caso A — Nueva ruta protegida
+
+**Paso 1:** Agregar en `permissions.ts`:
+```ts
+"/reportes": {
+  roles: ["admin", "manager"],
+  label: "Reportes",
+  icon: "BarChart3",
+  showInNav: true,
+},
+```
+
+**Paso 2:** Registrar en `App.tsx`:
+```tsx
+<Route path="/reportes">
+  {() => <ProtectedRoute component={Reportes} routePath="/reportes" />}
+</Route>
+```
+
+**Resultado:** La ruta queda protegida Y el sidebar la muestra automáticamente para admin y manager. No hay que tocar `AppLayout.tsx`.
+
+---
+
+### Caso B — Nueva acción restringida en un componente
+
+**Paso 1:** Agregar en `permissions.ts`:
+```ts
+"reportes:exportar": {
+  roles: ["admin", "manager"],
+  description: "Exportar reportes a Excel o PDF",
+},
+```
+
+**Paso 2:** Usar en el componente:
+```tsx
+const can = useCan();
+{can("reportes:exportar") && <BtnExportar />}
+```
+
+---
+
+### Caso C — Nuevo rol RBAC
+
+**Paso 1:** Agregar el tipo en `permissions.ts`:
+```ts
+export type RbacRole = "gestor_horarios" | "manager" | "viewer" | "supervisor"; // ← agregar acá
+```
+
+**Paso 2:** Asignarlo a las rutas o acciones que corresponda:
+```ts
+"/supervisores": {
+  roles: ["supervisor", ROLE_ADMIN],
+  label: "Supervisores",
+  icon: "UserCheck",
+  showInNav: true,
+},
+```
+
+**Paso 3:** Agregar el icono en el `ICON_MAP` de `AppLayout.tsx` si es uno nuevo:
+```ts
+const ICON_MAP: Record<string, LucideIcon> = {
+  // ...existentes...
+  UserCheck,  // ← agregar acá
+};
+```
+
+**Paso 4:** Crear el rol en la BD (tabla `roles`) y asignarlo al usuario.
+
+---
+
+## Roles especiales
+
+| Constante | Valor | Significado |
+|---|---|---|
+| `ROLE_ADMIN` | `"admin"` | Superusuario — siempre tiene acceso a todo |
+| `ROLE_ANY` | `"*"` | Cualquier usuario autenticado tiene acceso |
+
+La función `evaluatePermission(userRoles, required)` aplica estas reglas:
+1. Si el usuario tiene el rol `"admin"` → acceso garantizado sin importar `required`
+2. Si `required` incluye `"*"` → acceso para cualquier autenticado
+3. En otro caso → el usuario debe tener al menos uno de los roles en `required`
+
+---
+
+## Resumen visual del flujo
+
+```
+permissions.ts
+     │
+     ├─── ROUTE_PERMISSIONS ──→ App.tsx (ProtectedRoute)
+     │                       └→ AppLayout.tsx (sidebar dinámico)
+     │
+     └─── ACTION_PERMISSIONS ─→ useCan() hook ──→ componentes
+```
+
+Cualquier cambio de política de acceso se hace **solo en `permissions.ts`** y se propaga automáticamente al resto.
