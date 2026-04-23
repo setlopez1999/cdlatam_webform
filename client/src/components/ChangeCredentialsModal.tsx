@@ -42,8 +42,9 @@ const INITIAL_USERNAME_FORM = {
 // ─── Componente ───────────────────────────────────────────────────────────────
 
 export function ChangeCredentialsModal({ user, onClose, onSaved }: Props) {
-  const { user: currentUser, isAdmin } = useLocalAuth();
-  const isSelf = currentUser?.id === user.id;
+  const { currentUser, isAdmin } = useLocalAuth();
+  // Normalizar a number para evitar fallos de comparación string vs number
+  const isSelf = currentUser ? Number(currentUser.id) === Number(user.id) : false;
 
   // ── Estado formulario contraseña ──
   const [passwordForm, setPasswordForm] = useState(INITIAL_PASSWORD_FORM);

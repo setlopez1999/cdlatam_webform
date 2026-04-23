@@ -313,7 +313,7 @@ export const appRouter = router({
       }))
       .mutation(async ({ ctx, input }) => {
         const isAdmin = ctx.localUser?.role === "admin";
-        const isSelf = ctx.localUser?.id === input.targetUserId;
+        const isSelf = Number(ctx.localUser?.id) === Number(input.targetUserId);
 
         // Solo admin puede cambiar la contraseña de otro usuario
         if (!isSelf && !isAdmin) {
@@ -358,7 +358,7 @@ export const appRouter = router({
       }))
       .mutation(async ({ ctx, input }) => {
         const isAdmin = ctx.localUser?.role === "admin";
-        const isSelf = ctx.localUser?.id === input.targetUserId;
+        const isSelf = Number(ctx.localUser?.id) === Number(input.targetUserId);
 
         // Solo admin puede cambiar el username de otro usuario
         if (!isSelf && !isAdmin) {
