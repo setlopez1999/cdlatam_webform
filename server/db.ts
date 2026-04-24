@@ -413,8 +413,8 @@ export async function runMigrations() {
   // Paso 0: Migrar schema viejo automáticamente si es necesario (idempotente)
   autoMigrateUsersSchemaIfNeeded();
 
+  // Paso 1: Intentar migración estándar de Drizzle
   try {
-    // Intentar migración estándar de Drizzle primero
     const db = await getDb();
     migrate(db, { migrationsFolder: join(process.cwd(), "drizzle", "migrations") });
     console.log("[DB] Migrations applied successfully");
@@ -536,6 +536,21 @@ export async function runMigrations() {
     } catch (fallbackError) {
       console.error("[DB] Fallback schema creation also failed:", fallbackError);
     }
+  }
+
+  // Paso 2 (post-migración): garantizar roles nuevos en BDs ya migradas
+  // INSERT OR IGNORE es idempotente — seguro de correr siempre al arrancar
+  try {
+    sqlite.exec(`
+      INSERT OR IGNORE INTO roles (nombre, label, descripcion, activo) VALUES
+        ('gestor_horarios',       'Gestor de Horarios',    'Acceso al modulo de gestion de horarios', 1),
+        ('perfil_full',           'Perfil Full',           'Acceso completo: F1-Acta, F2-EP, Resultados e Implementacion', 1),
+        ('perfil_ventas',         'Perfil Ventas',         'Acceso restringido unicamente al modulo F1-Acta', 1),
+        ('perfil_implementacion', 'Perfil Implementacion', 'Acceso restringido unicamente al modulo de Implementacion', 1);
+    `);
+    console.log("[DB] Profile roles ensured (INSERT OR IGNORE)");
+  } catch (rolesErr: any) {
+    console.warn("[DB] Could not ensure profile roles:", rolesErr?.message ?? rolesErr);
   }
 }
 

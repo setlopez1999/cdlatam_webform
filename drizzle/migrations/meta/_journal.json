@@ -29,6 +29,13 @@
       "when": 1745186400000,
       "tag": "0003_users_schema_v2",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1745532000000,
+      "tag": "0004_add_profile_roles",
+      "breakpoints": true
     }
   ]
 }
