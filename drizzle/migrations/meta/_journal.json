@@ -36,6 +36,13 @@
       "when": 1745532000000,
       "tag": "0004_add_profile_roles",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1745535600000,
+      "tag": "0005_remove_legacy_roles",
+      "breakpoints": true
     }
   ]
 }

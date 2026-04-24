@@ -353,8 +353,6 @@ function autoMigrateUsersSchemaIfNeeded(): void {
         -- Insertar roles base
         INSERT OR IGNORE INTO roles (nombre, label, descripcion, activo) VALUES
           ('admin',                 'Administrador',        'Acceso total al sistema', 1),
-          ('manager',               'Gerente',              'Puede ver todo, no puede gestionar usuarios', 1),
-          ('viewer',                'Solo lectura',         'Acceso de solo lectura', 1),
           ('user',                  'Usuario',              'Acceso basico al sistema', 1),
           ('gestor_horarios',       'Gestor de Horarios',   'Acceso al modulo de gestion de horarios', 1),
           ('perfil_full',           'Perfil Full',          'Acceso completo: F1-Acta, F2-EP, Resultados e Implementacion', 1),
@@ -547,6 +545,8 @@ export async function runMigrations() {
         ('perfil_full',           'Perfil Full',           'Acceso completo: F1-Acta, F2-EP, Resultados e Implementacion', 1),
         ('perfil_ventas',         'Perfil Ventas',         'Acceso restringido unicamente al modulo F1-Acta', 1),
         ('perfil_implementacion', 'Perfil Implementacion', 'Acceso restringido unicamente al modulo de Implementacion', 1);
+      -- Eliminar roles obsoletos (viewer y manager ya no se usan)
+      DELETE FROM roles WHERE nombre IN ('viewer', 'manager');
     `);
     console.log("[DB] Profile roles ensured (INSERT OR IGNORE)");
   } catch (rolesErr: any) {
