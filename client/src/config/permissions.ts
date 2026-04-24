@@ -18,9 +18,12 @@
  *  - "*"      → cualquier usuario autenticado tiene acceso
  *
  * ROLES RBAC (definidos en la tabla `roles` de la BD)
- *  - "gestor_horarios" → acceso a la pantalla de Gestor de Horarios
- *  - "manager"         → puede ver todo, no puede gestionar usuarios
- *  - "viewer"          → acceso de solo lectura
+ *  - "gestor_horarios"       → acceso a la pantalla de Gestor de Horarios
+ *  - "manager"               → puede ver todo, no puede gestionar usuarios
+ *  - "viewer"                → acceso de solo lectura
+ *  - "perfil_full"           → acceso completo a F1-Acta, F2-EP, Resultados e Implementación
+ *  - "perfil_ventas"         → acceso restringido únicamente a F1-Acta
+ *  - "perfil_implementacion" → acceso restringido únicamente a Implementación
  *
  * USO EN COMPONENTES
  *  import { useCan } from "@/hooks/useCan";
@@ -44,7 +47,7 @@ export const ROLE_ANY = "*" as const;
 export const ROLE_ADMIN = "admin" as const;
 
 export type SpecialRole = typeof ROLE_ANY | typeof ROLE_ADMIN;
-export type RbacRole = "gestor_horarios" | "manager" | "viewer";
+export type RbacRole = "gestor_horarios" | "manager" | "viewer" | "perfil_full" | "perfil_ventas" | "perfil_implementacion";
 export type AppRole = SpecialRole | RbacRole;
 
 export interface RoutePermission {
@@ -217,8 +220,26 @@ export const ACTION_PERMISSIONS: Record<string, ActionPermission> = {
     description: "Ver expedientes propios",
   },
   "expedientes:view_all": {
-    roles: [ROLE_ADMIN, "manager"],
+    roles: [ROLE_ADMIN, "manager", "perfil_full"],
     description: "Ver expedientes de todos los usuarios",
+  },
+
+  // ── Visibilidad de tabs de expediente ───────────────────────────────────────
+  "expediente:tab_f1": {
+    roles: [ROLE_ANY],
+    description: "Ver tab F1-Acta (todos los usuarios)",
+  },
+  "expediente:tab_f2": {
+    roles: [ROLE_ADMIN, "manager", "perfil_full", "viewer"],
+    description: "Ver tab F2-EP (no disponible para perfil_ventas ni perfil_implementacion)",
+  },
+  "expediente:tab_resultados": {
+    roles: [ROLE_ADMIN, "manager", "perfil_full", "viewer"],
+    description: "Ver tab Resultados",
+  },
+  "expediente:tab_implementacion": {
+    roles: [ROLE_ADMIN, "manager", "perfil_full", "perfil_implementacion"],
+    description: "Ver tab Implementación",
   },
 
   // ── Gestor de horarios ──────────────────────────────────────────────────────

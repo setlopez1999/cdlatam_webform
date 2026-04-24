@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { useExpedienteStore } from "@/features/expedientes/store";
 import type { FormStatus } from "@/features/expedientes/types";
 import { cn } from "@/lib/utils";
+import { useLocalAuth } from "@/hooks/useLocalAuth";
 
 interface Tab {
   id: "acta" | "ep" | "resultados" | "implementacion";
@@ -20,7 +21,7 @@ interface Tab {
   path: (id: string) => string;
 }
 
-const TABS: Tab[] = [
+const ALL_TABS: Tab[] = [
   {
     id: "acta",
     label: "F1 — Acta",
@@ -46,6 +47,23 @@ const TABS: Tab[] = [
     path: (id) => `/expediente/${id}/implementacion`,
   },
 ];
+
+/**
+ * Devuelve los tabs visibles según el rol del usuario.
+ * - perfil_ventas        → solo F1-Acta
+ * - perfil_implementacion → solo Implementación
+ * - perfil_full / admin / manager / user → todos los tabs
+ */
+function getVisibleTabs(hasRole: (r: string) => boolean, isAdmin: boolean): Tab[] {
+  if (hasRole("perfil_ventas")) {
+    return ALL_TABS.filter(t => t.id === "acta");
+  }
+  if (hasRole("perfil_implementacion")) {
+    return ALL_TABS.filter(t => t.id === "implementacion");
+  }
+  // perfil_full, admin, manager, user → acceso completo
+  return ALL_TABS;
+}
 
 function StatusBadge({ status }: { status: FormStatus }) {
   const styles: Record<FormStatus, string> = {
@@ -75,6 +93,8 @@ export default function ExpedienteLayout({ expedienteId, activeTab, children }: 
   const [, navigate] = useLocation();
   const { getExpediente, renombrar } = useExpedienteStore();
   const expediente = getExpediente(expedienteId);
+  const { hasRole, isAdmin } = useLocalAuth();
+  const TABS = getVisibleTabs(hasRole, isAdmin);
 
   const [editando, setEditando] = useState(false);
   const [nombreTemp, setNombreTemp] = useState(expediente?.nombre ?? "");
