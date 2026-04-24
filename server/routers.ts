@@ -16,6 +16,8 @@ import {
   // Expedientes y Audit Log
   createExpediente, getExpedientes, getExpedientesByUser, getExpedienteByUuid,
   updateExpediente, deleteExpediente, createAuditLog, getAuditLog,
+  // Actas por expediente
+  getActaByExpedienteUuid,
 } from "./db";
 
 // dataSource — abstracción SQLite / API externa (controlado por USE_API en .env)
@@ -67,12 +69,16 @@ import { getSessionCookieOptions as getCookieOpts } from "./_core/cookies";
 // ─── Zod Schemas ──────────────────────────────────────────────────────────────
 
 const ServicioContratadoSchema = z.object({
-  item: z.number(),
+  // Campos del frontend (store de Zustand)
+  id: z.string().optional(),           // nanoid del frontend
+  item: z.number().optional(),         // número de ítem (backend legacy)
   unidadNegocio: z.string(),
   solucion: z.string(),
   detalleServicio: z.string(),
   tipoVenta: z.string(),
-  valorUnitario: z.number().min(0),
+  moneda: z.string().optional(),       // campo del frontend
+  precioUnitario: z.number().min(0).optional(),  // campo del frontend
+  valorUnitario: z.number().min(0).optional(),   // campo legacy del backend
   cantidad: z.number().min(0),
   total: z.number(),
   plazo: z.string(),
@@ -84,7 +90,8 @@ const CuotaPagoSchema = z.object({
 });
 
 const FormaPagoSchema = z.object({
-  item: z.number(),
+  id: z.string().optional(),   // nanoid del frontend
+  item: z.number().optional(), // número de ítem (backend legacy)
   tipoVenta: z.string(),
   nCuotas: z.number().min(1).max(36),
   primeraCuota: CuotaPagoSchema,
@@ -135,6 +142,7 @@ const FilaOtrosSchema = z.object({
 });
 
 const ActaInputSchema = z.object({
+  expedienteUuid: z.string().optional(),  // Vínculo con el store de Zustand
   noActa: z.string().optional(),
   atencion: z.string().optional(),
   fecha: z.string().optional(),
@@ -543,6 +551,63 @@ export const appRouter = router({
         if (!acta || acta.userId !== ctx.user.id) throw new Error("Acta no encontrada");
         return deleteActa(input.id);
       }),
+
+    /**
+     * syncF1 — Crea o actualiza el acta vinculada a un expediente.
+     * Recibe el expedienteUuid del store de Zustand y todos los campos de F1.
+     * Si ya existe un acta para ese expediente, la actualiza; si no, la crea.
+     * También actualiza expedientes.actaId para mantener la FK blanda.
+     */
+    syncF1: protectedProcedure
+      .input(ActaInputSchema.extend({
+        expedienteUuid: z.string().min(1),  // Requerido para syncF1
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const userId = ctx.user.id;
+        const { expedienteUuid, ...actaData } = input;
+        // Buscar si ya existe un acta para este expediente
+        const existing = await getActaByExpedienteUuid(expedienteUuid);
+        let acta;
+        if (existing) {
+          // Actualizar acta existente
+          await updateActa(existing.id, {
+            ...actaData,
+            fecha: actaData.fecha ? new Date(actaData.fecha) : undefined,
+            serviciosContratados: actaData.serviciosContratados ?? existing.serviciosContratados,
+            formasPagoImplementacion: actaData.formasPagoImplementacion ?? existing.formasPagoImplementacion,
+            formasPagoMantencion: actaData.formasPagoMantencion ?? existing.formasPagoMantencion,
+          });
+          acta = await getActaById(existing.id);
+        } else {
+          // Crear nueva acta vinculada al expediente
+          acta = await createActa({
+            userId,
+            expedienteUuid,
+            ...actaData,
+            fecha: actaData.fecha ? new Date(actaData.fecha) : undefined,
+            serviciosContratados: actaData.serviciosContratados ?? [],
+            formasPagoImplementacion: actaData.formasPagoImplementacion ?? [],
+            formasPagoMantencion: actaData.formasPagoMantencion ?? [],
+            status: actaData.status ?? "borrador",
+          });
+          // Actualizar expedientes.actaId con la FK blanda
+          const expediente = await getExpedienteByUuid(expedienteUuid);
+          if (expediente && acta) {
+            await updateExpediente(expediente.id, { actaId: acta.id });
+          }
+        }
+        return acta;
+      }),
+
+    /** Obtiene el acta vinculada a un expediente por su uuid. */
+    getByExpedienteUuid: protectedProcedure
+      .input(z.object({ expedienteUuid: z.string().min(1) }))
+      .query(async ({ ctx, input }) => {
+        const acta = await getActaByExpedienteUuid(input.expedienteUuid);
+        if (!acta) return null;
+        if (acta.userId !== ctx.user.id) throw new Error("Acta no encontrada");
+        return acta;
+      }),
   }),
 
   // ─── Evaluaciones (siempre SQLite) ───────────────────────────────────────
@@ -919,7 +984,7 @@ export const appRouter = router({
     listar: protectedProcedure.query(async ({ ctx }) => {
       const userId = Number(ctx.localUser?.id);
       const role = ctx.localUser?.role;
-      const canViewAll = role === "admin" || role === "manager";
+      const canViewAll = role === "admin" || (role as string) === "perfil_full";
       return canViewAll ? await getExpedientes() : await getExpedientesByUser(userId);
     }),
 

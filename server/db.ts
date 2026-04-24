@@ -529,6 +529,28 @@ export async function runMigrations() {
           horaFin TEXT NOT NULL,
           createdAt INTEGER DEFAULT (strftime('%s', 'now')) NOT NULL
         );
+        CREATE TABLE IF NOT EXISTS expedientes (
+          id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+          uuid TEXT NOT NULL UNIQUE,
+          nombre TEXT NOT NULL,
+          creadorId INTEGER NOT NULL,
+          actaId INTEGER,
+          evaluacionId INTEGER,
+          status TEXT DEFAULT 'borrador' NOT NULL,
+          createdAt INTEGER DEFAULT (strftime('%s', 'now')) NOT NULL,
+          updatedAt INTEGER DEFAULT (strftime('%s', 'now')) NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS audit_log (
+          id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+          userId INTEGER,
+          username TEXT NOT NULL,
+          action TEXT NOT NULL,
+          entity TEXT NOT NULL,
+          entityId INTEGER,
+          changes TEXT,
+          ip TEXT,
+          createdAt INTEGER DEFAULT (strftime('%s', 'now')) NOT NULL
+        );
       `);
       console.log("[DB] Schema applied manually (fallback)");
     } catch (fallbackError) {
@@ -536,7 +558,16 @@ export async function runMigrations() {
     }
   }
 
-  // Paso 2 (post-migración): garantizar roles nuevos en BDs ya migradas
+  // Paso 2 (post-migración): garantizar columnas nuevas en BDs existentes
+  // ALTER TABLE ADD COLUMN IF NOT EXISTS no existe en SQLite, usamos try/catch
+  try {
+    sqlite.exec(`ALTER TABLE actas ADD COLUMN expedienteUuid TEXT`);
+    console.log("[DB] Column expedienteUuid added to actas");
+  } catch {
+    // La columna ya existe — ignorar
+  }
+
+  // Paso 3 (post-migración): garantizar roles nuevos en BDs ya migradas
   // INSERT OR IGNORE es idempotente — seguro de correr siempre al arrancar
   try {
     sqlite.exec(`
@@ -738,6 +769,13 @@ export async function updateActa(id: number, data: Partial<InsertActa>) {
 export async function deleteActa(id: number) {
   const db = await getDb();
   return db.delete(actas).where(eq(actas.id, id));
+}
+
+/** Busca un acta por el uuid del expediente de Zustand. */
+export async function getActaByExpedienteUuid(expedienteUuid: string) {
+  const db = await getDb();
+  const result = await db.select().from(actas).where(eq(actas.expedienteUuid, expedienteUuid)).limit(1);
+  return result[0] ?? null;
 }
 
 // --- Evaluaciones de Proyecto -------------------------------------------------

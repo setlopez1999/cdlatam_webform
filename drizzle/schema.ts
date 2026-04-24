@@ -24,6 +24,8 @@ export type InsertRole = typeof roles.$inferInsert;
 export const actas = sqliteTable("actas", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   userId: integer("userId").notNull(),
+  // Vínculo con el expediente de Zustand (nanoid del store)
+  expedienteUuid: text("expedienteUuid"),
 
   // Encabezado
   noActa: text("noActa"),

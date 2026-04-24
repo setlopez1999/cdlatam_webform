@@ -43,6 +43,13 @@
       "when": 1745535600000,
       "tag": "0005_remove_legacy_roles",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1745539200000,
+      "tag": "0006_expedientes_actas_link",
+      "breakpoints": true
     }
   ]
 }

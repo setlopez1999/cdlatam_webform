@@ -5,13 +5,14 @@
  *   - data: estado actual de F1Data
  *   - status: "nuevo" | "sin_guardar" | "guardado"
  *   - update(partial): actualiza campos y marca sin_guardar
- *   - guardar(): persiste y marca guardado
+ *   - guardar(): persiste en localStorage Y sincroniza con BD via tRPC
+ *   - isSyncing: true mientras se guarda en BD
  *
- * Para conectar con tRPC en el futuro, reemplazar guardar() con:
- *   await trpc.actas.create.mutate(data)  (si no tiene id)
- *   await trpc.actas.update.mutate({ id, data })  (si ya tiene id)
+ * Al guardar, llama trpc.actas.syncF1 con el expedienteUuid y todos los campos de F1.
+ * Si la sincronización falla, el estado local sigue como "guardado" (el acta vive en localStorage).
  */
 import { useCallback } from "react";
+import { trpc } from "@/lib/trpc";
 import { useExpedienteStore } from "../store";
 import type { F1Data } from "../types";
 
@@ -19,19 +20,67 @@ export function useF1(expedienteId: string) {
   const store = useExpedienteStore();
   const expediente = store.getExpediente(expedienteId);
 
-  const data   = expediente?.f1.data   ?? null;
-  const status = expediente?.f1.status ?? "nuevo";
+  const data    = expediente?.f1.data   ?? null;
+  const status  = expediente?.f1.status ?? "nuevo";
   const savedAt = expediente?.f1.savedAt;
+
+  // Mutation para sincronizar F1 con la BD
+  const syncF1Mutation = trpc.actas.syncF1.useMutation({
+    onError: (err) => {
+      console.warn("[useF1] No se pudo sincronizar F1 con BD:", err.message);
+      // No revertir el estado local — el acta sigue guardada en localStorage
+    },
+  });
 
   const update = useCallback(
     (partial: Partial<F1Data>) => store.updateF1(expedienteId, partial),
     [expedienteId, store]
   );
 
-  const guardar = useCallback(
-    () => store.guardarF1(expedienteId),
-    [expedienteId, store]
-  );
+  /**
+   * guardar() — persiste F1 en localStorage y sincroniza con BD.
+   * 1. Marca el estado local como "guardado" (inmediato, para UX fluida)
+   * 2. Llama trpc.actas.syncF1 en background (fire-and-forget)
+   */
+  const guardar = useCallback(() => {
+    if (!data) return;
 
-  return { data, status, savedAt, update, guardar };
+    // 1. Persistir en localStorage (siempre, independiente de BD)
+    store.guardarF1(expedienteId);
+
+    // 2. Sincronizar con BD en background
+    syncF1Mutation.mutate({
+      expedienteUuid: expedienteId,
+      noActa: data.noActa,
+      atencion: data.atencion,
+      fecha: data.fecha,
+      razonSocial: data.razonSocial,
+      nombreFantasia: data.nombreFantasia,
+      rucDniRut: data.rucDniRut,
+      direccionComercial: data.direccionComercial,
+      representanteLegal: data.representanteLegal,
+      representanteDni: data.representanteDni,
+      representanteEmail: data.representanteEmail,
+      representanteFono: data.representanteTelefonoFijo,
+      contactoTecnico: data.contactoTecnico,
+      contactoTecnicoEmail: data.contactoTecnicoEmail,
+      contactoTecnicoFono: data.contactoTecnicoTelefonoFijo,
+      contactoFacturacion: data.contactoFacturacion,
+      contactoFacturacionEmail: data.contactoFacturacionEmail,
+      contactoFacturacionFono: data.contactoFacturacionTelefonoFijo,
+      serviciosContratados: data.serviciosContratados,
+      formasPagoImplementacion: data.formasPagoImplementacion,
+      formasPagoMantencion: data.formasPagoMantencion,
+      status: "borrador",
+    });
+  }, [data, expedienteId, store, syncF1Mutation]);
+
+  return {
+    data,
+    status,
+    savedAt,
+    update,
+    guardar,
+    isSyncing: syncF1Mutation.isPending,
+  };
 }

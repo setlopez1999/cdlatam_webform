@@ -21,3 +21,26 @@ Preparar la base de datos para la migración de los expedientes desde `localStor
 
 ### Cómo revertir
 Eliminar las tablas del schema y borrar las funciones CRUD correspondientes en `server/db.ts`.
+
+---
+
+## [2026-04-24] — Fase 0: Vincular Actas con Expedientes (Persistencia F1)
+
+**Rama:** `features`
+**Archivos modificados:** `drizzle/schema.ts`, `server/db.ts`, `drizzle/migrations/0006_expedientes_actas_link.sql`
+
+### Cambios
+
+| Tipo | Tabla | Detalle |
+|---|---|---|
+| NUEVA COLUMNA | `actas` | `expedienteUuid TEXT` — vínculo con el nanoid del store de Zustand |
+
+### Razón
+Conectar el store de Zustand con la BD: al guardar F1, se llama `trpc.actas.syncF1` que crea o actualiza el acta en BD vinculada al expediente por su `expedienteUuid`. También actualiza `expedientes.actaId` con la FK blanda.
+
+### Nuevos endpoints tRPC
+- `actas.syncF1` — crea o actualiza el acta vinculada a un expediente (upsert por `expedienteUuid`)
+- `actas.getByExpedienteUuid` — obtiene el acta de un expediente por su uuid
+
+### Cómo revertir
+Eliminar la columna `expedienteUuid` de `actas` y los procedures `syncF1` / `getByExpedienteUuid` de `routers.ts`.

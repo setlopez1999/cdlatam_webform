@@ -72,7 +72,7 @@ interface Props {
 }
 
 export default function F1Form({ expedienteId }: Props) {
-  const { data, status, update, guardar } = useF1(expedienteId);
+  const { data, status, update, guardar, isSyncing } = useF1(expedienteId);
   // Visibilidad de campos sensibles — cuando el acta persista en BD, pasar data.creadorId
   const { canViewSensitiveFields } = useFieldVisibility(undefined);
   const { data: catalogs } = trpc.catalogs.getAll.useQuery();
@@ -168,7 +168,7 @@ export default function F1Form({ expedienteId }: Props) {
     }
     guardar();
     toast.success("F1 guardado correctamente");
-    // TODO: await trpc.actas.create.mutate(data)  ← conectar aquí
+    // La sincronización con BD ocurre dentro de guardar() via trpc.actas.syncF1
   }, [data, guardar]);
 
   const handleReset = useCallback(() => {
@@ -208,8 +208,8 @@ export default function F1Form({ expedienteId }: Props) {
             <Button variant="outline" size="sm" onClick={handleExportPDF}>
               <Download className="w-3.5 h-3.5 mr-1.5" /> PDF
             </Button>
-            <Button size="sm" onClick={handleSave}>
-              <Save className="w-3.5 h-3.5 mr-1.5" /> Guardar
+            <Button size="sm" onClick={handleSave} disabled={isSyncing}>
+              <Save className="w-3.5 h-3.5 mr-1.5" /> {isSyncing ? "Guardando..." : "Guardar"}
             </Button>
           </div>
         }
@@ -268,8 +268,8 @@ export default function F1Form({ expedienteId }: Props) {
         <Button variant="outline" onClick={handleExportPDF}>
           <Download className="w-4 h-4 mr-2" /> Exportar PDF
         </Button>
-        <Button onClick={handleSave}>
-          <Save className="w-4 h-4 mr-2" /> Guardar F1
+        <Button onClick={handleSave} disabled={isSyncing}>
+          <Save className="w-4 h-4 mr-2" /> {isSyncing ? "Guardando..." : "Guardar F1"}
         </Button>
       </div>
     </div>
