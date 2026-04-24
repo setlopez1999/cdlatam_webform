@@ -95,12 +95,12 @@ export function useExpedienteStore() {
   /** Crea un nuevo expediente y lo devuelve */
   const crear = useCallback((nombre?: string): Expediente => {
     const exp = _crearExpediente(nombre);
-    setExpedientes(prev => {
-      const next = [...prev, exp];
-      _persist(next);
-      return next;
-    });
+    // Persistir ANTES de setExpedientes para que la navegación inmediata lea el dato correcto
+    const current = _load();
+    const next = [...current, exp];
+    _persist(next);
     _persistActivo(exp.id);
+    setExpedientes(next);
     return exp;
   }, []);
 
