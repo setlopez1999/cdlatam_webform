@@ -376,3 +376,52 @@ export type CatalogCeco = typeof catalogCecos.$inferSelect;
 export type CatalogDepartamento = typeof catalogDepartamentos.$inferSelect;
 export type CatalogArea = typeof catalogAreas.$inferSelect;
 export type CatalogNombre = typeof catalogNombres.$inferSelect;
+// ─── Expedientes (contenedor de actas y evaluaciones) ────────────────────────
+/**
+ * Tabla expedientes — metadata del expediente.
+ * Los datos de formulario (F1, F2) siguen en localStorage via Zustand
+ * hasta que se complete la migración de campos (ver doc/pendiente-integridad-expedientes.md).
+ *
+ * Relaciones:
+ *   creadorId → users.id   (quién creó el expediente)
+ *   actaId    → actas.id   (FK blanda, null hasta que F1 se guarde en BD)
+ *   evaluacionId → evaluaciones.id (FK blanda, null hasta que F2 se guarde en BD)
+ */
+export const expedientes = sqliteTable("expedientes", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  uuid: text("uuid").notNull().unique(),          // nanoid del store de Zustand
+  nombre: text("nombre").notNull(),
+  creadorId: integer("creadorId").notNull(),       // FK blanda → users.id
+  actaId: integer("actaId"),                       // FK blanda → actas.id (futuro)
+  evaluacionId: integer("evaluacionId"),           // FK blanda → evaluaciones.id (futuro)
+  status: text("status").default("borrador").notNull(), // "borrador" | "en_proceso" | "completado"
+  createdAt: integer("createdAt", { mode: "timestamp" }).default(sql`(strftime('%s', 'now'))`).notNull(),
+  updatedAt: integer("updatedAt", { mode: "timestamp" }).default(sql`(strftime('%s', 'now'))`).notNull(),
+});
+
+export type Expediente = typeof expedientes.$inferSelect;
+export type InsertExpediente = typeof expedientes.$inferInsert;
+
+// ─── Audit Log — trazabilidad de acciones ────────────────────────────────────
+/**
+ * Tabla audit_log — registra toda actividad relevante del sistema.
+ * Se graba desde el momento del despliegue. Sin retención automática por ahora.
+ *
+ * action: "LOGIN" | "LOGOUT" | "CREATE" | "UPDATE" | "DELETE"
+ * entity: "expediente" | "acta" | "evaluacion" | "user" | "implementacion"
+ * changes: JSON { before: {...}, after: {...} } — solo en UPDATE
+ */
+export const auditLog = sqliteTable("audit_log", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  userId: integer("userId"),                       // null si sesión expirada
+  username: text("username").notNull(),            // copia del username al momento de la acción
+  action: text("action").notNull(),
+  entity: text("entity").notNull(),
+  entityId: integer("entityId"),                   // null para LOGIN/LOGOUT
+  changes: text("changes", { mode: "json" }),      // { before, after } o null
+  ip: text("ip"),
+  createdAt: integer("createdAt", { mode: "timestamp" }).default(sql`(strftime('%s', 'now'))`).notNull(),
+});
+
+export type AuditLog = typeof auditLog.$inferSelect;
+export type InsertAuditLog = typeof auditLog.$inferInsert;

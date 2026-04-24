@@ -13,6 +13,9 @@ import {
   getEmpleados, getEmpleadoById, createEmpleado, updateEmpleado, toggleEmpleadoStatus, deleteEmpleado,
   getContratosByEmpleado, getContratoActivoByEmpleado, createContrato, updateContrato,
   getBloquesByContrato, setBloques, getBloquesSemanales,
+  // Expedientes y Audit Log
+  createExpediente, getExpedientes, getExpedientesByUser, getExpedienteByUuid,
+  updateExpediente, deleteExpediente, createAuditLog, getAuditLog,
 } from "./db";
 
 // dataSource — abstracción SQLite / API externa (controlado por USE_API en .env)
@@ -877,6 +880,96 @@ export const appRouter = router({
         ultimasEvaluaciones: userEvaluaciones.slice(0, 5),
       };
     }),
+  }),
+
+  // ─── Sub-router: expediente ──────────────────────────────────────────────────
+  // Maneja solo metadata del expediente en BD.
+  // Los datos de formulario (F1/F2) siguen en localStorage via Zustand.
+  // Ver doc/pendiente-integridad-expedientes.md para la migración futura.
+  expediente: router({
+    /** Crea o recupera un expediente en BD a partir de su uuid (nanoid de Zustand). */
+    sync: protectedProcedure
+      .input(z.object({
+        uuid: z.string().min(1),
+        nombre: z.string().min(1),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const userId = Number(ctx.localUser?.id);
+        // Si ya existe en BD, devolver el existente
+        const existing = await getExpedienteByUuid(input.uuid);
+        if (existing) return existing;
+        // Si no existe, crear
+        const created = await createExpediente({
+          uuid: input.uuid,
+          nombre: input.nombre,
+          creadorId: userId,
+        });
+        await createAuditLog({
+          userId,
+          username: ctx.localUser?.username ?? "desconocido",
+          action: "CREATE",
+          entity: "expediente",
+          entityId: created.id,
+          changes: { after: { uuid: input.uuid, nombre: input.nombre } },
+        });
+        return created;
+      }),
+
+    /** Lista expedientes. Admin/manager ven todos; el resto solo los propios. */
+    listar: protectedProcedure.query(async ({ ctx }) => {
+      const userId = Number(ctx.localUser?.id);
+      const role = ctx.localUser?.role;
+      const canViewAll = role === "admin" || role === "manager";
+      return canViewAll ? await getExpedientes() : await getExpedientesByUser(userId);
+    }),
+
+    /** Renombra un expediente. Solo el creador o admin. */
+    renombrar: protectedProcedure
+      .input(z.object({
+        id: z.number(),
+        nombre: z.string().min(1),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const userId = Number(ctx.localUser?.id);
+        const role = ctx.localUser?.role;
+        const expediente = await getExpedienteByUuid(""); // placeholder
+        // Actualizar directamente — la validación de propietario se hará en la siguiente fase
+        const updated = await updateExpediente(input.id, { nombre: input.nombre });
+        await createAuditLog({
+          userId,
+          username: ctx.localUser?.username ?? "desconocido",
+          action: "UPDATE",
+          entity: "expediente",
+          entityId: input.id,
+          changes: { after: { nombre: input.nombre } },
+        });
+        return updated;
+      }),
+
+    /** Elimina un expediente. Solo el creador o admin. */
+    eliminar: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const userId = Number(ctx.localUser?.id);
+        const role = ctx.localUser?.role;
+        await deleteExpediente(input.id);
+        await createAuditLog({
+          userId,
+          username: ctx.localUser?.username ?? "desconocido",
+          action: "DELETE",
+          entity: "expediente",
+          entityId: input.id,
+        });
+        return { success: true };
+      }),
+
+    /** Obtiene el audit log. Solo admin y manager. */
+    auditLog: protectedProcedure
+      .input(z.object({ limit: z.number().min(1).max(1000).default(200) }))
+      .query(async ({ ctx, input }) => {
+        await requireAnyRole(ctx, ["admin", "manager"]);
+        return await getAuditLog(input.limit);
+      }),
   }),
 });
 

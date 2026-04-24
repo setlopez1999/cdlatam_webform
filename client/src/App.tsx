@@ -16,6 +16,7 @@ import NuevoExpediente from "./pages/NuevoExpediente";
 import ExpedienteActa from "./pages/ExpedienteActa";
 import ExpedienteEP from "./pages/ExpedienteEP";
 import ExpedienteResultados from "./pages/ExpedienteResultados";
+import ExpedienteImplementacion from "./pages/ExpedienteImplementacion";
 import SpreadsheetView from "./pages/SpreadsheetView";
 import GestorHorarios from "./pages/GestorHorarios";
 import { useLocalAuth } from "./hooks/useLocalAuth";
@@ -151,6 +152,9 @@ function Router() {
       </Route>
       <Route path="/expediente/:id/resultados">
         {() => <ProtectedRoute component={ExpedienteResultados} routePath="/expediente/:id/resultados" />}
+      </Route>
+      <Route path="/expediente/:id/implementacion">
+        {() => <ProtectedRoute component={ExpedienteImplementacion} routePath="/expediente/:id/implementacion" />}
       </Route>
 
       <Route path="/404" component={NotFound} />

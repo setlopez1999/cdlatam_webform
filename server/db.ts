@@ -20,6 +20,9 @@ import {
   schEmpleados, type SchEmpleado, type InsertSchEmpleado,
   schContratos, type SchContrato, type InsertSchContrato,
   schBloquesHorario, type SchBloqueHorario, type InsertSchBloqueHorario,
+  // Expedientes y Auditoría
+  expedientes, type Expediente, type InsertExpediente,
+  auditLog, type InsertAuditLog,
 } from "../drizzle/schema";
 
 // 1. Inicializar conexión al archivo local "gestion.db"
@@ -903,4 +906,91 @@ export async function getBloquesSemanales(): Promise<Array<SchBloqueHorario & { 
     .where(and(eq(schContratos.activo, 1), eq(schEmpleados.activo, 1)))
     .orderBy(schBloquesHorario.diaSemana, schBloquesHorario.horaInicio);
   return result;
+}
+
+// ─── MÓDULO: EXPEDIENTES ──────────────────────────────────────────────────────
+
+/**
+ * Crea un expediente en BD con su metadata.
+ * Los datos de formulario (F1/F2) siguen en localStorage por ahora.
+ */
+export async function createExpediente(data: { uuid: string; nombre: string; creadorId: number }) {
+  const db = await getDb();
+  const result = await db.insert(expedientes).values({
+    uuid: data.uuid,
+    nombre: data.nombre,
+    creadorId: data.creadorId,
+    status: "borrador",
+  }).returning();
+  return result[0];
+}
+
+/** Obtiene todos los expedientes (para admin/full). */
+export async function getExpedientes() {
+  const db = await getDb();
+  return db.select().from(expedientes).orderBy(desc(expedientes.createdAt));
+}
+
+/** Obtiene solo los expedientes de un usuario específico. */
+export async function getExpedientesByUser(userId: number) {
+  const db = await getDb();
+  return db.select().from(expedientes)
+    .where(eq(expedientes.creadorId, userId))
+    .orderBy(desc(expedientes.createdAt));
+}
+
+/** Busca un expediente por su uuid (nanoid del store de Zustand). */
+export async function getExpedienteByUuid(uuid: string) {
+  const db = await getDb();
+  const result = await db.select().from(expedientes).where(eq(expedientes.uuid, uuid)).limit(1);
+  return result[0] ?? null;
+}
+
+/** Actualiza el nombre o status de un expediente. */
+export async function updateExpediente(id: number, data: Partial<Pick<Expediente, "nombre" | "status" | "actaId" | "evaluacionId">>) {
+  const db = await getDb();
+  const result = await db.update(expedientes)
+    .set({ ...data, updatedAt: new Date() })
+    .where(eq(expedientes.id, id))
+    .returning();
+  return result[0] ?? null;
+}
+
+/** Elimina un expediente por id. */
+export async function deleteExpediente(id: number) {
+  const db = await getDb();
+  await db.delete(expedientes).where(eq(expedientes.id, id));
+}
+
+// ─── MÓDULO: AUDIT LOG ────────────────────────────────────────────────────────
+
+/**
+ * Registra una entrada en el audit log.
+ * Llamar desde los procedures tRPC después de cada acción relevante.
+ */
+export async function createAuditLog(data: {
+  userId?: number;
+  username: string;
+  action: "LOGIN" | "LOGOUT" | "CREATE" | "UPDATE" | "DELETE";
+  entity: string;
+  entityId?: number;
+  changes?: { before?: unknown; after?: unknown };
+  ip?: string;
+}) {
+  const db = await getDb();
+  await db.insert(auditLog).values({
+    userId: data.userId ?? null,
+    username: data.username,
+    action: data.action,
+    entity: data.entity,
+    entityId: data.entityId ?? null,
+    changes: data.changes ?? null,
+    ip: data.ip ?? null,
+  });
+}
+
+/** Obtiene el audit log completo, ordenado por más reciente. */
+export async function getAuditLog(limit = 200) {
+  const db = await getDb();
+  return db.select().from(auditLog).orderBy(desc(auditLog.createdAt)).limit(limit);
 }

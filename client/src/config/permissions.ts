@@ -157,6 +157,11 @@ export const ROUTE_PERMISSIONS: Record<string, RoutePermission> = {
     label: "Resultados",
     showInNav: false,
   },
+  "/expediente/:id/implementacion": {
+    roles: [ROLE_ANY],
+    label: "Implementación",
+    showInNav: false,
+  },
 };
 
 // ─── Permisos de acciones ─────────────────────────────────────────────────────

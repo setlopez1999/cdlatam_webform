@@ -6,7 +6,7 @@
 
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
-import { FileText, BarChart2, ClipboardList, Pencil, Check, X, ChevronLeft } from "lucide-react";
+import { FileText, BarChart2, ClipboardList, Pencil, Check, X, ChevronLeft, Rocket } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useExpedienteStore } from "@/features/expedientes/store";
@@ -14,7 +14,7 @@ import type { FormStatus } from "@/features/expedientes/types";
 import { cn } from "@/lib/utils";
 
 interface Tab {
-  id: "acta" | "ep" | "resultados";
+  id: "acta" | "ep" | "resultados" | "implementacion";
   label: string;
   icon: React.ReactNode;
   path: (id: string) => string;
@@ -39,6 +39,12 @@ const TABS: Tab[] = [
     icon: <BarChart2 className="w-4 h-4" />,
     path: (id) => `/expediente/${id}/resultados`,
   },
+  {
+    id: "implementacion",
+    label: "Implementación",
+    icon: <Rocket className="w-4 h-4" />,
+    path: (id) => `/expediente/${id}/implementacion`,
+  },
 ];
 
 function StatusBadge({ status }: { status: FormStatus }) {
@@ -61,7 +67,7 @@ function StatusBadge({ status }: { status: FormStatus }) {
 
 interface Props {
   expedienteId: string;
-  activeTab: "acta" | "ep" | "resultados";
+  activeTab: "acta" | "ep" | "resultados" | "implementacion";
   children: React.ReactNode;
 }
 
