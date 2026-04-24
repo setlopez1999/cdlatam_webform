@@ -52,7 +52,7 @@ export function useLocalAuth() {
   });
 
   // Consulta los roles RBAC del usuario autenticado desde user_roles
-  const { data: myRoles = [] } = trpc.userRoles.myRoles.useQuery(undefined, {
+  const { data: myRoles = [], refetch: refetchRoles } = trpc.userRoles.myRoles.useQuery(undefined, {
     enabled: !!user,
     retry: false,
     refetchOnWindowFocus: false,
@@ -137,5 +137,6 @@ export function useLocalAuth() {
     logout,
     loginError: loginMutation.error?.message || null,
     isLoggingIn: loginMutation.isPending,
+    refetchRoles,
   };
 }

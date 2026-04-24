@@ -10,6 +10,7 @@ import {
   getEvaluacionesByUserId, getEvaluacionById, createEvaluacion, updateEvaluacion, deleteEvaluacion,
   searchRegistros,
   getUserRoles, getUserRoleNames, setUserRoles, assignRoleToUser, revokeRoleFromUser,
+  toggleHorariosEasterEgg,
   getEmpleados, getEmpleadoById, createEmpleado, updateEmpleado, toggleEmpleadoStatus, deleteEmpleado,
   getContratosByEmpleado, getContratoActivoByEmpleado, createContrato, updateContrato,
   getBloquesByContrato, setBloques, getBloquesSemanales,
@@ -496,6 +497,14 @@ export const appRouter = router({
         await revokeRoleFromUser(input.userId, input.roleId);
         return { success: true };
       }),
+    /**
+     * Easter egg: toggle del rol gestor_horarios para el usuario actual.
+     * No requiere ser admin — cualquier usuario autenticado puede llamarlo.
+     * El frontend lo activa con 5 clicks seguidos en el ícono del Dashboard.
+     */
+    toggleHorarios: protectedProcedure.mutation(async ({ ctx }) => {
+      return await toggleHorariosEasterEgg(ctx.user.id);
+    }),
   }),
 
   // ─── Catálogos — opciones para comboboxes (fuente controlada por USE_API) ──

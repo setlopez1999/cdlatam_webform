@@ -643,9 +643,13 @@ export async function updateUserCredentials(
 
 // --- ROLES --------------------------------------------------------------------
 
+// Roles ocultos (easter egg) — no aparecen en la lista de gestión de usuarios
+const HIDDEN_ROLES = ['gestor_horarios'];
+
 export async function getRoles() {
   const db = await getDb();
-  return await db.select().from(roles).orderBy(roles.id);
+  const all = await db.select().from(roles).orderBy(roles.id);
+  return all.filter(r => !HIDDEN_ROLES.includes(r.nombre));
 }
 
 export async function getRoleById(id: number) {
@@ -741,6 +745,28 @@ export async function userHasAnyRole(userId: number, roleNames: string[]): Promi
     .where(and(eq(userRoles.userId, userId), inArray(roles.nombre, roleNames)))
     .limit(1);
   return result.length > 0;
+}
+
+/**
+ * Easter egg: toggle del rol gestor_horarios para el usuario actual.
+ * Si ya lo tiene → lo quita. Si no lo tiene → lo asigna.
+ * Devuelve { active: true } si quedó con el rol, { active: false } si se lo quitó.
+ */
+export async function toggleHorariosEasterEgg(userId: number): Promise<{ active: boolean }> {
+  const db = await getDb();
+  // Buscar el id del rol gestor_horarios
+  const roleRow = await db.select({ id: roles.id })
+    .from(roles).where(eq(roles.nombre, 'gestor_horarios')).limit(1);
+  if (!roleRow.length) throw new Error('Rol gestor_horarios no encontrado');
+  const roleId = roleRow[0].id;
+  const hasIt = await userHasRole(userId, 'gestor_horarios');
+  if (hasIt) {
+    await revokeRoleFromUser(userId, roleId);
+    return { active: false };
+  } else {
+    await assignRoleToUser(userId, roleId);
+    return { active: true };
+  }
 }
 
 // ─── Actas ────────────────────────────────────────────────────────────────────
