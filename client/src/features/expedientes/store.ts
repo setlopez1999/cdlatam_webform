@@ -8,7 +8,7 @@
  *   - Reemplazar las llamadas a _persist() por mutations de tRPC
  *   - El shape de Expediente ya mapea 1:1 con los schemas del servidor
  */
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback } from "react";
 import { nanoid } from "nanoid";
 import type { Expediente, F1Data, F2Data, FormStatus } from "./types";
 import { F1_INITIAL, F2_INITIAL } from "./types";
@@ -77,16 +77,15 @@ function _crearExpediente(nombre?: string): Expediente {
 export function useExpedienteStore() {
   const [expedientes, setExpedientes] = useState<Expediente[]>(_load);
 
-  // Sincronizar con localStorage cuando cambia el estado
-  useEffect(() => {
-    _persist(expedientes);
-  }, [expedientes]);
+  // NOTA: _persist() se llama explícitamente en cada mutación (crear, eliminar, _update)
+  // No usar useEffect para persistir — causaría sobreescritura con estado inicial vacío
 
   // ── Helpers internos ──────────────────────────────────────────────────────
 
   const _update = useCallback((id: string, updater: (exp: Expediente) => Expediente) => {
     setExpedientes(prev => {
       const next = prev.map(e => e.id === id ? updater({ ...e, updatedAt: new Date().toISOString() }) : e);
+      _persist(next);  // Persistir en cada mutación
       return next;
     });
   }, []);
