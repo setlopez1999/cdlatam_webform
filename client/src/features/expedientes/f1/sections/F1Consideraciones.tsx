@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { FormSection } from "@/components/FormSection";
-import { ClipboardList, Plus, Trash2, Lock } from "lucide-react";
+import { ClipboardList, Plus, Trash2, Lock, ShieldOff } from "lucide-react";
 import type { F1Data } from "../../types";
 
 // Consideraciones fijas — no editables desde la UI
@@ -26,9 +26,11 @@ const CONSIDERACIONES_FIJAS = [
 interface Props {
   data: F1Data;
   onUpdate: (partial: Partial<F1Data>) => void;
+  /** Si true, oculta el contenido sensible y muestra un placeholder de acceso restringido */
+  restricted?: boolean;
 }
 
-export function F1Consideraciones({ data, onUpdate }: Props) {
+export function F1Consideraciones({ data, onUpdate, restricted = false }: Props) {
   const [nuevoItem, setNuevoItem] = useState("");
 
   const personalizadas = data.consideracionesPersonalizadas ?? [];
@@ -49,6 +51,19 @@ export function F1Consideraciones({ data, onUpdate }: Props) {
   const eliminarItem = (idx: number) => {
     onUpdate({ consideracionesPersonalizadas: personalizadas.filter((_, i) => i !== idx) });
   };
+
+  if (restricted) {
+    return (
+      <FormSection title="Consideraciones y Alcances Comerciales" icon={ClipboardList} accent="indigo" collapsible defaultOpen>
+        <div className="flex items-center gap-3 py-6 px-2 text-muted-foreground">
+          <ShieldOff className="w-5 h-5 shrink-0" />
+          <p className="text-sm">
+            <span className="font-semibold">[Restringido]</span> — No tienes acceso a las consideraciones comerciales de este expediente.
+          </p>
+        </div>
+      </FormSection>
+    );
+  }
 
   return (
     <FormSection title="Consideraciones y Alcances Comerciales" icon={ClipboardList} accent="indigo" collapsible defaultOpen>

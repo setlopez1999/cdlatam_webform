@@ -20,6 +20,7 @@ import { FileText, Save, RefreshCw, Download } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { generateActaPDF } from "@/lib/pdfExport";
 import { useF1 } from "./useF1";
+import { useFieldVisibility } from "@/hooks/useFieldVisibility";
 import { F1_INITIAL } from "../types";
 import type { ServicioContratado } from "../types";
 import { nanoid } from "nanoid";
@@ -72,6 +73,8 @@ interface Props {
 
 export default function F1Form({ expedienteId }: Props) {
   const { data, status, update, guardar } = useF1(expedienteId);
+  // Visibilidad de campos sensibles — cuando el acta persista en BD, pasar data.creadorId
+  const { canViewSensitiveFields } = useFieldVisibility(undefined);
   const { data: catalogs } = trpc.catalogs.getAll.useQuery();
 
   if (!data) return <div className="p-6 text-muted-foreground">Expediente no encontrado.</div>;
@@ -241,6 +244,7 @@ export default function F1Form({ expedienteId }: Props) {
         onAdd={addServicio}
         onRemove={removeServicio}
         onUpdate={updateServicio}
+        restricted={!canViewSensitiveFields}
       />
 
       <F1FormasPago
@@ -250,9 +254,10 @@ export default function F1Form({ expedienteId }: Props) {
         onUpdate={updateFormaPago}
         onAdd={addFormaPago}
         onRemove={removeFormaPago}
+        restricted={!canViewSensitiveFields}
       />
 
-      <F1Consideraciones data={data} onUpdate={update} />
+      <F1Consideraciones data={data} onUpdate={update} restricted={!canViewSensitiveFields} />
 
       <F1Firmas data={data} onUpdate={update} />
 

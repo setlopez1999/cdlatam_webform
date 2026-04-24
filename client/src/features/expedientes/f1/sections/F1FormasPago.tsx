@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { FormSection, FieldGroup } from "@/components/FormSection";
-import { CreditCard, Plus, Trash2 } from "lucide-react";
+import { CreditCard, Plus, Trash2, ShieldOff } from "lucide-react";
 import type { F1Data, FormaPago } from "../../types";
 import { formatCurrency, getCurrencyCode, parseNumeric } from "@/lib/formatters";
 
@@ -32,6 +32,8 @@ interface Props {
   ) => void;
   onAdd?: (tipo: "formasPagoImplementacion" | "formasPagoMantencion") => void;
   onRemove?: (tipo: "formasPagoImplementacion" | "formasPagoMantencion", id: string) => void;
+  /** Si true, oculta montos y detalles de pago y muestra placeholder de acceso restringido */
+  restricted?: boolean;
 }
 
 // ─── Subcomponente: campo de fecha con opción "Contra entrega" ────────────────
@@ -241,7 +243,7 @@ function matchesKeywords(value: string, keywords: string[]): boolean {
   return keywords.some(k => v.includes(k));
 }
 
-export function F1FormasPago({ data, catalogs, moneda, onUpdate, onAdd, onRemove }: Props) {
+export function F1FormasPago({ data, catalogs, moneda, onUpdate, onAdd, onRemove, restricted = false }: Props) {
   const currencyCode = getCurrencyCode(moneda ?? "");
 
   // Detectar qué tipos de venta están presentes en serviciosContratados
@@ -251,6 +253,19 @@ export function F1FormasPago({ data, catalogs, moneda, onUpdate, onAdd, onRemove
 
   // Si no hay servicios o ninguno coincide con impl/mant → no mostrar nada
   const mostrarAlguna = tieneImplementacion || tieneMantencion;
+
+  if (restricted) {
+    return (
+      <FormSection title="Formas de Pago" icon={CreditCard} accent="indigo">
+        <div className="flex items-center gap-3 py-6 px-2 text-muted-foreground">
+          <ShieldOff className="w-5 h-5 shrink-0" />
+          <p className="text-sm">
+            <span className="font-semibold">[Restringido]</span> — No tienes acceso a la información de pagos de este expediente.
+          </p>
+        </div>
+      </FormSection>
+    );
+  }
 
   if (!mostrarAlguna) {
     return (

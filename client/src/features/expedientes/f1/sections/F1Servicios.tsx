@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { FormSection } from "@/components/FormSection";
-import { Briefcase, Plus, Trash2 } from "lucide-react";
+import { Briefcase, Plus, Trash2, ShieldOff } from "lucide-react";
 import type { F1Data, ServicioContratado } from "../../types";
 import { formatCurrency, getCurrencyCode, parseNumeric } from "@/lib/formatters";
 
@@ -29,9 +29,11 @@ interface Props {
   onAdd: () => void;
   onRemove: (id: string) => void;
   onUpdate: (id: string, field: keyof ServicioContratado, value: string | number) => void;
+  /** Si true, oculta valores unitarios, totales y descuentos — muestra solo servicio y tipo */
+  restricted?: boolean;
 }
 
-export function F1Servicios({ servicios, catalogs, moneda, onAdd, onRemove, onUpdate }: Props) {
+export function F1Servicios({ servicios, catalogs, moneda, onAdd, onRemove, onUpdate, restricted = false }: Props) {
   const currencyCode = getCurrencyCode(moneda ?? "");
   const totalServicios = servicios.reduce((sum, s) => sum + s.total, 0);
 
@@ -121,29 +123,23 @@ export function F1Servicios({ servicios, catalogs, moneda, onAdd, onRemove, onUp
 
                   {/* Valor Unitario */}
                   <td className="px-1 py-1 min-w-[105px]">
-                    <Input
-                      type="number"
-                      className="h-8 text-xs text-right w-full min-w-[85px]"
-                      placeholder="0.00"
-                      value={servicio.precioUnitario || ""}
-                      onChange={e => onUpdate(servicio.id, "precioUnitario", parseNumeric(e.target.value))}
-                    />
+                    {restricted
+                      ? <span className="text-muted-foreground italic text-xs">[Restringido]</span>
+                      : <Input type="number" className="h-8 text-xs text-right w-full min-w-[85px]" placeholder="0.00" value={servicio.precioUnitario || ""} onChange={e => onUpdate(servicio.id, "precioUnitario", parseNumeric(e.target.value))} />
+                    }
                   </td>
 
                   {/* Cantidad */}
                   <td className="px-1 py-1 min-w-[75px]">
-                    <Input
-                      type="number"
-                      className="h-8 text-xs text-right w-full min-w-[58px]"
-                      placeholder="1"
-                      value={servicio.cantidad || ""}
-                      onChange={e => onUpdate(servicio.id, "cantidad", parseNumeric(e.target.value))}
-                    />
+                    {restricted
+                      ? <span className="text-muted-foreground italic text-xs">[Restringido]</span>
+                      : <Input type="number" className="h-8 text-xs text-right w-full min-w-[58px]" placeholder="1" value={servicio.cantidad || ""} onChange={e => onUpdate(servicio.id, "cantidad", parseNumeric(e.target.value))} />
+                    }
                   </td>
 
                   {/* Total (calculado) */}
                   <td className="px-2 py-1 text-right font-mono font-medium text-foreground">
-                    {formatCurrency(servicio.total, currencyCode)}
+                    {restricted ? <span className="text-muted-foreground italic text-xs">[Restringido]</span> : formatCurrency(servicio.total, currencyCode)}
                   </td>
 
                   {/* Plazo */}
@@ -179,17 +175,19 @@ export function F1Servicios({ servicios, catalogs, moneda, onAdd, onRemove, onUp
         </div>
 
         {/* Footer: botón agregar + total */}
-        <div className="flex items-center justify-between pt-2">
-          <Button variant="outline" size="sm" onClick={onAdd}>
-            <Plus className="w-3.5 h-3.5 mr-1.5" /> Agregar Servicio
-          </Button>
-          <div className="flex items-center gap-3">
-            <span className="text-sm text-muted-foreground">Total Servicios:</span>
-            <span className="text-base font-bold text-foreground font-mono">
-              {formatCurrency(totalServicios, currencyCode)}
-            </span>
+        {!restricted && (
+          <div className="flex items-center justify-between pt-2">
+            <Button variant="outline" size="sm" onClick={onAdd}>
+              <Plus className="w-3.5 h-3.5 mr-1.5" /> Agregar Servicio
+            </Button>
+            <div className="flex items-center gap-3">
+              <span className="text-sm text-muted-foreground">Total Servicios:</span>
+              <span className="text-base font-bold text-foreground font-mono">
+                {formatCurrency(totalServicios, currencyCode)}
+              </span>
+            </div>
           </div>
-        </div>
+        )}
 
       </div>
     </FormSection>
