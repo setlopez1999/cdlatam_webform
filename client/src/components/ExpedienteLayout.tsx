@@ -50,18 +50,30 @@ const ALL_TABS: Tab[] = [
 
 /**
  * Devuelve los tabs visibles según el rol del usuario.
+ * - admin / perfil_full  → todos los tabs (PRIORIDAD MÁXIMA)
  * - perfil_ventas        → solo F1-Acta
  * - perfil_implementacion → solo Implementación
- * - perfil_full / admin / manager / user → todos los tabs
+ * - otros                → todos los tabs
+ *
+ * IMPORTANTE: isAdmin debe verificarse ANTES de los roles restrictivos.
+ * hasRole("admin") devuelve true para admins, lo que causaría que
+ * hasRole("perfil_ventas") también devuelva true (fallback admin),
+ * atrapando al admin en el primer if y mostrando solo F1.
  */
 function getVisibleTabs(hasRole: (r: string) => boolean, isAdmin: boolean): Tab[] {
-  if (hasRole("perfil_ventas")) {
+  // Admin y perfil_full tienen acceso completo — verificar PRIMERO
+  if (isAdmin) return ALL_TABS;
+  // Nota: no usamos hasRole("perfil_full") aquí porque hasRole para admin
+  // siempre devuelve true, ya verificamos isAdmin arriba.
+  // Para no-admins, verificamos perfil_full directamente en myRoles.
+  // Roles restrictivos — solo aplican a usuarios sin admin
+  if (hasRole("perfil_ventas") && !hasRole("perfil_full")) {
     return ALL_TABS.filter(t => t.id === "acta");
   }
-  if (hasRole("perfil_implementacion")) {
+  if (hasRole("perfil_implementacion") && !hasRole("perfil_full")) {
     return ALL_TABS.filter(t => t.id === "implementacion");
   }
-  // perfil_full, admin, manager, user → acceso completo
+  // perfil_full, manager, user → acceso completo
   return ALL_TABS;
 }
 

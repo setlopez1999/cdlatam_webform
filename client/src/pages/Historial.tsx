@@ -1,49 +1,51 @@
 /**
  * Historial / Expedientes — Lista de todos los expedientes guardados.
  * Cada expediente agrupa F1 (Acta), F2 (EP) y sus Resultados.
+ *
+ * Usa el nuevo store (features/expedientes/store.ts) con la clave
+ * cdlatam_expedientes y el formato {f1, f2, f3}.
  */
 
 import { useState, useMemo } from "react";
 import { useLocation } from "wouter";
 import {
-  FolderOpen, FileText, ClipboardList, BarChart2,
-  ChevronDown, ChevronRight, Trash2, Plus, AlertTriangle,
-  Search,
+  FolderOpen, Trash2, Plus, AlertTriangle, Search, ChevronDown,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import {
-  useExpediente, calcularResultado, type Expediente,
-} from "@/hooks/useFormStore";
+import { useExpedienteStore } from "@/features/expedientes/store";
+import type { Expediente } from "@/features/expedientes/types";
+import { calcularResultadoF3 } from "@/features/expedientes/types";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { PageLayout } from "@/components/PageLayout";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-type EstadoDoc = "completo" | "borrador" | "ausente";
+type EstadoDoc = "guardado" | "borrador" | "ausente";
 
-function getEstadoActa(exp: Expediente): EstadoDoc {
-  if (!exp.acta) return "ausente";
-  if (exp.acta.status === "completado" || exp.acta.status === "exportado") return "completo";
-  return "borrador";
+/** Mapea el FormStatus del nuevo store a EstadoDoc para mostrar en la tarjeta */
+function getEstadoF1(exp: Expediente): EstadoDoc {
+  if (exp.f1.status === "guardado") return "guardado";
+  if (exp.f1.status === "sin_guardar") return "borrador";
+  return "ausente";
 }
 
-function getEstadoEP(exp: Expediente): EstadoDoc {
-  if (!exp.ep) return "ausente";
-  if (exp.ep.status === "completado" || exp.ep.status === "exportado") return "completo";
-  return "borrador";
+function getEstadoF2(exp: Expediente): EstadoDoc {
+  if (exp.f2.status === "guardado") return "guardado";
+  if (exp.f2.status === "sin_guardar") return "borrador";
+  return "ausente";
 }
 
 const ESTADO_STYLES: Record<EstadoDoc, string> = {
-  completo: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30",
+  guardado: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30",
   borrador: "bg-amber-500/15 text-amber-400 border-amber-500/30",
   ausente:  "bg-muted text-muted-foreground border-border",
 };
 
 const ESTADO_LABELS: Record<EstadoDoc, string> = {
-  completo: "Completo",
+  guardado: "Guardado",
   borrador: "Borrador",
   ausente:  "—",
 };
@@ -73,14 +75,19 @@ function fmtCell(value: number) {
 // ─── Tablas de resultados expandibles ────────────────────────────────────────
 
 function ResultadosExpandidos({ exp }: { exp: Expediente }) {
-  if (!exp.ep) return null;
-  const r = useMemo(() => calcularResultado(exp.ep!), [exp.ep]);
+  const tieneF2 = exp.f2.status !== "nuevo";
+  if (!tieneF2) return null;
+
+  const r = useMemo(
+    () => calcularResultadoF3(exp.f2.data, exp.f1.data),
+    [exp.f2.data, exp.f1.data],
+  );
   const res = r.resumen;
 
   return (
     <div className="mt-3 space-y-4 border-t border-border/40 pt-3">
       {/* Aviso si falta el Acta */}
-      {!exp.acta && (
+      {exp.f1.status === "nuevo" && (
         <div className="flex items-center gap-2 text-xs text-amber-400 bg-amber-500/10 rounded-lg px-3 py-2">
           <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
           <span>Tablas de resultado incompletas por falta de información en Acta (F1).</span>
@@ -234,14 +241,18 @@ function ExpedienteCard({ exp, onEliminar }: { exp: Expediente; onEliminar: (id:
   const [, navigate] = useLocation();
   const [expandido, setExpandido] = useState(false);
 
-  const ea = getEstadoActa(exp);
-  const ee = getEstadoEP(exp);
-  const tieneResultados = !!(exp.ep);
-  const resultadosCompletos = !!(exp.acta && exp.ep);
+  const ef1 = getEstadoF1(exp);
+  const ef2 = getEstadoF2(exp);
+  const tieneF2 = exp.f2.status !== "nuevo";
+  const resultadosCompletos = exp.f1.status !== "nuevo" && exp.f2.status !== "nuevo";
+  const tieneContenidoF1 = exp.f1.status !== "nuevo";
 
-  const fechaDisplay = new Date(exp.creadoEn).toLocaleDateString("es-CL", {
+  const fechaDisplay = new Date(exp.createdAt).toLocaleDateString("es-CL", {
     day: "2-digit", month: "short", year: "numeric",
   });
+
+  // Nombre de empresa del F1 si está disponible
+  const empresa = exp.f1.data?.razonSocial || exp.f1.data?.nombreFantasia || null;
 
   const handleEliminar = () => {
     if (!confirm(`¿Eliminar el expediente "${exp.nombre}"? Esta acción no se puede deshacer.`)) return;
@@ -256,25 +267,27 @@ function ExpedienteCard({ exp, onEliminar }: { exp: Expediente; onEliminar: (id:
         <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
           <FolderOpen className="w-4 h-4 text-primary" />
         </div>
-
         <div className="flex-1 min-w-0">
           <p className="text-sm font-semibold truncate">{exp.nombre}</p>
-          <p className="text-xs text-muted-foreground">{fechaDisplay}</p>
+          <p className="text-xs text-muted-foreground">
+            {empresa ? <span className="text-foreground/70">{empresa} · </span> : null}
+            {fechaDisplay}
+          </p>
         </div>
 
         {/* Estados — desktop */}
         <div className="hidden sm:flex items-center gap-4 shrink-0">
-          <EstadoBadge estado={ea} label="Acta (F1)" />
-          <EstadoBadge estado={ee} label="EP (F2)" />
+          <EstadoBadge estado={ef1} label="Acta (F1)" />
+          <EstadoBadge estado={ef2} label="EP (F2)" />
           <div className="flex flex-col items-center gap-0.5">
             <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Resultados</span>
-            <Badge variant="outline" className={cn("text-xs", tieneResultados
+            <Badge variant="outline" className={cn("text-xs", tieneF2
               ? resultadosCompletos
                 ? "bg-violet-500/15 text-violet-400 border-violet-500/30"
                 : "bg-amber-500/15 text-amber-400 border-amber-500/30"
               : "bg-muted text-muted-foreground border-border"
             )}>
-              {tieneResultados ? (resultadosCompletos ? "Disponibles" : "Incompletos") : "—"}
+              {tieneF2 ? (resultadosCompletos ? "Disponibles" : "Incompletos") : "—"}
             </Badge>
           </div>
         </div>
@@ -287,9 +300,9 @@ function ExpedienteCard({ exp, onEliminar }: { exp: Expediente; onEliminar: (id:
             className="h-7 text-xs hidden sm:flex"
             onClick={() => navigate(`/expediente/${exp.id}/acta`)}
           >
-            {exp.acta ? "Continuar" : "Iniciar"}
+            {tieneContenidoF1 ? "Continuar" : "Iniciar"}
           </Button>
-          {tieneResultados && (
+          {tieneF2 && (
             <Button
               size="icon"
               variant="ghost"
@@ -314,24 +327,27 @@ function ExpedienteCard({ exp, onEliminar }: { exp: Expediente; onEliminar: (id:
 
       {/* Estados — móvil */}
       <div className="sm:hidden flex items-center gap-3 px-4 pb-3 flex-wrap">
-        <EstadoBadge estado={ea} label="Acta (F1)" />
-        <EstadoBadge estado={ee} label="EP (F2)" />
+        <EstadoBadge estado={ef1} label="Acta (F1)" />
+        <EstadoBadge estado={ef2} label="EP (F2)" />
         <Button size="sm" variant="outline" className="h-7 text-xs ml-auto"
           onClick={() => navigate(`/expediente/${exp.id}/acta`)}>
-          {exp.acta ? "Continuar" : "Iniciar"}
+          {tieneContenidoF1 ? "Continuar" : "Iniciar"}
         </Button>
       </div>
 
       {/* Aviso resultados incompletos */}
-      {tieneResultados && !resultadosCompletos && (
+      {tieneF2 && !resultadosCompletos && (
         <div className="mx-4 mb-3 flex items-center gap-2 text-xs text-amber-400 bg-amber-500/10 rounded-lg px-3 py-2">
           <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
-          <span>Tablas de resultado incompletas por falta de información en {!exp.acta ? "Acta (F1)" : "EP (F2)"}.</span>
+          <span>
+            Tablas de resultado incompletas por falta de información en{" "}
+            {exp.f1.status === "nuevo" ? "Acta (F1)" : "EP (F2)"}.
+          </span>
         </div>
       )}
 
       {/* Resultados expandidos */}
-      {expandido && exp.ep && (
+      {expandido && tieneF2 && (
         <div className="px-4 pb-4">
           <ResultadosExpandidos exp={exp} />
         </div>
@@ -344,7 +360,7 @@ function ExpedienteCard({ exp, onEliminar }: { exp: Expediente; onEliminar: (id:
 
 export default function Historial() {
   const [, navigate] = useLocation();
-  const { expedientes, eliminar } = useExpediente();
+  const { expedientes, eliminar } = useExpedienteStore();
   const [search, setSearch] = useState("");
 
   const filtrados = useMemo(() => {
@@ -352,8 +368,8 @@ export default function Historial() {
     const q = search.toLowerCase();
     return expedientes.filter(e =>
       e.nombre.toLowerCase().includes(q) ||
-      e.acta?.razonSocial?.toLowerCase().includes(q) ||
-      e.ep?.nombreCliente?.toLowerCase().includes(q)
+      e.f1.data?.razonSocial?.toLowerCase().includes(q) ||
+      e.f1.data?.nombreFantasia?.toLowerCase().includes(q)
     );
   }, [expedientes, search]);
 
@@ -370,7 +386,12 @@ export default function Historial() {
         <>
           <div className="relative">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-            <Input placeholder="Buscar expediente..." value={search} onChange={e => setSearch(e.target.value)} className="pl-8 h-8 text-sm w-48" />
+            <Input
+              placeholder="Buscar expediente..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              className="pl-8 h-8 text-sm w-48"
+            />
           </div>
           <Button className="gap-2 h-8 text-sm" onClick={() => navigate("/nuevo-expediente")}>
             <Plus className="w-4 h-4" />Nuevo
@@ -378,7 +399,6 @@ export default function Historial() {
         </>
       }
     >
-
       {filtrados.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 gap-4 text-center">
           <FolderOpen className="w-12 h-12 text-muted-foreground/40" />
