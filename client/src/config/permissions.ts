@@ -242,6 +242,12 @@ export const ACTION_PERMISSIONS: Record<string, ActionPermission> = {
     description: "Ver tab Implementación",
   },
 
+  // ── Campos sensibles de expediente ──────────────────────────────────────────
+  "expediente:view_sensitive_fields": {
+    roles: [ROLE_ADMIN, "manager", "perfil_full"],
+    description: "Ver campos sensibles del acta: montos, formas de pago, consideraciones personalizadas y cláusulas legales",
+  },
+
   // ── Gestor de horarios ──────────────────────────────────────────────────────
   "horarios:manage": {
     roles: ["gestor_horarios", ROLE_ADMIN],

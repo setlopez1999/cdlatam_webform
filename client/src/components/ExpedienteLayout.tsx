@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input";
 import { useExpedienteStore } from "@/features/expedientes/store";
 import type { FormStatus } from "@/features/expedientes/types";
 import { cn } from "@/lib/utils";
-import { useLocalAuth } from "@/hooks/useLocalAuth";
+import { useCan } from "@/hooks/useCan";
 
 interface Tab {
   id: "acta" | "ep" | "resultados" | "implementacion";
@@ -49,32 +49,21 @@ const ALL_TABS: Tab[] = [
 ];
 
 /**
- * Devuelve los tabs visibles según el rol del usuario.
- * - admin / perfil_full  → todos los tabs (PRIORIDAD MÁXIMA)
- * - perfil_ventas        → solo F1-Acta
- * - perfil_implementacion → solo Implementación
- * - otros                → todos los tabs
+ * getVisibleTabs — Devuelve los tabs visibles usando ACTION_PERMISSIONS de permissions.ts.
  *
- * IMPORTANTE: isAdmin debe verificarse ANTES de los roles restrictivos.
- * hasRole("admin") devuelve true para admins, lo que causaría que
- * hasRole("perfil_ventas") también devuelva true (fallback admin),
- * atrapando al admin en el primer if y mostrando solo F1.
+ * Fuente única de verdad: `can("expediente:tab_*")` via useCan().
+ * No hay lógica de roles hardcodeada aquí — todo está en permissions.ts.
  */
-function getVisibleTabs(hasRole: (r: string) => boolean, isAdmin: boolean): Tab[] {
-  // Admin y perfil_full tienen acceso completo — verificar PRIMERO
-  if (isAdmin) return ALL_TABS;
-  // Nota: no usamos hasRole("perfil_full") aquí porque hasRole para admin
-  // siempre devuelve true, ya verificamos isAdmin arriba.
-  // Para no-admins, verificamos perfil_full directamente en myRoles.
-  // Roles restrictivos — solo aplican a usuarios sin admin
-  if (hasRole("perfil_ventas") && !hasRole("perfil_full")) {
-    return ALL_TABS.filter(t => t.id === "acta");
-  }
-  if (hasRole("perfil_implementacion") && !hasRole("perfil_full")) {
-    return ALL_TABS.filter(t => t.id === "implementacion");
-  }
-  // perfil_full, manager, user → acceso completo
-  return ALL_TABS;
+function getVisibleTabs(can: (action: string) => boolean): Tab[] {
+  return ALL_TABS.filter(tab => {
+    switch (tab.id) {
+      case "acta":           return can("expediente:tab_f1");
+      case "ep":             return can("expediente:tab_f2");
+      case "resultados":     return can("expediente:tab_resultados");
+      case "implementacion": return can("expediente:tab_implementacion");
+      default:               return false;
+    }
+  });
 }
 
 function StatusBadge({ status }: { status: FormStatus }) {
@@ -105,8 +94,8 @@ export default function ExpedienteLayout({ expedienteId, activeTab, children }: 
   const [, navigate] = useLocation();
   const { getExpediente, renombrar } = useExpedienteStore();
   const expediente = getExpediente(expedienteId);
-  const { hasRole, isAdmin } = useLocalAuth();
-  const TABS = getVisibleTabs(hasRole, isAdmin);
+  const can = useCan();
+  const TABS = getVisibleTabs(can);
 
   const [editando, setEditando] = useState(false);
   const [nombreTemp, setNombreTemp] = useState(expediente?.nombre ?? "");

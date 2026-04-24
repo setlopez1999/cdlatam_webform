@@ -99,23 +99,27 @@ export function getCurrencyCode(monedaValue: string): string {
 /**
  * Retorna el color de estado para badges.
  */
-export function getStatusColor(status: "borrador" | "completado" | "exportado"): string {
+export function getStatusColor(status: string): string {
   switch (status) {
-    case "borrador": return "bg-amber-50 text-amber-700 border-amber-200";
+    case "nuevo":      return "bg-slate-500/10 text-slate-400 border-slate-500/20";
+    case "borrador":   return "bg-amber-500/10 text-amber-400 border-amber-500/20";
+    case "guardado":   return "bg-emerald-500/10 text-emerald-400 border-emerald-500/20";
     case "completado": return "bg-emerald-50 text-emerald-700 border-emerald-200";
-    case "exportado": return "bg-blue-50 text-blue-700 border-blue-200";
-    default: return "bg-gray-50 text-gray-700 border-gray-200";
+    case "exportado":  return "bg-blue-50 text-blue-700 border-blue-200";
+    default:           return "bg-slate-500/10 text-slate-400 border-slate-500/20";
   }
 }
 
 /**
  * Retorna el label de estado.
  */
-export function getStatusLabel(status: "borrador" | "completado" | "exportado"): string {
+export function getStatusLabel(status: string): string {
   switch (status) {
-    case "borrador": return "Borrador";
+    case "nuevo":      return "Nuevo";
+    case "borrador":   return "Borrador";
+    case "guardado":   return "Guardado";
     case "completado": return "Completado";
-    case "exportado": return "Exportado";
-    default: return status;
+    case "exportado":  return "Exportado";
+    default:           return status ?? "-";
   }
 }

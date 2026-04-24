@@ -12,7 +12,7 @@ import {
   FileText, Hash, Users, Search, Database,
   BarChart3, TrendingUp,
   ChevronDown, ChevronUp, X, FileText as FileTextIcon,
-  ClipboardList, RefreshCw, Filter, Eye, Trash2,
+  RefreshCw, Filter, Eye, Trash2,
   Download, Upload, Settings2
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -25,7 +25,9 @@ import { Table2 } from "lucide-react";
 import { PageLayout } from "@/components/PageLayout";
 import { ManageCatalogsModal } from "@/components/ManageCatalogsModal";
 import { CatalogTabGrid } from "@/components/CatalogTabGrid";
-import { loadActasList, loadEPList, deleteActa, deleteEP } from "@/hooks/useFormStore";
+import { useExpedienteStore } from "@/features/expedientes/store";
+import type { Expediente } from "@/features/expedientes/types";
+import { useLocation } from "wouter";
 import { formatCurrency, formatDate, getStatusColor, getStatusLabel } from "@/lib/formatters";
 import { CatalogCrudView } from "@/components/CatalogCrudView";
 import { catalogConfigs } from "@/config/catalogConfig";
@@ -36,7 +38,7 @@ import { parseErrorMessage, isConnectionError, APP_DEBUG, getUseApi } from "@/li
 type TabId =
   | "resumen" | "cecos" | "soluciones" | "paises" | "monedas"
   | "unidades" | "detalle" | "tipos" | "plazos" | "documentos" | "empresas" | "doctos" | "deptos" | "areas" | "nombres"
-  | "actas" | "ep";
+  | "expedientes";
 
 interface TabDef {
   id: TabId;
@@ -63,8 +65,7 @@ const TABS: TabDef[] = [
   { id: "deptos", label: "Departamentos", icon: MapPin, color: "text-indigo-400", bgColor: "bg-indigo-500/10", group: "catalogs" },
   { id: "areas", label: "Áreas", icon: Layers, color: "text-fuchsia-400", bgColor: "bg-fuchsia-500/10", group: "catalogs" },
   { id: "nombres", label: "Nombres", icon: Users, color: "text-rose-400", bgColor: "bg-rose-500/10", group: "catalogs" },
-  { id: "actas", label: "Actas", icon: FileTextIcon, color: "text-slate-300", bgColor: "bg-slate-500/10", group: "records" },
-  { id: "ep", label: "Evaluaciones", icon: ClipboardList, color: "text-slate-300", bgColor: "bg-slate-500/10", group: "records" },
+  { id: "expedientes", label: "Expedientes", icon: FileTextIcon, color: "text-indigo-300", bgColor: "bg-indigo-500/10", group: "records" },
 ];
 
 // ─── Tipos de datos ─────────────────────────────────────────────────────────
@@ -210,7 +211,122 @@ function ResumenView({ data, catalogMeta, onSelectTab }: {
   );
 }
 
-// ─── ESPACIO PARA OTRAS VISTAS (SI APLICA) ───────────────────────────────────
+// ─── Vista Expedientes (nuevo store) ────────────────────────────────────────
+
+function ExpedientesView() {
+  const { expedientes, eliminar } = useExpedienteStore();
+  const [, navigate] = useLocation();
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+
+  const filtered = useMemo(() => expedientes.filter(exp => {
+    const q = search.toLowerCase();
+    const razonSocial = exp.f1.data.razonSocial?.toLowerCase() ?? "";
+    const noActa = exp.f1.data.noActa?.toLowerCase() ?? "";
+    const nombre = exp.nombre.toLowerCase();
+    const matchQ = !q || razonSocial.includes(q) || noActa.includes(q) || nombre.includes(q);
+    const matchStatus = statusFilter === "all" || exp.f1.status === statusFilter;
+    return matchQ && matchStatus;
+  }), [expedientes, search, statusFilter]);
+
+  const handleDelete = (id: string) => {
+    if (!confirm("¿Eliminar este expediente? Esta acción no se puede deshacer.")) return;
+    eliminar(id);
+    toast.success("Expediente eliminado");
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex gap-3 flex-wrap">
+        <div className="flex-1 min-w-48">
+          <SearchBar value={search} onChange={setSearch} placeholder="Buscar por razón social, N° acta, nombre..." />
+        </div>
+        <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <SelectTrigger className="w-40 bg-[#1a1f2e] border-white/10 text-white h-9 text-sm">
+            <Filter className="w-3.5 h-3.5 mr-2 text-slate-400" /><SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos</SelectItem>
+            <SelectItem value="nuevo">Nuevo</SelectItem>
+            <SelectItem value="borrador">Borrador</SelectItem>
+            <SelectItem value="guardado">Guardado</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      {filtered.length === 0 ? (
+        <EmptyState
+          icon={FileTextIcon}
+          title="No hay expedientes"
+          desc={search ? "Sin resultados para tu búsqueda." : "Aún no hay expedientes registrados."}
+        />
+      ) : (
+        <div className="bg-[#1a1f2e] border border-white/5 rounded-xl overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-white/5 bg-white/3">
+                  {["N° Acta", "Razón Social", "RUT/DNI", "Representante", "Fecha", "Total", "F1", "F2", ""].map(h => (
+                    <th key={h} className="text-left px-4 py-3 text-xs font-medium text-slate-500">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((exp: Expediente) => {
+                  const f1 = exp.f1.data;
+                  const total = (f1.serviciosContratados ?? []).reduce((s, sv) => s + (sv.total ?? 0), 0);
+                  return (
+                    <tr key={exp.id} className="border-t border-white/3 hover:bg-white/3 transition-colors">
+                      <td className="px-4 py-3">
+                        <span className="font-mono text-xs text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded">{f1.noActa || "-"}</span>
+                      </td>
+                      <td className="px-4 py-3 text-sm font-medium text-slate-200">{f1.razonSocial || exp.nombre}</td>
+                      <td className="px-4 py-3 text-xs text-slate-400">{f1.rucDniRut || "-"}</td>
+                      <td className="px-4 py-3 text-xs text-slate-400">{f1.representanteLegal || "-"}</td>
+                      <td className="px-4 py-3 text-xs text-slate-400">{formatDate(f1.fecha ?? "")}</td>
+                      <td className="px-4 py-3 text-xs font-mono text-right text-slate-300">{formatCurrency(total)}</td>
+                      <td className="px-4 py-3">
+                        <span className={`text-xs px-2 py-0.5 rounded-full border ${getStatusColor(exp.f1.status)}`}>
+                          {getStatusLabel(exp.f1.status)}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className={`text-xs px-2 py-0.5 rounded-full border ${getStatusColor(exp.f2.status)}`}>
+                          {getStatusLabel(exp.f2.status)}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex gap-1">
+                          <Button
+                            variant="ghost" size="icon"
+                            className="h-7 w-7 text-slate-400 hover:text-white"
+                            onClick={() => navigate(`/expediente/${exp.id}/acta`)}
+                          >
+                            <Eye className="w-3.5 h-3.5" />
+                          </Button>
+                          <Button
+                            variant="ghost" size="icon"
+                            className="h-7 w-7 text-slate-400 hover:text-red-400"
+                            onClick={() => handleDelete(exp.id)}
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          <div className="px-4 py-2.5 border-t border-white/5 text-xs text-slate-500">
+            {filtered.length} de {expedientes.length} expedientes
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 // ─── Vista simple lista ───────────────────────────────────────────────────────
 
@@ -233,189 +349,6 @@ function SimpleList({ items, dotColor }: { items: string[]; dotColor: string }) 
     </div>
   );
 }
-
-// ─── Vista Actas (localStorage) ───────────────────────────────────────────────
-
-function ActasView() {
-  const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
-  const [actas, setActas] = useState(() => loadActasList());
-
-  const filtered = useMemo(() => actas.filter(a => {
-    const q = search.toLowerCase();
-    const matchQ = !q || a.razonSocial?.toLowerCase().includes(q) || a.noActa?.toLowerCase().includes(q) || a.rucDniRut?.toLowerCase().includes(q);
-    return matchQ && (statusFilter === "all" || a.status === statusFilter);
-  }), [actas, search, statusFilter]);
-
-  const handleDelete = (id: string) => {
-    if (!confirm("¿Eliminar esta acta?")) return;
-    deleteActa(id);
-    setActas(loadActasList());
-    toast.success("Acta eliminada");
-    // TODO: Conectar con API de Base de Datos aquí - trpc.actas.delete.mutate({ id })
-  };
-
-  return (
-    <div className="space-y-4">
-      <div className="flex gap-3 flex-wrap">
-        <div className="flex-1 min-w-48"><SearchBar value={search} onChange={setSearch} placeholder="Buscar por razón social, N° acta, RUT..." /></div>
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-40 bg-[#1a1f2e] border-white/10 text-white h-9 text-sm">
-            <Filter className="w-3.5 h-3.5 mr-2 text-slate-400" /><SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todos</SelectItem>
-            <SelectItem value="borrador">Borrador</SelectItem>
-            <SelectItem value="completado">Completado</SelectItem>
-            <SelectItem value="exportado">Exportado</SelectItem>
-          </SelectContent>
-        </Select>
-        <Button variant="outline" size="sm" onClick={() => setActas(loadActasList())} className="h-9 border-white/10 text-slate-400 hover:text-white">
-          <RefreshCw className="w-3.5 h-3.5" />
-        </Button>
-      </div>
-      {filtered.length === 0 ? (
-        <EmptyState icon={FileTextIcon} title="No hay actas" desc={search ? "Sin resultados para tu búsqueda." : "Aún no hay actas registradas."} />
-      ) : (
-        <div className="bg-[#1a1f2e] border border-white/5 rounded-xl overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-white/5 bg-white/3">
-                  {["N° Acta", "Razón Social", "RUT/DNI", "Representante", "Fecha", "Total", "Estado", ""].map(h => (
-                    <th key={h} className="text-left px-4 py-3 text-xs font-medium text-slate-500">{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((acta, i) => {
-                  const total = (acta.serviciosContratados as any[])?.reduce((s: number, sv: any) => s + (sv.total || 0), 0) ?? 0;
-                  return (
-                    <tr key={String(acta.id ?? i)} className="border-t border-white/3 hover:bg-white/3 transition-colors">
-                      <td className="px-4 py-3"><span className="font-mono text-xs text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded">{acta.noActa || "-"}</span></td>
-                      <td className="px-4 py-3 text-sm font-medium text-slate-200">{acta.razonSocial || "-"}</td>
-                      <td className="px-4 py-3 text-xs text-slate-400">{acta.rucDniRut || "-"}</td>
-                      <td className="px-4 py-3 text-xs text-slate-400">{acta.representanteLegal || "-"}</td>
-                      <td className="px-4 py-3 text-xs text-slate-400">{formatDate(acta.fecha ?? "")}</td>
-                      <td className="px-4 py-3 text-xs font-mono text-right text-slate-300">{formatCurrency(total)}</td>
-                      <td className="px-4 py-3">
-                        <span className={`text-xs px-2 py-0.5 rounded-full border ${getStatusColor(acta.status)}`}>{getStatusLabel(acta.status)}</span>
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex gap-1">
-                          <Button asChild variant="ghost" size="icon" className="h-7 w-7 text-slate-400 hover:text-white">
-                            <Link href="/historial"><Eye className="w-3.5 h-3.5" /></Link>
-                          </Button>
-                          <Button variant="ghost" size="icon" className="h-7 w-7 text-slate-400 hover:text-red-400" onClick={() => handleDelete(String(acta.id ?? ""))}>
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-          <div className="px-4 py-2.5 border-t border-white/5 text-xs text-slate-500">
-            {filtered.length} de {actas.length} actas
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ─── Vista EP (localStorage) ──────────────────────────────────────────────────
-
-function EPView() {
-  const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
-  const [eps, setEps] = useState(() => loadEPList());
-
-  const filtered = useMemo(() => eps.filter(e => {
-    const q = search.toLowerCase();
-    const matchQ = !q || e.nombreCliente?.toLowerCase().includes(q) || e.empresa?.toLowerCase().includes(q) || e.solucion?.toLowerCase().includes(q);
-    return matchQ && (statusFilter === "all" || e.status === statusFilter);
-  }), [eps, search, statusFilter]);
-
-  const handleDelete = (id: string) => {
-    if (!confirm("¿Eliminar esta evaluación?")) return;
-    deleteEP(id);
-    setEps(loadEPList());
-    toast.success("Evaluación eliminada");
-    // TODO: Conectar con API de Base de Datos aquí - trpc.evaluaciones.delete.mutate({ id })
-  };
-
-  return (
-    <div className="space-y-4">
-      <div className="flex gap-3 flex-wrap">
-        <div className="flex-1 min-w-48"><SearchBar value={search} onChange={setSearch} placeholder="Buscar por cliente, empresa, solución..." /></div>
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-40 bg-[#1a1f2e] border-white/10 text-white h-9 text-sm">
-            <Filter className="w-3.5 h-3.5 mr-2 text-slate-400" /><SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todos</SelectItem>
-            <SelectItem value="borrador">Borrador</SelectItem>
-            <SelectItem value="completado">Completado</SelectItem>
-            <SelectItem value="exportado">Exportado</SelectItem>
-          </SelectContent>
-        </Select>
-        <Button variant="outline" size="sm" onClick={() => setEps(loadEPList())} className="h-9 border-white/10 text-slate-400 hover:text-white">
-          <RefreshCw className="w-3.5 h-3.5" />
-        </Button>
-      </div>
-      {filtered.length === 0 ? (
-        <EmptyState icon={ClipboardList} title="No hay evaluaciones" desc={search ? "Sin resultados para tu búsqueda." : "Aún no hay evaluaciones registradas."} />
-      ) : (
-        <div className="bg-[#1a1f2e] border border-white/5 rounded-xl overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-white/5 bg-white/3">
-                  {["N° Propuesta", "Cliente", "Empresa", "Solución", "País", "Monto", "Estado", ""].map(h => (
-                    <th key={h} className="text-left px-4 py-3 text-xs font-medium text-slate-500">{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((ep, i) => (
-                  <tr key={String(ep.id ?? i)} className="border-t border-white/3 hover:bg-white/3 transition-colors">
-                    <td className="px-4 py-3"><span className="font-mono text-xs text-violet-400 bg-violet-500/10 px-2 py-0.5 rounded">{ep.propuestaNumero || "-"}</span></td>
-                    <td className="px-4 py-3 text-sm font-medium text-slate-200">{ep.nombreCliente || "-"}</td>
-                    <td className="px-4 py-3 text-xs text-slate-400">{ep.empresa || "-"}</td>
-                    <td className="px-4 py-3 text-xs text-slate-400">{ep.solucion || "-"}</td>
-                    <td className="px-4 py-3 text-xs text-slate-400">{ep.paisImplementacion || "-"}</td>
-                    <td className="px-4 py-3 text-xs font-mono text-right text-slate-300">{formatCurrency(ep.montoProyecto)}</td>
-                    <td className="px-4 py-3">
-                      <span className={`text-xs px-2 py-0.5 rounded-full border ${getStatusColor(ep.status)}`}>{getStatusLabel(ep.status)}</span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex gap-1">
-                        <Button asChild variant="ghost" size="icon" className="h-7 w-7 text-slate-400 hover:text-white">
-                          <Link href="/historial"><Eye className="w-3.5 h-3.5" /></Link>
-                        </Button>
-                        <Button variant="ghost" size="icon" className="h-7 w-7 text-slate-400 hover:text-red-400" onClick={() => handleDelete(String(ep.id ?? ""))}>
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </Button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <div className="px-4 py-2.5 border-t border-white/5 text-xs text-slate-500">
-            {filtered.length} de {eps.length} evaluaciones
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ─── Página principal ─────────────────────────────────────────────────────────
 
 export default function BaseDatos() {
   const [activeTab, setActiveTab] = useState<string>("resumen");
@@ -512,7 +445,7 @@ export default function BaseDatos() {
             {activeTab === "resumen" && data && <ResumenView data={data} catalogMeta={catalogMetaList as any} onSelectTab={setActiveTab} />}
 
             {/* CRUD GENÉRICO DE CATÁLOGOS - dinámico desde catalog_meta */}
-            {activeTab !== "resumen" && activeTab !== "actas" && activeTab !== "ep" && (() => {
+            {activeTab !== "resumen" && activeTab !== "expedientes" && (() => {
               const cat = catalogMetaList.find(c => c.tableName === activeTab);
               if (!cat) return null;
               // Usar config hardcodeado si existe, sino generar uno genérico
@@ -530,8 +463,7 @@ export default function BaseDatos() {
             })()}
 
             {/* VISTAS PARTICULARES */}
-            {activeTab === "actas" && <ActasView />}
-            {activeTab === "ep" && <EPView />}
+            {activeTab === "expedientes" && <ExpedientesView />}
           </>
         )}
       </div>

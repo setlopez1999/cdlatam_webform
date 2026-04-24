@@ -1,15 +1,28 @@
 /**
- * useLocalAuth — Hook de autenticación conectado directamente a la Base de Datos local (gestion.db) 
- * usando los endpoints nativos de tRPC del servidor. 
+ * useLocalAuth — Hook de autenticación conectado directamente a la Base de Datos local (gestion.db)
+ * usando los endpoints nativos de tRPC del servidor.
  *
  * Emplea Zustand (`useAuthStore`) para la gestión global y persistente de la sesión.
+ *
+ * ─── SISTEMA DE ROLES ────────────────────────────────────────────────────────
+ * Fuente única de verdad: `myRoles` (array de strings desde user_roles en BD via tRPC).
+ * El campo legacy `currentUser.role` solo se usa como fallback para isAdmin durante
+ * la ventana de carga inicial antes de que myRoles llegue del servidor.
+ *
+ * Jerarquía de verificación:
+ *   1. isAdmin  → myRoles.includes("admin") || currentUser.role === "admin" (legacy fallback)
+ *   2. hasRole  → isAdmin || myRoles.includes(roleName)
+ *   3. useCan() → evaluatePermission() de permissions.ts (fuente de verdad de permisos)
+ *
+ * NO usar `currentUser.role` directamente en componentes — usar isAdmin, hasRole() o useCan().
  *
  * Provee:
  *  - currentUser: usuario autenticado
  *  - isAuthenticated: boolean
- *  - isAdmin: boolean — true si el usuario tiene el rol "admin" en user_roles
+ *  - isAdmin: boolean — true si el usuario tiene el rol "admin" (RBAC o campo legacy)
  *  - hasRole(roleName): boolean — verifica si el usuario tiene un rol específico
  *  - hasAnyRole(roleNames[]): boolean — verifica si el usuario tiene alguno de los roles
+ *  - myRoles: string[] — lista de roles RBAC del usuario (fuente primaria)
  *  - login(username, password): Promise
  *  - logout(): Promise
  *  - isLoading: boolean
@@ -25,6 +38,7 @@ export interface AuthUser {
   id: number | string;
   username: string;
   displayName?: string | null;
+  /** Campo legacy del JWT — solo usar para isAdmin, no para lógica de permisos en componentes */
   role: "user" | "admin" | string;
 }
 
@@ -79,26 +93,37 @@ export function useLocalAuth() {
   }, [logoutMutation, refetch, clearAuth]);
 
   /**
-   * Verifica si el usuario tiene un rol específico.
-   * Fuente primaria: user_roles (RBAC). Fallback: campo legacy role="admin".
+   * isAdmin — true si el usuario tiene el rol "admin".
+   *
+   * Fuente primaria: myRoles (RBAC desde user_roles en BD).
+   * Fallback: campo legacy `role` del JWT (ventana de carga inicial antes de que myRoles llegue).
+   */
+  const isAdmin = myRoles.includes("admin") || currentUser?.role === "admin";
+
+  /**
+   * hasRole — verifica si el usuario tiene un rol específico.
+   *
+   * Fuente única: myRoles (RBAC desde user_roles en BD).
+   * Admin tiene acceso a todos los roles (verificado via isAdmin).
+   *
+   * Para verificar permisos de acciones, usar `useCan()` en su lugar.
    */
   const hasRole = useCallback((roleName: string): boolean => {
     if (!currentUser) return false;
-    // Fallback legacy: si el campo role es "admin", tiene acceso total
-    if (currentUser.role === "admin") return true;
+    if (isAdmin) return true;
     return myRoles.includes(roleName);
-  }, [currentUser, myRoles]);
+  }, [currentUser, isAdmin, myRoles]);
 
   /**
-   * Verifica si el usuario tiene al menos uno de los roles dados.
+   * hasAnyRole — verifica si el usuario tiene al menos uno de los roles dados.
+   *
+   * Fuente única: myRoles (RBAC desde user_roles en BD).
    */
   const hasAnyRole = useCallback((roleNames: string[]): boolean => {
     if (!currentUser) return false;
-    if (currentUser.role === "admin") return true;
+    if (isAdmin) return true;
     return roleNames.some(r => myRoles.includes(r));
-  }, [currentUser, myRoles]);
-
-  const isAdmin = hasRole("admin");
+  }, [currentUser, isAdmin, myRoles]);
 
   return {
     currentUser,

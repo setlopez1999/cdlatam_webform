@@ -6,10 +6,13 @@
  *   - Formas de pago (montos, cuotas)
  *   - Servicios (valores unitarios, totales, descuentos)
  *
- * Reglas de visibilidad:
+ * Reglas de visibilidad (definidas en permissions.ts → "expediente:view_sensitive_fields"):
  *   - admin / perfil_full / manager → siempre ve todo
  *   - Creador del acta              → ve todo (independiente del rol)
  *   - Otro usuario con perfil_ventas → solo ve servicios básicos, SIN montos ni consideraciones
+ *
+ * Fuente única de verdad: `useCan("expediente:view_sensitive_fields")` via permissions.ts.
+ * NO hay roles hardcodeados en este hook.
  *
  * Uso:
  *   const { canViewSensitiveFields } = useFieldVisibility(actaCreadorId);
@@ -21,18 +24,18 @@
  */
 
 import { useLocalAuth } from "./useLocalAuth";
-
-const ROLES_FULL_ACCESS = ["admin", "perfil_full", "manager"];
+import { useCan } from "./useCan";
 
 /**
  * @param actaCreadorId - ID del usuario que creó el acta (undefined si aún no persiste en BD)
  * @returns canViewSensitiveFields — true si el usuario puede ver campos sensibles
  */
 export function useFieldVisibility(actaCreadorId?: number | string) {
-  const { currentUser, hasAnyRole } = useLocalAuth();
+  const { currentUser } = useLocalAuth();
+  const can = useCan();
 
-  // Admins y roles con acceso completo siempre ven todo
-  if (hasAnyRole(ROLES_FULL_ACCESS)) {
+  // Roles con acceso completo (definidos en permissions.ts → "expediente:view_sensitive_fields")
+  if (can("expediente:view_sensitive_fields")) {
     return { canViewSensitiveFields: true };
   }
 
