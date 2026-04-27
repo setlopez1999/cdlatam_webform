@@ -135,7 +135,7 @@ export const ROUTE_PERMISSIONS: Record<string, RoutePermission> = {
     roles: ["gestor_horarios"],
     label: "Gestor de Horarios",
     icon: "CalendarClock",
-    showInNav: true,
+    showInNav: false,
   },
 
   // ── Rutas para todos los usuarios autenticados ──────────────────────────────
