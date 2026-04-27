@@ -1,9 +1,9 @@
 /**
  * EasterEggOverlay — Overlay fullscreen con la animación Lottie del easter egg.
  * Se muestra al activar/desactivar el rol gestor_horarios con 5 clicks en el ícono del Dashboard.
- * La animación dura ~3 segundos (180 frames a 60fps) y luego desaparece sola.
  */
 import Lottie from "lottie-react";
+import goAnimation from "@/assets/go.json";
 
 interface EasterEggOverlayProps {
   active: boolean;
@@ -24,8 +24,7 @@ export function EasterEggOverlay({ active, onComplete }: EasterEggOverlayProps) 
       {/* Animación centrada */}
       <div className="relative w-80 h-80 md:w-96 md:h-96">
         <Lottie
-          animationData={undefined}
-          path="/go.json"
+          animationData={goAnimation}
           loop={false}
           autoplay={true}
           onComplete={onComplete}
