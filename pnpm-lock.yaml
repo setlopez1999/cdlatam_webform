@@ -131,7 +131,7 @@ importers:
         specifier: ^3.0.3
         version: 3.0.3
       better-sqlite3:
-        specifier: ^12.6.2
+        specifier: ^12.9.0
         version: 12.9.0
       class-variance-authority:
         specifier: ^0.7.1
