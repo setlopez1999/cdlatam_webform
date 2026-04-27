@@ -68,6 +68,12 @@ export interface ActionPermission {
   roles: AppRole[];
   /** Descripción legible de la acción */
   description: string;
+  /**
+   * Si true, el rol "admin" NO tiene acceso automático.
+   * El usuario debe tener el rol explícitamente en user_roles.
+   * Usado para el easter egg de gestor_horarios.
+   */
+  strictRoles?: boolean;
 }
 
 // ─── Permisos de rutas ────────────────────────────────────────────────────────
@@ -249,9 +255,12 @@ export const ACTION_PERMISSIONS: Record<string, ActionPermission> = {
   },
 
   // ── Gestor de horarios ──────────────────────────────────────────────────────
+  // EASTER EGG: strictRoles=true → admin NO tiene acceso automático.
+  // Solo quien tenga gestor_horarios explícito (vía 5 clicks en el Dashboard).
   "horarios:manage": {
-    roles: ["gestor_horarios", ROLE_ADMIN],
-    description: "Acceder y gestionar el módulo de horarios",
+    roles: ["gestor_horarios"],
+    strictRoles: true,
+    description: "Acceder y gestionar el módulo de horarios (easter egg)",
   },
 };
 
@@ -266,10 +275,11 @@ export const ACTION_PERMISSIONS: Record<string, ActionPermission> = {
  */
 export function evaluatePermission(
   userRoles: string[],
-  required: AppRole[]
+  required: AppRole[],
+  strict = false
 ): boolean {
-  // Admin siempre tiene acceso total
-  if (userRoles.includes(ROLE_ADMIN)) return true;
+  // Si strictRoles=true, el admin NO tiene acceso automático
+  if (!strict && userRoles.includes(ROLE_ADMIN)) return true;
   // Si el permiso es para todos los autenticados
   if (required.includes(ROLE_ANY)) return true;
   // Verificar si el usuario tiene al menos uno de los roles requeridos

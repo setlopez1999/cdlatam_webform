@@ -45,7 +45,7 @@ export function useCan(): (actionKey: string) => boolean {
         console.warn(`[useCan] Acción "${actionKey}" no registrada en ACTION_PERMISSIONS`);
         return false;
       }
-      return evaluatePermission(userRoles, perm.roles);
+      return evaluatePermission(userRoles, perm.roles, perm.strictRoles ?? false);
     },
     [userRoles]
   );
