@@ -1,65 +1,79 @@
 # Auditoría de Arquitectura: Fuente de Verdad y Flujo de Peticiones
 
-Este documento detalla el estado actual de la arquitectura de datos del proyecto `cdlatam_webform`, analizando cómo fluyen las peticiones desde el cliente hasta la base de datos, dónde está centralizada la lógica y qué inconsistencias o áreas de mejora existen.
+> **Última actualización:** Abril 2026  
+> Este documento refleja el estado **actual** del código. Las inconsistencias listadas anteriormente (catálogos dinámicos directos a `db.ts`) ya fueron corregidas.
 
 ## 1. Arquitectura General y Flujo de Peticiones
 
-El proyecto utiliza una arquitectura cliente-servidor basada en **React + tRPC** en el frontend y **Express + tRPC + Drizzle ORM + SQLite** en el backend.
+El proyecto usa una arquitectura cliente-servidor basada en **React + tRPC** en el frontend y **Express + tRPC + Drizzle ORM + SQLite** en el backend.
 
-El flujo de una petición típica es el siguiente:
+Flujo de una petición típica:
 
-1. **Cliente (React):** Los componentes y hooks (ej. `useFormStore.ts`) hacen llamadas a través del cliente tRPC (`trpc.ts`).
-2. **Capa de Transporte (tRPC):** Las peticiones viajan al servidor y son recibidas por los routers definidos en `server/routers.ts`.
-3. **Capa de Abstracción (dataSource.ts):** Para los catálogos y usuarios, los routers delegan la llamada a `dataSource.ts`. Esta capa actúa como un "switch" o proxy.
-4. **Fuente de Verdad (SQLite o API Externa):** Dependiendo de la variable de entorno `USE_API`, `dataSource.ts` decide si:
-   - Hace un `fetch` a una API externa (`API_URL`).
-   - Llama directamente a las funciones de acceso a datos locales en `server/db.ts` (SQLite).
+```
+Cliente (React)
+  → hook/componente llama a trpc.<router>.<procedure>
+  → tRPC router en server/routers.ts
+  → delega a dataSource.ts (prefijo ds_)
+  → dataSource.ts decide:
+      USE_API=false → db.ts (SQLite local gestion.db)
+      USE_API=true  → fetch a API_URL externa
+```
 
 ## 2. Centralización de la Fuente de Verdad
 
-La lógica de la fuente de verdad está **parcialmente centralizada**. Existe un esfuerzo claro por abstraer el origen de los datos mediante el archivo `dataSource.ts`, pero esta abstracción no cubre el 100% de las entidades del sistema.
+### Lo que SÍ pasa por `dataSource.ts` (respeta USE_API)
 
-### Lo que SÍ está centralizado (Pasa por `dataSource.ts`)
+| Entidad | Funciones ds_ |
+|---|---|
+| Catálogos fijos (monedas, países, empresas…) | `ds_getCatalogList`, `ds_createCatalogRecord`, etc. |
+| Catálogos dinámicos (custom tables) | `ds_getCatalogListGeneric`, `ds_createCatalogRecordGeneric`, etc. |
+| Usuarios | `ds_getUsers`, `ds_createUser`, `ds_toggleUserStatus`, etc. |
+| Roles | `ds_getRoles`, `ds_createRole`, `ds_updateRole`, etc. |
+| Credenciales | `ds_updateUserCredentials` |
+| Resumen de catálogos (allCounts) | `ds_allCounts` |
 
-Las siguientes entidades respetan la variable `USE_API` y pueden alternar entre SQLite local y una API externa:
+> **Nota:** Las operaciones DDL de tablas dinámicas (`ds_createCatalogTable`, `ds_deleteCatalogTable`) son siempre SQLite-only porque son operaciones de estructura, no de datos.
 
-*   **Catálogos Fijos:** Monedas, Países, Empresas, Documentos de Identidad, Unidades de Negocio, Soluciones, Detalle de Servicio, Tipos de Venta, Plazos, Documentos, CECOs, Departamentos, Áreas, Nombres.
-*   **Usuarios Locales:** Creación, listado, búsqueda y cambio de estado de usuarios (`localUsers`).
+### Lo que va directo a `db.ts` / SQLite (no respeta USE_API)
 
-### Lo que NO está centralizado (Va directo a `db.ts` / SQLite)
+Las siguientes entidades **no** pasan por `dataSource.ts` — siempre leen/escriben en `gestion.db`:
 
-Las siguientes entidades ignoran `USE_API` y siempre leen/escriben en la base de datos SQLite local (`gestion.db`):
+| Entidad | Por qué es aceptable |
+|---|---|
+| **Actas de Aceptación** | Entidad core local, no se prevé sincronizar con API externa |
+| **Evaluaciones de Proyecto (EP)** | Ídem |
+| **Expedientes** | Ídem |
+| **Audit Log** | Por diseño: el log de auditoría siempre es local |
+| **Búsqueda global** (`searchRegistros`) | Busca en actas y evaluaciones, ambas locales |
+| **Gestor de Horarios** | Módulo local exclusivo |
+| **Autenticación** (login REST `/api/auth/login`) | Va directo a `db.ts` — ver sección 3C |
 
-*   **Actas de Aceptación:** Todo el CRUD (`getActasByUserId`, `createActa`, etc.) se importa directamente desde `db.ts` en `routers.ts`.
-*   **Evaluaciones de Proyecto (EP):** Todo el CRUD se importa directamente desde `db.ts`.
-*   **Búsqueda Global:** La función `searchRegistros` (que busca en actas y evaluaciones) va directo a SQLite.
-*   **Catálogos Dinámicos (Custom Tables):** La gestión de la estructura de las tablas dinámicas (`catalog_meta`) y su CRUD genérico (`getCatalogListGeneric`, `createCatalogRecordGeneric`, etc.) se importan directamente desde `db.ts` en `routers.ts`.
-*   **Autenticación Local (Login):** El endpoint REST `/api/auth/login` en `localAuth.ts` consulta directamente a `db.ts` (`findLocalUserByUsername`) para verificar credenciales, saltándose `dataSource.ts`.
+## 3. Inconsistencias Pendientes
 
-## 3. Inconsistencias y Áreas de Mejora Detectadas
+### A. Autenticación Mixta (tRPC vs REST)
 
-Durante la auditoría se detectaron las siguientes inconsistencias arquitectónicas:
+El sistema usa tRPC para casi todo, pero mantiene endpoints REST en `localAuth.ts`:
+- `POST /api/auth/login`
+- `GET /api/auth/me`
+- `POST /api/auth/logout`
 
-### A. Fuga de Abstracción en Catálogos Dinámicos
-Mientras que los catálogos fijos pasan por `dataSource.ts` (ej. `ds_getCatalogList`), los catálogos dinámicos creados por el usuario (ej. `catalog_custom_gerencias`) tienen sus propios endpoints en `routers.ts` (ej. `listGeneric`, `createGeneric`) que llaman directamente a `db.ts`. Esto significa que si `USE_API=true`, los catálogos fijos vendrán de la API externa, pero los dinámicos seguirán leyendo de SQLite local.
+Además, existe un `localAuth` router en tRPC que parcialmente duplica esta lógica.
 
-### B. Estado Híbrido en el Cliente (localStorage vs tRPC)
-El archivo `client/src/hooks/useFormStore.ts` revela que el estado de los formularios (Actas y Evaluaciones) se persiste actualmente en `localStorage` del navegador, no en la base de datos.
-Existen comentarios explícitos en el código indicando que esto debe cambiarse:
-> `TODO: Conectar con API de Base de Datos aquí - reemplazar localStorage con tRPC mutations.`
-Esto genera una inconsistencia grave: el backend tiene tablas y endpoints para Actas y Evaluaciones, pero el frontend no los está utilizando para guardar la información final.
+**Impacto actual:** bajo (funciona correctamente). Si se activa `USE_API=true`, el login seguirá usando SQLite local.
 
-### C. Autenticación Mixta (tRPC vs REST)
-El sistema utiliza tRPC para casi todo, pero mantiene endpoints REST tradicionales (`/api/auth/login`, `/api/auth/me`) en `localAuth.ts` para la autenticación. Además, el router tRPC `localAuth.login` duplica la lógica del endpoint REST.
+**Recomendación:** Unificar en tRPC o en REST, eliminar la duplicidad.
 
-### D. Conteo de Resumen (allCounts)
-El endpoint `allCounts` agregado recientemente en `routers.ts` itera sobre `listCatalogMeta()` y llama a `getCatalogListGeneric` (que va directo a SQLite). Si `USE_API=true`, este conteo no reflejará los datos de la API externa, sino los de la base local.
+### B. Actas, EP y Expedientes fuera de dataSource
 
-## 4. Recomendaciones
+El CRUD de estas entidades core se importa directamente desde `db.ts` en `routers.ts`. Si en el futuro se quiere sincronizar con API externa, hay que agregar sus `ds_` wrappers.
 
-Para lograr una arquitectura robusta y verdaderamente centralizada, se recomienda:
+**Impacto actual:** ninguno (`USE_API=false` en producción). Es deuda técnica documentada.
 
-1.  **Completar la abstracción en `dataSource.ts`:** Mover las funciones genéricas de catálogos dinámicos (`getCatalogListGeneric`, etc.) hacia `dataSource.ts` para que también respeten la variable `USE_API`.
-2.  **Migrar el frontend de localStorage a tRPC:** Actualizar `useFormStore.ts` para que las funciones `saveActa`, `saveEP`, `deleteActa`, etc., ejecuten mutaciones tRPC hacia el backend en lugar de guardar en el navegador.
-3.  **Unificar la Autenticación:** Decidir si la autenticación se manejará vía REST o tRPC y eliminar la duplicidad de código entre `localAuth.ts` y el router `localAuth` en `routers.ts`.
-4.  **Documentar la API Externa:** Crear un documento detallando los endpoints que la API externa debe implementar para ser compatible con `dataSource.ts` cuando `USE_API=true`.
+## 4. Relación entre los dos docs de arquitectura
+
+| Doc | Propósito |
+|---|---|
+| **Este archivo** (`AUDITORIA_FUENTE_VERDAD.md`) | Estado actual del sistema: qué está centralizado y qué no |
+| `WORKFLOW_DB_TS_DATASOURCE.md` | Guía de uso: cómo agregar nuevas funciones respetando el patrón |
+
+Ambos son complementarios, no redundantes. Leer primero la auditoría para entender el estado, luego el workflow para saber cómo extenderlo.
