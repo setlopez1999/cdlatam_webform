@@ -9,7 +9,7 @@ export default function Login() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [localError, setLocalError] = useState<string | null>(null);
-  
+
   const { login, isLoggingIn, loginError } = useLocalAuth();
   const [, navigate] = useLocation();
 
@@ -103,7 +103,7 @@ export default function Login() {
         {/* Footer */}
         <div className="relative z-10">
           <p className="text-white/20 text-xs">
-            Transformación Digital en Latinoamérica
+            Transformación Digital en Latinoamérica2
           </p>
         </div>
       </div>
