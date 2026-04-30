@@ -299,6 +299,7 @@ export const catalogUnidadesNegocio = sqliteTable("catalog_unidades_negocio", {
 export const catalogSoluciones = sqliteTable("catalog_soluciones", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   valor: text("valor").notNull().unique(),
+  unidadNegocioId: integer("unidadNegocioId").references(() => catalogUnidadesNegocio.id),
   activo: integer("activo").default(1).notNull(),
 });
 

@@ -78,7 +78,8 @@ export const catalogConfigs: Record<string, CatalogConfig> = {
     bgColor: "bg-emerald-500/10",
     fields: [
       { key: "valor", label: "Valor", type: "text", required: true },
-      { key: "activo", label: "Activo", type: "boolean",  },
+      { key: "unidadNegocioId", label: "Unidad de Negocio", type: "select", required: true, options: [] }, // Opciones se inyectarán dinámicamente
+      { key: "activo", label: "Activo", type: "boolean" },
     ],
   },
   detalle: {

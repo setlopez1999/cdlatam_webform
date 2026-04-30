@@ -80,6 +80,9 @@ export function CatalogCrudView({ config }: { config: CatalogConfig }) {
           payload[field.key] = payload[field.key] ? 1 : 0;
         } else if (field.type === "number" && payload[field.key] === "") {
           delete payload[field.key];
+        } else if (field.type === "select" && field.key.endsWith("Id") && typeof payload[field.key] === "string") {
+          // Convertir IDs de string a number para SQLite
+          payload[field.key] = parseInt(payload[field.key], 10);
         }
       }
 
@@ -315,6 +318,8 @@ export function CatalogCrudView({ config }: { config: CatalogConfig }) {
                     <td key={field.key} className="px-5 py-3 whitespace-nowrap text-slate-300 font-medium">
                       {field.type === "boolean" ? (
                         <div className={`w-2.5 h-2.5 rounded-full ${record[field.key] ? "bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.4)]" : "bg-red-500"}`}></div>
+                      ) : field.type === "select" && field.options ? (
+                        field.options.find((o: any) => String(o.value) === String(record[field.key]))?.label || record[field.key] || <span className="text-slate-600">-</span>
                       ) : (
                         record[field.key] || <span className="text-slate-600">-</span>
                       )}

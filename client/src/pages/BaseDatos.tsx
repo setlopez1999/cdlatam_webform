@@ -450,7 +450,7 @@ export default function BaseDatos() {
               if (!cat) return null;
               // Usar config hardcodeado si existe, sino generar uno genérico
               const staticConfig = catalogConfigs[activeTab];
-              const config = staticConfig ?? {
+              const config = staticConfig ? { ...staticConfig } : {
                 tableName: cat.tableName,
                 title: cat.title,
                 fields: [
@@ -458,6 +458,14 @@ export default function BaseDatos() {
                   { key: "activo", label: "Activo", type: "boolean" as const },
                 ],
               };
+              
+              if (config.tableName === "soluciones" && data?.unidades) {
+                const selectField = config.fields.find(f => f.key === "unidadNegocioId");
+                if (selectField) {
+                  selectField.options = data.unidades.map(u => ({ value: String(u.id), label: u.valor }));
+                }
+              }
+
               // Siempre usar el título de catalog_meta (puede haber sido renombrado)
               return <CatalogCrudView key={activeTab} config={{ ...config, title: cat.title }} />;
             })()}
