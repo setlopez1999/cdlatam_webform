@@ -20,7 +20,7 @@
  *
  * Para el futuro (cuando los expedientes persistan en BD):
  *   Reemplazar `actaCreadorId` con el `creadorId` del expediente desde la BD.
- *   Ver: doc/pendiente-integridad-expedientes.md
+ *   Ver: docs/ARQUITECTURA_EXPEDIENTES_INTEGRIDAD.md
  */
 
 import { useLocalAuth } from "./useLocalAuth";

@@ -73,6 +73,24 @@ function buildActaHTML(acta: ActaData): string {
       <td>${formatDate(fp.terceraCuota.fecha)}</td>
     </tr>`).join("");
 
+  const pagoImplSection = acta.formasPagoImplementacion.length > 0 ? `
+  <!-- Formas de Pago — Implementación -->
+  <div class="section">
+    <div class="section-title">Formas de Pago — Implementación</div>
+    <table>
+      <thead>
+        <tr>
+          <th>#</th><th>Tipo Venta</th><th class="text-right">N° Cuotas</th>
+          <th class="text-right">1ª Cuota</th><th>Fecha</th>
+          <th class="text-right">2ª Cuota</th><th>Fecha</th>
+          <th class="text-right">3ª Cuota</th><th>Fecha</th>
+        </tr>
+      </thead>
+      <tbody>${pagoImplRows}</tbody>
+    </table>
+  </div>
+  ` : "";
+
   const pagoMantRows = acta.formasPagoMantencion.map((fp, i) => `
     <tr>
       <td>${i + 1}</td>
@@ -85,6 +103,24 @@ function buildActaHTML(acta: ActaData): string {
       <td class="text-right">${fmt(fp.terceraCuota.monto)}</td>
       <td>${formatDate(fp.terceraCuota.fecha)}</td>
     </tr>`).join("");
+
+  const pagoMantSection = acta.formasPagoMantencion.length > 0 ? `
+  <!-- Formas de Pago — Mantención -->
+  <div class="section">
+    <div class="section-title">Formas de Pago — Mantención</div>
+    <table>
+      <thead>
+        <tr>
+          <th>#</th><th>Tipo Venta</th><th class="text-right">N° Cuotas</th>
+          <th class="text-right">1ª Cuota</th><th>Fecha</th>
+          <th class="text-right">2ª Cuota</th><th>Fecha</th>
+          <th class="text-right">3ª Cuota en adelante</th><th>Fecha</th>
+        </tr>
+      </thead>
+      <tbody>${pagoMantRows}</tbody>
+    </table>
+  </div>
+  ` : "";
 
   const consideracionesFijas = [
     "Activación nueva.",
@@ -262,37 +298,9 @@ function buildActaHTML(acta: ActaData): string {
     </table>
   </div>
 
-  <!-- Formas de Pago — Implementación -->
-  <div class="section">
-    <div class="section-title">Formas de Pago — Implementación</div>
-    <table>
-      <thead>
-        <tr>
-          <th>#</th><th>Tipo Venta</th><th class="text-right">N° Cuotas</th>
-          <th class="text-right">1ª Cuota</th><th>Fecha</th>
-          <th class="text-right">2ª Cuota</th><th>Fecha</th>
-          <th class="text-right">3ª Cuota</th><th>Fecha</th>
-        </tr>
-      </thead>
-      <tbody>${pagoImplRows || "<tr><td colspan='9' style='text-align:center;color:#9ca3af;'>—</td></tr>"}</tbody>
-    </table>
-  </div>
+  ${pagoImplSection}
 
-  <!-- Formas de Pago — Mantención -->
-  <div class="section">
-    <div class="section-title">Formas de Pago — Mantención</div>
-    <table>
-      <thead>
-        <tr>
-          <th>#</th><th>Tipo Venta</th><th class="text-right">N° Cuotas</th>
-          <th class="text-right">1ª Cuota</th><th>Fecha</th>
-          <th class="text-right">2ª Cuota</th><th>Fecha</th>
-          <th class="text-right">3ª Cuota en adelante</th><th>Fecha</th>
-        </tr>
-      </thead>
-      <tbody>${pagoMantRows || "<tr><td colspan='9' style='text-align:center;color:#9ca3af;'>—</td></tr>"}</tbody>
-    </table>
-  </div>
+  ${pagoMantSection}
 
   <!-- Consideraciones -->
   <div class="section">

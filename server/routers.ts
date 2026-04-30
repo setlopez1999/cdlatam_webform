@@ -959,7 +959,7 @@ export const appRouter = router({
   // ─── Sub-router: expediente ──────────────────────────────────────────────────
   // Maneja solo metadata del expediente en BD.
   // Los datos de formulario (F1/F2) siguen en localStorage via Zustand.
-  // Ver doc/pendiente-integridad-expedientes.md para la migración futura.
+  // Ver docs/ARQUITECTURA_EXPEDIENTES_INTEGRIDAD.md para la migración futura.
   expediente: router({
     /** Crea o recupera un expediente en BD a partir de su uuid (nanoid de Zustand). */
     sync: protectedProcedure

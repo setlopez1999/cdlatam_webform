@@ -382,7 +382,7 @@ export type CatalogNombre = typeof catalogNombres.$inferSelect;
 /**
  * Tabla expedientes — metadata del expediente.
  * Los datos de formulario (F1, F2) siguen en localStorage via Zustand
- * hasta que se complete la migración de campos (ver doc/pendiente-integridad-expedientes.md).
+ * hasta que se complete la migración de campos (ver docs/ARQUITECTURA_EXPEDIENTES_INTEGRIDAD.md).
  *
  * Relaciones:
  *   creadorId → users.id   (quién creó el expediente)

@@ -3,7 +3,7 @@
  *
  * Esta pestaña está reservada para el módulo de Implementación.
  * Los campos y funcionalidades se definirán en coordinación con Martín.
- * Ver doc/pendiente-integridad-expedientes.md para el contexto completo.
+ * Ver docs/ARQUITECTURA_EXPEDIENTES_INTEGRIDAD.md para el contexto completo.
  */
 
 import { useParams } from "wouter";
