@@ -60,64 +60,52 @@ function buildActaHTML(acta: ActaData): string {
       <td>${s.plazo || "&nbsp;"}</td>
     </tr>`).join("");
 
-  const pagoImplRows = acta.formasPagoImplementacion.map((fp, i) => `
+
+
+  const buildPagoHeaders = (maxCuotas: number) => `
+    <tr>
+      <th>#</th><th>Tipo Venta</th><th class="text-right">N° Cuotas</th>
+      ${Array.from({ length: maxCuotas }).map((_, idx) => `
+        <th class="text-right">${idx + 1}ª Cuota</th><th>Fecha</th>
+      `).join("")}
+    </tr>
+  `;
+
+  const buildPagoRows = (items: FormaPago[], maxCuotas: number) => items.map((fp, i) => `
     <tr>
       <td>${i + 1}</td>
       <td>${fp.tipoVenta || "&nbsp;"}</td>
       <td class="text-right">${fp.nCuotas}</td>
-      <td class="text-right">${fmt(fp.primeraCuota.monto)}</td>
-      <td>${formatDate(fp.primeraCuota.fecha)}</td>
-      <td class="text-right">${fmt(fp.segundaCuota.monto)}</td>
-      <td>${formatDate(fp.segundaCuota.fecha)}</td>
-      <td class="text-right">${fmt(fp.terceraCuota.monto)}</td>
-      <td>${formatDate(fp.terceraCuota.fecha)}</td>
+      ${Array.from({ length: maxCuotas }).map((_, idx) => {
+        const cuota = fp.cuotas?.[idx];
+        const isEnabled = idx < (fp.nCuotas || 1);
+        return `
+          <td class="text-right">${isEnabled ? fmt(cuota?.monto || 0) : "-"}</td>
+          <td>${isEnabled ? formatDate(cuota?.fecha || "") : "-"}</td>
+        `;
+      }).join("")}
     </tr>`).join("");
 
+  const maxCuotasImpl = Math.min(4, Math.max(1, ...acta.formasPagoImplementacion.map(i => i.nCuotas || 0)));
   const pagoImplSection = acta.formasPagoImplementacion.length > 0 ? `
   <!-- Formas de Pago — Implementación -->
   <div class="section">
     <div class="section-title">Formas de Pago — Implementación</div>
     <table>
-      <thead>
-        <tr>
-          <th>#</th><th>Tipo Venta</th><th class="text-right">N° Cuotas</th>
-          <th class="text-right">1ª Cuota</th><th>Fecha</th>
-          <th class="text-right">2ª Cuota</th><th>Fecha</th>
-          <th class="text-right">3ª Cuota</th><th>Fecha</th>
-        </tr>
-      </thead>
-      <tbody>${pagoImplRows}</tbody>
+      <thead>${buildPagoHeaders(maxCuotasImpl)}</thead>
+      <tbody>${buildPagoRows(acta.formasPagoImplementacion, maxCuotasImpl)}</tbody>
     </table>
   </div>
   ` : "";
 
-  const pagoMantRows = acta.formasPagoMantencion.map((fp, i) => `
-    <tr>
-      <td>${i + 1}</td>
-      <td>${fp.tipoVenta || "&nbsp;"}</td>
-      <td class="text-right">${fp.nCuotas}</td>
-      <td class="text-right">${fmt(fp.primeraCuota.monto)}</td>
-      <td>${formatDate(fp.primeraCuota.fecha)}</td>
-      <td class="text-right">${fmt(fp.segundaCuota.monto)}</td>
-      <td>${formatDate(fp.segundaCuota.fecha)}</td>
-      <td class="text-right">${fmt(fp.terceraCuota.monto)}</td>
-      <td>${formatDate(fp.terceraCuota.fecha)}</td>
-    </tr>`).join("");
-
+  const maxCuotasMant = Math.min(4, Math.max(1, ...acta.formasPagoMantencion.map(i => i.nCuotas || 0)));
   const pagoMantSection = acta.formasPagoMantencion.length > 0 ? `
   <!-- Formas de Pago — Mantención -->
   <div class="section">
     <div class="section-title">Formas de Pago — Mantención</div>
     <table>
-      <thead>
-        <tr>
-          <th>#</th><th>Tipo Venta</th><th class="text-right">N° Cuotas</th>
-          <th class="text-right">1ª Cuota</th><th>Fecha</th>
-          <th class="text-right">2ª Cuota</th><th>Fecha</th>
-          <th class="text-right">3ª Cuota en adelante</th><th>Fecha</th>
-        </tr>
-      </thead>
-      <tbody>${pagoMantRows}</tbody>
+      <thead>${buildPagoHeaders(maxCuotasMant)}</thead>
+      <tbody>${buildPagoRows(acta.formasPagoMantencion, maxCuotasMant)}</tbody>
     </table>
   </div>
   ` : "";

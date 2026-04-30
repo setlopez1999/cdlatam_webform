@@ -95,9 +95,7 @@ const FormaPagoSchema = z.object({
   item: z.number().optional(), // número de ítem (backend legacy)
   tipoVenta: z.string(),
   nCuotas: z.number().min(1).max(36),
-  primeraCuota: CuotaPagoSchema,
-  segundaCuota: CuotaPagoSchema,
-  terceraCuota: CuotaPagoSchema,
+  cuotas: z.array(CuotaPagoSchema),
 });
 
 const FilaCostoSchema = z.object({

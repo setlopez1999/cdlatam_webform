@@ -46,9 +46,7 @@ export interface FormaPago {
   item: number;
   tipoVenta: string;
   nCuotas: number;
-  primeraCuota: CuotaPago;
-  segundaCuota: CuotaPago;
-  terceraCuota: CuotaPago;
+  cuotas: CuotaPago[]; // Arreglo dinámico de 1 a 4 cuotas
 }
 
 // ─── F1 — Acta ────────────────────────────────────────────────────────────────

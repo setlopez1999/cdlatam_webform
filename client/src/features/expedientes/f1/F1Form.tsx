@@ -59,9 +59,12 @@ function createFormaPago(item: number) {
   const emptyCuota = { monto: 0, fecha: "" };
   return {
     id: nanoid(), item, tipoVenta: "", nCuotas: 1,
-    primeraCuota: { ...emptyCuota },
-    segundaCuota: { ...emptyCuota },
-    terceraCuota: { ...emptyCuota },
+    cuotas: [
+      { ...emptyCuota }, // Cuota 1
+      { ...emptyCuota }, // Cuota 2
+      { ...emptyCuota }, // Cuota 3
+      { ...emptyCuota }, // Cuota 4
+    ],
   };
 }
 
@@ -123,10 +126,23 @@ export default function F1Form({ expedienteId }: Props) {
     update({
       [tipo]: list.map(fp => {
         if (fp.id !== id) return fp;
-        if (field.includes(".")) {
-          const [parent, child] = field.split(".");
-          return { ...fp, [parent]: { ...(fp as any)[parent], [child]: value } };
+
+        // Soporte para cuotas dinámicas (ej: "cuotas.0.monto")
+        if (field.startsWith("cuotas.")) {
+          const parts = field.split(".");
+          const index = parseInt(parts[1]);
+          const child = parts[2];
+          const newCuotas = [...fp.cuotas];
+          newCuotas[index] = { ...newCuotas[index], [child]: value };
+          return { ...fp, cuotas: newCuotas };
         }
+
+        // Caso especial para nCuotas: limitar rango 1-4
+        if (field === "nCuotas") {
+          const val = Math.min(4, Math.max(1, typeof value === "string" ? parseInt(value) : value));
+          return { ...fp, nCuotas: val || 1 };
+        }
+
         return { ...fp, [field]: value };
       }),
     });

@@ -80,24 +80,37 @@ interface PagoTableProps {
   tipo: "formasPagoImplementacion" | "formasPagoMantencion";
   catalogs?: Catalogs;
   currencyCode?: string;
+  totalReferencia: number; // Monto total esperado según servicios
   onUpdate: Props["onUpdate"];
   onAdd?: Props["onAdd"];
   onRemove?: Props["onRemove"];
-  terceraCuotaLabel?: string;
 }
 
 function PagoTable({
-  title, items, tipo, catalogs, currencyCode = "USD",
-  onUpdate, onAdd, onRemove, terceraCuotaLabel = "Tercera Cuota",
+  title, items, tipo, catalogs, currencyCode = "USD", totalReferencia,
+  onUpdate, onAdd, onRemove,
 }: PagoTableProps) {
-  const totalMonto = items.reduce(
-    (sum, i) => sum + i.primeraCuota.monto + i.segundaCuota.monto + i.terceraCuota.monto, 0
+  // Determinar cuántas columnas de cuotas mostrar (máximo de nCuotas en esta tabla, min 1, max 4)
+  const maxCuotas = Math.min(4, Math.max(1, ...items.map(i => i.nCuotas || 0)));
+  
+  const totalPagos = items.reduce(
+    (sum, i) => sum + i.cuotas.reduce((s, c) => s + (c.monto || 0), 0), 0
   );
 
+  const diff = Math.abs(totalPagos - totalReferencia);
+  const hasWarning = diff > 0.1 && totalReferencia > 0;
+
   return (
-    <div className="space-y-2">
-      <div className="flex items-center justify-between mb-2">
-        <h4 className="text-sm font-semibold text-foreground">{title}</h4>
+    <div className="space-y-3">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-1">
+        <div className="flex items-center gap-3">
+          <h4 className="text-sm font-semibold text-foreground">{title}</h4>
+          {hasWarning && (
+            <Badge variant="outline" className="bg-orange-500/10 text-orange-400 border-orange-500/20 text-[10px] py-0 px-2 flex items-center gap-1 animate-pulse">
+              <ShieldOff className="w-3 h-3" /> La suma no coincide con el total de servicios ({formatCurrency(totalReferencia, currencyCode)})
+            </Badge>
+          )}
+        </div>
         {onAdd && (
           <Button type="button" variant="outline" size="sm" onClick={() => onAdd(tipo)} className="h-7 text-xs gap-1">
             <Plus className="w-3 h-3" /> Agregar fila
@@ -105,34 +118,36 @@ function PagoTable({
         )}
       </div>
 
-      <div className="overflow-x-auto rounded-lg border border-border/60">
-        <table className="w-full min-w-[1050px] text-xs border-collapse">
+      <div className="overflow-x-auto rounded-lg border border-border/60 shadow-sm">
+        <table className="w-full min-w-[800px] text-xs border-collapse">
           <thead>
             <tr className="bg-muted/60">
               <th className="border-b border-r border-border/60 px-2 py-2 text-left font-medium w-10">ITEM</th>
               <th className="border-b border-r border-border/60 px-2 py-2 text-left font-medium w-[130px] min-w-[130px]">Tipo Venta</th>
               <th className="border-b border-r border-border/60 px-2 py-2 text-center font-medium w-16">N° Cuotas</th>
-              <th className="border-b border-r border-border/60 px-2 py-2 text-center font-medium" colSpan={2}>Primera Cuota</th>
-              <th className="border-b border-r border-border/60 px-2 py-2 text-center font-medium" colSpan={2}>Segunda Cuota</th>
-              <th className="border-b border-border/60 px-2 py-2 text-center font-medium" colSpan={2}>{terceraCuotaLabel}</th>
+              {Array.from({ length: maxCuotas }).map((_, i) => (
+                <th key={i} className="border-b border-r border-border/60 px-2 py-2 text-center font-medium" colSpan={2}>
+                  Cuota {i + 1}
+                </th>
+              ))}
               {onRemove && <th className="border-b border-l border-border/60 w-8"></th>}
             </tr>
             <tr className="bg-muted/30 text-muted-foreground">
               <th className="border-b border-r border-border/60 px-1 py-1"></th>
               <th className="border-b border-r border-border/60 px-1 py-1"></th>
               <th className="border-b border-r border-border/60 px-1 py-1"></th>
-              <th className="border-b border-r border-border/60 px-2 py-1 text-center font-normal w-[90px] min-w-[90px]">Monto</th>
-              <th className="border-b border-r border-border/60 px-2 py-1 text-center font-normal min-w-[140px]">Fecha</th>
-              <th className="border-b border-r border-border/60 px-2 py-1 text-center font-normal w-[90px] min-w-[90px]">Monto</th>
-              <th className="border-b border-r border-border/60 px-2 py-1 text-center font-normal min-w-[140px]">Fecha</th>
-              <th className="border-b border-r border-border/60 px-2 py-1 text-center font-normal w-[90px] min-w-[90px]">Monto</th>
-              <th className="border-b border-border/60 px-2 py-1 text-center font-normal min-w-[140px]">Fecha</th>
+              {Array.from({ length: maxCuotas }).map((_, i) => (
+                <Fragment key={i}>
+                  <th className="border-b border-r border-border/60 px-2 py-1 text-center font-normal w-[90px] min-w-[90px]">Monto</th>
+                  <th className="border-b border-r border-border/60 px-2 py-1 text-center font-normal min-w-[140px]">Fecha</th>
+                </Fragment>
+              ))}
               {onRemove && <th className="border-b border-l border-border/60"></th>}
             </tr>
           </thead>
           <tbody>
             {items.map((pago, idx) => (
-              <tr key={pago.id} className="hover:bg-muted/20 transition-colors">
+              <tr key={pago.id} className="hover:bg-muted/10 transition-colors">
                 <td className="border-b border-r border-border/40 px-2 py-1 text-center text-muted-foreground">{idx + 1}</td>
 
                 {/* Tipo Venta */}
@@ -157,50 +172,36 @@ function PagoTable({
 
                 {/* N° Cuotas */}
                 <td className="border-b border-r border-border/40 px-1 py-0.5">
-                  <Input type="number" min={1} max={36}
-                    className="h-7 text-xs text-center border-0 bg-transparent focus-visible:ring-0"
+                  <Input type="number" min={1} max={4}
+                    className="h-7 text-xs text-center border-0 bg-transparent focus-visible:ring-0 font-medium text-blue-400"
                     value={pago.nCuotas}
-                    onChange={e => onUpdate(tipo, pago.id, "nCuotas", parseInt(e.target.value) || 1)} />
+                    onChange={e => onUpdate(tipo, pago.id, "nCuotas", e.target.value)} />
                 </td>
 
-                {/* Primera Cuota: Monto + Fecha/CE */}
-                <td className="border-b border-r border-border/40 px-1 py-0.5 min-w-[90px]">
-                  <Input type="number" min={0} className="h-7 text-xs text-right border-0 bg-transparent focus-visible:ring-0 min-w-[72px]"
-                    placeholder="0" value={pago.primeraCuota.monto || ""}
-                    onChange={e => onUpdate(tipo, pago.id, "primeraCuota.monto", parseNumeric(e.target.value))} />
-                </td>
-                <td className="border-b border-r border-border/40 px-1 py-0.5 min-w-[140px]">
-                  <FechaContraEntrega
-                    value={pago.primeraCuota.fecha}
-                    onChange={v => onUpdate(tipo, pago.id, "primeraCuota.fecha", v)}
-                  />
-                </td>
-
-                {/* Segunda Cuota: Monto + Fecha/CE */}
-                <td className="border-b border-r border-border/40 px-1 py-0.5 min-w-[90px]">
-                  <Input type="number" min={0} className="h-7 text-xs text-right border-0 bg-transparent focus-visible:ring-0 min-w-[72px]"
-                    placeholder="0" value={pago.segundaCuota.monto || ""}
-                    onChange={e => onUpdate(tipo, pago.id, "segundaCuota.monto", parseNumeric(e.target.value))} />
-                </td>
-                <td className="border-b border-r border-border/40 px-1 py-0.5 min-w-[140px]">
-                  <FechaContraEntrega
-                    value={pago.segundaCuota.fecha}
-                    onChange={v => onUpdate(tipo, pago.id, "segundaCuota.fecha", v)}
-                  />
-                </td>
-
-                {/* Tercera Cuota: Monto + Fecha/CE */}
-                <td className="border-b border-r border-border/40 px-1 py-0.5 min-w-[90px]">
-                  <Input type="number" min={0} className="h-7 text-xs text-right border-0 bg-transparent focus-visible:ring-0 min-w-[72px]"
-                    placeholder="0" value={pago.terceraCuota.monto || ""}
-                    onChange={e => onUpdate(tipo, pago.id, "terceraCuota.monto", parseNumeric(e.target.value))} />
-                </td>
-                <td className="border-b border-border/40 px-1 py-0.5 min-w-[140px]">
-                  <FechaContraEntrega
-                    value={pago.terceraCuota.fecha}
-                    onChange={v => onUpdate(tipo, pago.id, "terceraCuota.fecha", v)}
-                  />
-                </td>
+                {/* Cuotas dinámicas */}
+                {Array.from({ length: maxCuotas }).map((_, i) => {
+                  const isEnabled = i < (pago.nCuotas || 1);
+                  return (
+                    <Fragment key={i}>
+                      <td className={`border-b border-r border-border/40 px-1 py-0.5 min-w-[90px] ${!isEnabled ? "bg-muted/30" : ""}`}>
+                        <Input type="number" min={0} disabled={!isEnabled}
+                          className={`h-7 text-xs text-right border-0 bg-transparent focus-visible:ring-0 min-w-[72px] ${!isEnabled ? "opacity-30" : ""}`}
+                          placeholder="0" value={pago.cuotas?.[i]?.monto || ""}
+                          onChange={e => onUpdate(tipo, pago.id, `cuotas.${i}.monto`, parseNumeric(e.target.value))} />
+                      </td>
+                      <td className={`border-b border-r border-border/40 px-1 py-0.5 min-w-[140px] ${!isEnabled ? "bg-muted/30" : ""}`}>
+                        {isEnabled ? (
+                          <FechaContraEntrega
+                            value={pago.cuotas?.[i]?.fecha || ""}
+                            onChange={v => onUpdate(tipo, pago.id, `cuotas.${i}.fecha`, v)}
+                          />
+                        ) : (
+                          <div className="h-7" />
+                        )}
+                      </td>
+                    </Fragment>
+                  );
+                })}
 
                 {onRemove && (
                   <td className="border-b border-l border-border/40 px-1 py-0.5 text-center">
@@ -214,14 +215,16 @@ function PagoTable({
               </tr>
             ))}
           </tbody>
-          {totalMonto > 0 && (
+          {totalPagos > 0 && (
             <tfoot>
               <tr className="bg-muted/40 font-medium">
                 <td colSpan={3} className="border-t border-r border-border/60 px-2 py-1.5 text-right text-xs">Total:</td>
-                <td colSpan={2} className="border-t border-r border-border/60 px-2 py-1.5 text-right text-xs font-semibold text-primary">
-                  {formatCurrency(totalMonto, currencyCode)}
+                <td colSpan={2} className={`border-t border-r border-border/60 px-2 py-1.5 text-right text-xs font-bold ${hasWarning ? "text-orange-400" : "text-emerald-400"}`}>
+                  {formatCurrency(totalPagos, currencyCode)}
                 </td>
-                <td colSpan={4} className="border-t border-border/60 px-2 py-1.5"></td>
+                <td colSpan={maxCuotas * 2 - 2} className="border-t border-border/60 px-2 py-1.5">
+                   {hasWarning && <span className="text-[10px] text-orange-400/80 italic font-normal">Suma no coincide con servicios</span>}
+                </td>
                 {onRemove && <td className="border-t border-l border-border/60"></td>}
               </tr>
             </tfoot>
@@ -239,9 +242,12 @@ const IMPLEMENTACION_KEYWORDS = ["implementacion", "implementación", "impl"];
 const MANTENCION_KEYWORDS     = ["mantencion", "mantención", "mant", "mantención"];
 
 function matchesKeywords(value: string, keywords: string[]): boolean {
-  const v = value.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  const v = (value || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
   return keywords.some(k => v.includes(k));
 }
+
+import { Fragment } from "react";
+import { Badge } from "@/components/ui/badge";
 
 export function F1FormasPago({ data, catalogs, moneda, onUpdate, onAdd, onRemove, restricted = false }: Props) {
   const currencyCode = getCurrencyCode(moneda ?? "");
@@ -251,7 +257,15 @@ export function F1FormasPago({ data, catalogs, moneda, onUpdate, onAdd, onRemove
   const tieneImplementacion = tiposPresentes.some(t => matchesKeywords(t, IMPLEMENTACION_KEYWORDS));
   const tieneMantencion     = tiposPresentes.some(t => matchesKeywords(t, MANTENCION_KEYWORDS));
 
-  // Si no hay servicios o ninguno coincide con impl/mant → no mostrar nada
+  // Cálculo de montos totales de servicios para validación
+  const totalReferenciaImpl = data.serviciosContratados
+    .filter(s => matchesKeywords(s.tipoVenta, IMPLEMENTACION_KEYWORDS))
+    .reduce((sum, s) => sum + (s.total || 0), 0);
+
+  const totalReferenciaMant = data.serviciosContratados
+    .filter(s => matchesKeywords(s.tipoVenta, MANTENCION_KEYWORDS))
+    .reduce((sum, s) => sum + (s.total || 0), 0);
+
   const mostrarAlguna = tieneImplementacion || tieneMantencion;
 
   if (restricted) {
@@ -287,10 +301,10 @@ export function F1FormasPago({ data, catalogs, moneda, onUpdate, onAdd, onRemove
             tipo="formasPagoImplementacion"
             catalogs={catalogs}
             currencyCode={currencyCode}
+            totalReferencia={totalReferenciaImpl}
             onUpdate={onUpdate}
             onAdd={onAdd}
             onRemove={onRemove}
-            terceraCuotaLabel="Tercera Cuota"
           />
         )}
         {tieneMantencion && (
@@ -301,10 +315,10 @@ export function F1FormasPago({ data, catalogs, moneda, onUpdate, onAdd, onRemove
               tipo="formasPagoMantencion"
               catalogs={catalogs}
               currencyCode={currencyCode}
+              totalReferencia={totalReferenciaMant}
               onUpdate={onUpdate}
               onAdd={onAdd}
               onRemove={onRemove}
-              terceraCuotaLabel="Tercera Cuota en adelante"
             />
           </div>
         )}

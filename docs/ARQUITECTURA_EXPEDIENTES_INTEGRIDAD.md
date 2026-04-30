@@ -11,9 +11,9 @@ Actualmente, el sistema maneja un **CRUD esqueleto** para los expedientes. Esto 
 | Capa | Dónde se guarda | Qué contiene |
 |---|---|---|
 | **Metadata** | BD (`expedientes`) | `id`, `uuid`, `nombre`, `creadorId`, `status`, timestamps |
-| **Formulario F1 (Acta)** | `localStorage` (Zustand) | Todos los campos del acta (servicios, pagos, consideraciones) |
-| **Formulario F2 (EP)** | `localStorage` (Zustand) | Todos los campos de la evaluación de proyecto |
-| **Auditoría** | BD (`audit_log`) | Creación, renombrado y eliminación del expediente |
+| **Formulario F1 (Acta)** | BD (`actas`) | Todos los campos del acta (servicios, pagos, consideraciones). Sincronizado vía tRPC. |
+| **Formulario F2 (EP)** | `localStorage` (Zustand) | Todos los campos de la evaluación de proyecto (Pendiente de migración). |
+| **Auditoría** | BD (`audit_log`) | Acciones de creación, actualización y sincronización. |
 
 **Problema actual:** Si el usuario borra el caché del navegador, pierde el contenido de F1 y F2, aunque el expediente siga existiendo en la base de datos (vacío).
 
@@ -23,13 +23,11 @@ Actualmente, el sistema maneja un **CRUD esqueleto** para los expedientes. Esto 
 
 Para lograr la integridad completa y permitir la auditoría a nivel de campos, se deben ejecutar los siguientes pasos una vez que se definan los campos definitivos con el equipo de negocio.
 
-### 1. Sincronizar F1 (Acta) con la BD
-
-Las tablas `actas` y `evaluaciones` ya existen en `drizzle/schema.ts`.
-
-1. Modificar `useF1.ts` (o el store de Zustand) para que la función `guardarF1` llame a una mutation tRPC (`trpc.actas.create` o `update`).
-2. El backend debe guardar el acta y actualizar el campo `actaId` en la tabla `expedientes`.
-3. Al cargar un expediente, el frontend debe hacer un query a la BD para obtener el acta en lugar de leerla de `localStorage`.
+### 1. Sincronizar F1 (Acta) con la BD ✅
+**ESTADO: COMPLETADO**
+- Las tablas `actas` ya reciben datos JSON.
+- `useF1.ts` llama a `trpc.actas.syncF1` en cada guardado.
+- Se implementó la lógica de pagos dinámicos (1-4 cuotas) con validación de montos cruzados.
 
 ### 2. Sincronizar F2 (Evaluación de Proyecto) con la BD
 
