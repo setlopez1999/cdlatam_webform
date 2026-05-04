@@ -22,6 +22,7 @@ import {
   schBloquesHorario, type SchBloqueHorario, type InsertSchBloqueHorario,
   // Expedientes y Auditoría
   expedientes, type Expediente, type InsertExpediente,
+  resultadosExpediente, type ResultadoExpediente, type InsertResultadoExpediente,
   auditLog, type InsertAuditLog,
 } from "../drizzle/schema";
 
@@ -567,6 +568,33 @@ export async function runMigrations() {
     // La columna ya existe — ignorar
   }
 
+  const tryAlter = (sql: string, label: string) => {
+    try {
+      sqlite.exec(sql);
+      console.log(`[DB] ${label}`);
+    } catch {
+      /* ya aplicado */
+    }
+  };
+  tryAlter(`ALTER TABLE actas ADD COLUMN f1Datos TEXT`, "Column f1Datos added to actas");
+  tryAlter(`ALTER TABLE actas ADD COLUMN f1FormStatus TEXT DEFAULT 'nuevo'`, "Column f1FormStatus added to actas");
+  tryAlter(`ALTER TABLE actas ADD COLUMN f1SavedAt INTEGER`, "Column f1SavedAt added to actas");
+  tryAlter(`ALTER TABLE evaluaciones ADD COLUMN expedienteUuid TEXT`, "Column expedienteUuid added to evaluaciones");
+  tryAlter(`ALTER TABLE evaluaciones ADD COLUMN firmaImagen TEXT`, "Column firmaImagen added to evaluaciones");
+  tryAlter(`ALTER TABLE evaluaciones ADD COLUMN f2FormStatus TEXT DEFAULT 'nuevo'`, "Column f2FormStatus added to evaluaciones");
+  tryAlter(`ALTER TABLE evaluaciones ADD COLUMN f2SavedAt INTEGER`, "Column f2SavedAt added to evaluaciones");
+  tryAlter(`
+    CREATE TABLE IF NOT EXISTS resultados_expediente (
+      id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+      expedienteUuid TEXT NOT NULL UNIQUE,
+      payload TEXT NOT NULL,
+      f3FormStatus TEXT DEFAULT 'nuevo' NOT NULL,
+      f3SavedAt INTEGER,
+      createdAt INTEGER DEFAULT (strftime('%s', 'now')) NOT NULL,
+      updatedAt INTEGER DEFAULT (strftime('%s', 'now')) NOT NULL
+    )
+  `, "Table resultados_expediente ensured");
+
   // Paso 3 (post-migración): garantizar roles nuevos en BDs ya migradas
   // INSERT OR IGNORE es idempotente — seguro de correr siempre al arrancar
   try {
@@ -832,6 +860,58 @@ export async function deleteEvaluacion(id: number) {
   return db.delete(evaluaciones).where(eq(evaluaciones.id, id));
 }
 
+export async function getEvaluacionByExpedienteUuid(expedienteUuid: string) {
+  const db = await getDb();
+  const r = await db.select().from(evaluaciones).where(eq(evaluaciones.expedienteUuid, expedienteUuid)).limit(1);
+  return r[0] ?? null;
+}
+
+export async function getResultadoByExpedienteUuid(expedienteUuid: string) {
+  const db = await getDb();
+  const r = await db.select().from(resultadosExpediente).where(eq(resultadosExpediente.expedienteUuid, expedienteUuid)).limit(1);
+  return r[0] ?? null;
+}
+
+export async function upsertResultadoExpediente(data: {
+  expedienteUuid: string;
+  payload: unknown;
+  f3FormStatus: string;
+}) {
+  const db = await getDb();
+  const now = new Date();
+  await db
+    .insert(resultadosExpediente)
+    .values({
+      expedienteUuid: data.expedienteUuid,
+      payload: data.payload as InsertResultadoExpediente["payload"],
+      f3FormStatus: data.f3FormStatus,
+      f3SavedAt: now,
+      createdAt: now,
+      updatedAt: now,
+    })
+    .onConflictDoUpdate({
+      target: resultadosExpediente.expedienteUuid,
+      set: {
+        payload: data.payload as InsertResultadoExpediente["payload"],
+        f3FormStatus: data.f3FormStatus,
+        f3SavedAt: now,
+        updatedAt: now,
+      },
+    });
+  return getResultadoByExpedienteUuid(data.expedienteUuid);
+}
+
+/** Elimina expediente y todos los hijos vinculados por expedienteUuid (transacción). */
+export async function deleteExpedienteCascadeByUuid(uuid: string) {
+  const db = await getDb();
+  await db.transaction(async (tx) => {
+    await tx.delete(resultadosExpediente).where(eq(resultadosExpediente.expedienteUuid, uuid));
+    await tx.delete(evaluaciones).where(eq(evaluaciones.expedienteUuid, uuid));
+    await tx.delete(actas).where(eq(actas.expedienteUuid, uuid));
+    await tx.delete(expedientes).where(eq(expedientes.uuid, uuid));
+  });
+}
+
 export async function searchRegistros(userId: number, query: string) {
   const db = await getDb();
 
@@ -1029,6 +1109,12 @@ export async function getExpedienteByUuid(uuid: string) {
   return result[0] ?? null;
 }
 
+export async function getExpedienteById(id: number) {
+  const db = await getDb();
+  const result = await db.select().from(expedientes).where(eq(expedientes.id, id)).limit(1);
+  return result[0] ?? null;
+}
+
 /** Actualiza el nombre o status de un expediente. */
 export async function updateExpediente(id: number, data: Partial<Pick<Expediente, "nombre" | "status" | "actaId" | "evaluacionId">>) {
   const db = await getDb();
@@ -1039,10 +1125,42 @@ export async function updateExpediente(id: number, data: Partial<Pick<Expediente
   return result[0] ?? null;
 }
 
-/** Elimina un expediente por id. */
+/** Elimina un expediente por id (solo la fila expedientes; preferir deleteExpedienteCascadeByUuid). */
 export async function deleteExpediente(id: number) {
   const db = await getDb();
   await db.delete(expedientes).where(eq(expedientes.id, id));
+}
+
+/** Lista expedientes con acta, evaluación y resultado por uuid (N consultas por fila). */
+export async function listExpedientesResumen(userId: number, canViewAll: boolean) {
+  const list = canViewAll
+    ? await getExpedientes()
+    : await getExpedientesByUser(userId);
+  const rows: Array<{
+    expediente: Expediente;
+    acta: typeof actas.$inferSelect | null;
+    evaluacion: typeof evaluaciones.$inferSelect | null;
+    resultado: ResultadoExpediente | null;
+  }> = [];
+  for (const e of list) {
+    const acta = await getActaByExpedienteUuid(e.uuid);
+    const evaluacion = await getEvaluacionByExpedienteUuid(e.uuid);
+    const resultado = await getResultadoByExpedienteUuid(e.uuid);
+    rows.push({ expediente: e, acta, evaluacion, resultado });
+  }
+  return rows;
+}
+
+export async function getExpedienteDetalle(uuid: string, userId: number, canViewAll: boolean) {
+  const exp = await getExpedienteByUuid(uuid);
+  if (!exp) return null;
+  if (!canViewAll && exp.creadorId !== userId) return null;
+  const acta = await getActaByExpedienteUuid(uuid);
+  const evaluacion = await getEvaluacionByExpedienteUuid(uuid);
+  const resultado = await getResultadoByExpedienteUuid(uuid);
+  if (acta && acta.userId !== userId && !canViewAll) return null;
+  if (evaluacion && evaluacion.userId !== userId && !canViewAll) return null;
+  return { expediente: exp, acta, evaluacion, resultado };
 }
 
 // ─── MÓDULO: AUDIT LOG ────────────────────────────────────────────────────────

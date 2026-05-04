@@ -6,7 +6,7 @@
  * cdlatam_expedientes y el formato {f1, f2, f3}.
  */
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useLocation } from "wouter";
 import {
   FolderOpen, Trash2, Plus, AlertTriangle, Search, ChevronDown,
@@ -15,7 +15,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { useExpedienteStore } from "@/features/expedientes/store";
+import { mapResumenRowToExpediente } from "@/features/expedientes/fromServer";
 import type { Expediente } from "@/features/expedientes/types";
+import { trpc } from "@/lib/trpc";
 import { calcularResultadoF3 } from "@/features/expedientes/types";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -237,7 +239,7 @@ function ResultadosExpandidos({ exp }: { exp: Expediente }) {
 
 // ─── Tarjeta de Expediente ────────────────────────────────────────────────────
 
-function ExpedienteCard({ exp, onEliminar }: { exp: Expediente; onEliminar: (id: string) => void }) {
+function ExpedienteCard({ exp, onEliminar }: { exp: Expediente; onEliminar: () => void }) {
   const [, navigate] = useLocation();
   const [expandido, setExpandido] = useState(false);
 
@@ -256,8 +258,7 @@ function ExpedienteCard({ exp, onEliminar }: { exp: Expediente; onEliminar: (id:
 
   const handleEliminar = () => {
     if (!confirm(`¿Eliminar el expediente "${exp.nombre}"? Esta acción no se puede deshacer.`)) return;
-    onEliminar(exp.id);
-    toast.success("Expediente eliminado");
+    onEliminar();
   };
 
   return (
@@ -360,8 +361,26 @@ function ExpedienteCard({ exp, onEliminar }: { exp: Expediente; onEliminar: (id:
 
 export default function Historial() {
   const [, navigate] = useLocation();
-  const { expedientes, eliminar } = useExpedienteStore();
+  const { expedientes, eliminar, reemplazarListaDesdeServidor } = useExpedienteStore();
   const [search, setSearch] = useState("");
+
+  const resumenQuery = trpc.expediente.listarResumen.useQuery(undefined, { staleTime: 15_000 });
+  const eliminarSrv = trpc.expediente.eliminar.useMutation({
+    onSuccess: (_data, input) => {
+      eliminar(input.uuid);
+      void resumenQuery.refetch();
+      toast.success("Expediente eliminado");
+    },
+    onError: (err) => {
+      toast.error(err.message || "No se pudo eliminar");
+    },
+  });
+
+  useEffect(() => {
+    if (resumenQuery.data) {
+      reemplazarListaDesdeServidor(resumenQuery.data.map(mapResumenRowToExpediente));
+    }
+  }, [resumenQuery.data, reemplazarListaDesdeServidor]);
 
   const filtrados = useMemo(() => {
     if (!search.trim()) return expedientes;
@@ -417,7 +436,11 @@ export default function Historial() {
       ) : (
         <div className="flex flex-col gap-3">
           {filtrados.map(exp => (
-            <ExpedienteCard key={exp.id} exp={exp} onEliminar={eliminar} />
+            <ExpedienteCard
+              key={exp.id}
+              exp={exp}
+              onEliminar={() => eliminarSrv.mutate({ uuid: exp.id })}
+            />
           ))}
         </div>
       )}

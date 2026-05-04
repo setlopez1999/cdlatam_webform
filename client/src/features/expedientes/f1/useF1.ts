@@ -48,7 +48,8 @@ export function useF1(expedienteId: string) {
     // 1. Persistir en localStorage (siempre, independiente de BD)
     store.guardarF1(expedienteId);
 
-    // 2. Sincronizar con BD en background
+    const savedIso = new Date().toISOString();
+    // 2. Sincronizar con BD en background (snapshot completo F1 + columnas planas)
     syncF1Mutation.mutate({
       expedienteUuid: expedienteId,
       noActa: data.noActa,
@@ -72,6 +73,9 @@ export function useF1(expedienteId: string) {
       formasPagoImplementacion: data.formasPagoImplementacion,
       formasPagoMantencion: data.formasPagoMantencion,
       status: "borrador",
+      f1Datos: { ...data } as Record<string, unknown>,
+      f1FormStatus: "guardado",
+      f1SavedAt: savedIso,
     });
   }, [data, expedienteId, store, syncF1Mutation]);
 

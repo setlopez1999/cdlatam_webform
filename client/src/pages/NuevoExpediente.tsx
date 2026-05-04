@@ -25,8 +25,10 @@ export default function NuevoExpediente() {
   const num = expedientes.length + 1;
   const [nombre, setNombre] = useState(`Expediente #${num}`);
 
-  // Mutation para sincronizar con BD
-  const syncExpediente = trpc.expediente.sync.useMutation();
+  const utils = trpc.useUtils();
+  const syncExpediente = trpc.expediente.sync.useMutation({
+    onSuccess: () => void utils.expediente.listarResumen.invalidate(),
+  });
 
   const handleCrear = async () => {
     if (isCreating) return;

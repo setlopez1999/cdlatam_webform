@@ -16,9 +16,14 @@ import {
   getBloquesByContrato, setBloques, getBloquesSemanales,
   // Expedientes y Audit Log
   createExpediente, getExpedientes, getExpedientesByUser, getExpedienteByUuid,
-  updateExpediente, deleteExpediente, createAuditLog, getAuditLog,
+  updateExpediente, createAuditLog, getAuditLog,
   // Actas por expediente
   getActaByExpedienteUuid,
+  getEvaluacionByExpedienteUuid,
+  upsertResultadoExpediente,
+  deleteExpedienteCascadeByUuid,
+  listExpedientesResumen,
+  getExpedienteDetalle,
 } from "./db";
 
 // dataSource — abstracción SQLite / API externa (controlado por USE_API en .env)
@@ -123,7 +128,7 @@ const FilaRRHHSchema = z.object({
   total: z.number(),
   descripcionGasto: z.string(),
   observacion: z.string(),
-});
+}).passthrough();
 
 const FilaOtrosSchema = z.object({
   id: z.string(),
@@ -138,7 +143,7 @@ const FilaOtrosSchema = z.object({
   descripcionGasto: z.string(),
   observacion: z.string(),
   mes: z.union([z.literal(1), z.literal(2), z.literal(3)]),
-});
+}).passthrough();
 
 const ActaInputSchema = z.object({
   expedienteUuid: z.string().optional(),  // Vínculo con el store de Zustand
@@ -163,10 +168,15 @@ const ActaInputSchema = z.object({
   formasPagoImplementacion: z.array(FormaPagoSchema).optional(),
   formasPagoMantencion: z.array(FormaPagoSchema).optional(),
   status: z.enum(["borrador", "completado", "exportado"]).optional(),
+  /** Snapshot completo F1Data (JSON) */
+  f1Datos: z.any().optional(),
+  f1FormStatus: z.enum(["nuevo", "sin_guardar", "guardado"]).optional(),
+  f1SavedAt: z.string().optional(),
 });
 
 const EvaluacionInputSchema = z.object({
   actaId: z.number().optional(),
+  expedienteUuid: z.string().optional(),
   unidadNegocios: z.string().optional(),
   empresa: z.string().optional(),
   solucion: z.string().optional(),
@@ -193,6 +203,7 @@ const EvaluacionInputSchema = z.object({
   totalOtros: z.number().optional(),
   totalGastos: z.number().optional(),
   status: z.enum(["borrador", "completado", "exportado"]).optional(),
+  firmaImagen: z.string().optional(),
 });
 
 // ─── Router ───────────────────────────────────────────────────────────────────
@@ -529,13 +540,15 @@ export const appRouter = router({
     create: protectedProcedure
       .input(ActaInputSchema)
       .mutation(async ({ ctx, input }) => {
+        const { f1SavedAt: f1s, ...restIn } = input;
         const result = await createActa({
           userId: ctx.user.id,
-          ...input,
+          ...restIn,
           fecha: input.fecha ? new Date(input.fecha) : undefined,
           serviciosContratados: input.serviciosContratados ?? [],
           formasPagoImplementacion: input.formasPagoImplementacion ?? [],
           formasPagoMantencion: input.formasPagoMantencion ?? [],
+          f1SavedAt: f1s ? new Date(f1s) : undefined,
         });
         return result;
       }),
@@ -545,9 +558,11 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         const acta = await getActaById(input.id);
         if (!acta || acta.userId !== ctx.user.id) throw new Error("Acta no encontrada");
+        const { f1SavedAt: f1s, ...dataRest } = input.data;
         return updateActa(input.id, {
-          ...input.data,
+          ...dataRest,
           fecha: input.data.fecha ? new Date(input.data.fecha) : undefined,
+          f1SavedAt: f1s ? new Date(f1s) : undefined,
         });
       }),
 
@@ -571,33 +586,36 @@ export const appRouter = router({
       }))
       .mutation(async ({ ctx, input }) => {
         const userId = ctx.user.id;
-        const { expedienteUuid, ...actaData } = input;
-        // Buscar si ya existe un acta para este expediente
+        const { expedienteUuid, f1SavedAt: f1SavedAtStr, ...actaRest } = input;
+        const f1SavedAt = f1SavedAtStr ? new Date(f1SavedAtStr) : undefined;
         const existing = await getActaByExpedienteUuid(expedienteUuid);
         let acta;
         if (existing) {
-          // Actualizar acta existente
           await updateActa(existing.id, {
-            ...actaData,
-            fecha: actaData.fecha ? new Date(actaData.fecha) : undefined,
-            serviciosContratados: actaData.serviciosContratados ?? existing.serviciosContratados,
-            formasPagoImplementacion: actaData.formasPagoImplementacion ?? existing.formasPagoImplementacion,
-            formasPagoMantencion: actaData.formasPagoMantencion ?? existing.formasPagoMantencion,
+            ...actaRest,
+            fecha: actaRest.fecha ? new Date(actaRest.fecha) : undefined,
+            serviciosContratados: actaRest.serviciosContratados ?? existing.serviciosContratados,
+            formasPagoImplementacion: actaRest.formasPagoImplementacion ?? existing.formasPagoImplementacion,
+            formasPagoMantencion: actaRest.formasPagoMantencion ?? existing.formasPagoMantencion,
+            f1Datos: actaRest.f1Datos ?? existing.f1Datos ?? undefined,
+            f1FormStatus: actaRest.f1FormStatus ?? existing.f1FormStatus ?? "nuevo",
+            f1SavedAt: f1SavedAt ?? existing.f1SavedAt ?? undefined,
           });
           acta = await getActaById(existing.id);
         } else {
-          // Crear nueva acta vinculada al expediente
           acta = await createActa({
             userId,
             expedienteUuid,
-            ...actaData,
-            fecha: actaData.fecha ? new Date(actaData.fecha) : undefined,
-            serviciosContratados: actaData.serviciosContratados ?? [],
-            formasPagoImplementacion: actaData.formasPagoImplementacion ?? [],
-            formasPagoMantencion: actaData.formasPagoMantencion ?? [],
-            status: actaData.status ?? "borrador",
+            ...actaRest,
+            fecha: actaRest.fecha ? new Date(actaRest.fecha) : undefined,
+            serviciosContratados: actaRest.serviciosContratados ?? [],
+            formasPagoImplementacion: actaRest.formasPagoImplementacion ?? [],
+            formasPagoMantencion: actaRest.formasPagoMantencion ?? [],
+            status: actaRest.status ?? "borrador",
+            f1Datos: actaRest.f1Datos ?? undefined,
+            f1FormStatus: actaRest.f1FormStatus ?? "nuevo",
+            f1SavedAt: f1SavedAt ?? undefined,
           });
-          // Actualizar expedientes.actaId con la FK blanda
           const expediente = await getExpedienteByUuid(expedienteUuid);
           if (expediente && acta) {
             await updateExpediente(expediente.id, { actaId: acta.id });
@@ -678,6 +696,75 @@ export const appRouter = router({
         const ev = await getEvaluacionById(input.id);
         if (!ev || ev.userId !== ctx.user.id) throw new Error("Evaluación no encontrada");
         return deleteEvaluacion(input.id);
+      }),
+
+    /**
+     * syncF2 — Crea o actualiza la evaluación vinculada al expediente (1:1 por expedienteUuid).
+     */
+    syncF2: protectedProcedure
+      .input(z.object({
+        expedienteUuid: z.string().min(1),
+        f2FormStatus: z.enum(["nuevo", "sin_guardar", "guardado"]),
+        f2SavedAt: z.string().optional(),
+        data: EvaluacionInputSchema,
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const userId = ctx.user.id;
+        const acta = await getActaByExpedienteUuid(input.expedienteUuid);
+        const expediente = await getExpedienteByUuid(input.expedienteUuid);
+        const existing = await getEvaluacionByExpedienteUuid(input.expedienteUuid);
+        const d = input.data;
+        const stripLabel = <T extends { label?: unknown }>(row: T) => {
+          const { label: _l, ...rest } = row;
+          return rest;
+        };
+        const basePatch = {
+          expedienteUuid: input.expedienteUuid,
+          actaId: d.actaId ?? acta?.id ?? null,
+          unidadNegocios: d.unidadNegocios,
+          empresa: d.empresa,
+          solucion: d.solucion,
+          tipoMoneda: d.tipoMoneda,
+          montoProyecto: d.montoProyecto,
+          tipoCambio: d.tipoCambio,
+          totalClp: d.totalClp,
+          descripcion: d.descripcion,
+          preventa: d.preventa,
+          fechaEntrega: d.fechaEntrega ? new Date(d.fechaEntrega) : undefined,
+          ejecutivoComercial: d.ejecutivoComercial,
+          plazoImplementacion: d.plazoImplementacion,
+          propuestaNumero: d.propuestaNumero,
+          paisImplementacion: d.paisImplementacion,
+          rut: d.rut,
+          nombreCliente: d.nombreCliente,
+          hardware: d.hardware ?? [],
+          materiales: d.materiales ?? [],
+          rrhh: (d.rrhh ?? []).map(r => stripLabel(r as { label?: unknown })),
+          otrosGastos: (d.otrosGastos ?? []).map(o => stripLabel(o as { label?: unknown })),
+          totalHardware: d.totalHardware,
+          totalMateriales: d.totalMateriales,
+          totalRrhh: d.totalRrhh,
+          totalOtros: d.totalOtros,
+          totalGastos: d.totalGastos,
+          status: d.status ?? "borrador",
+          firmaImagen: d.firmaImagen,
+          f2FormStatus: input.f2FormStatus,
+          f2SavedAt: input.f2SavedAt ? new Date(input.f2SavedAt) : new Date(),
+        };
+        let row;
+        if (existing) {
+          await updateEvaluacion(existing.id, basePatch);
+          row = await getEvaluacionById(existing.id);
+        } else {
+          row = await createEvaluacion({
+            userId,
+            ...basePatch,
+          });
+        }
+        if (expediente && row) {
+          await updateExpediente(expediente.id, { evaluacionId: row.id });
+        }
+        return row;
       }),
   }),
 
@@ -955,9 +1042,7 @@ export const appRouter = router({
   }),
 
   // ─── Sub-router: expediente ──────────────────────────────────────────────────
-  // Maneja solo metadata del expediente en BD.
-  // Los datos de formulario (F1/F2) siguen en localStorage via Zustand.
-  // Ver docs/ARQUITECTURA_EXPEDIENTES_INTEGRIDAD.md para la migración futura.
+  // Metadata + vínculos a actas / evaluaciones / resultados en SQLite.
   expediente: router({
     /** Crea o recupera un expediente en BD a partir de su uuid (nanoid de Zustand). */
     sync: protectedProcedure
@@ -995,44 +1080,92 @@ export const appRouter = router({
       return canViewAll ? await getExpedientes() : await getExpedientesByUser(userId);
     }),
 
-    /** Renombra un expediente. Solo el creador o admin. */
+    /** Lista expedientes con acta, evaluación y resultado (para historial / hidratación). */
+    listarResumen: protectedProcedure.query(async ({ ctx }) => {
+      if (!ctx.user) throw new Error("No autenticado");
+      const canViewAll = ctx.user.role === "admin" || ctx.user.role === "perfil_full";
+      return listExpedientesResumen(ctx.user.id, canViewAll);
+    }),
+
+    /** Detalle completo de un expediente por uuid (F1/F2/F3 desde tablas). */
+    detalle: protectedProcedure
+      .input(z.object({ uuid: z.string().min(1) }))
+      .query(async ({ ctx, input }) => {
+        if (!ctx.user) throw new Error("No autenticado");
+        const canViewAll = ctx.user.role === "admin" || ctx.user.role === "perfil_full";
+        return getExpedienteDetalle(input.uuid, ctx.user.id, canViewAll);
+      }),
+
+    /** Persiste snapshot de resultados F3. */
+    syncResultado: protectedProcedure
+      .input(z.object({
+        expedienteUuid: z.string().min(1),
+        payload: z.unknown(),
+        f3FormStatus: z.enum(["nuevo", "sin_guardar", "guardado"]),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (!ctx.user) throw new Error("No autenticado");
+        const canViewAll = ctx.user.role === "admin" || ctx.user.role === "perfil_full";
+        const det = await getExpedienteDetalle(input.expedienteUuid, ctx.user.id, canViewAll);
+        if (!det) throw new Error("Expediente no encontrado");
+        await upsertResultadoExpediente({
+          expedienteUuid: input.expedienteUuid,
+          payload: input.payload,
+          f3FormStatus: input.f3FormStatus,
+        });
+        await createAuditLog({
+          userId: ctx.user.id,
+          username: ctx.user.username,
+          action: "UPDATE",
+          entity: "expediente",
+          entityId: det.expediente.id,
+          changes: { after: { resultado: true } },
+        });
+        return { success: true as const };
+      }),
+
+    /** Renombra un expediente por uuid. Solo el creador o admin. */
     renombrar: protectedProcedure
       .input(z.object({
-        id: z.number(),
+        uuid: z.string().min(1),
         nombre: z.string().min(1),
       }))
       .mutation(async ({ ctx, input }) => {
-        const userId = Number(ctx.localUser?.id);
-        const role = ctx.localUser?.role;
-        const expediente = await getExpedienteByUuid(""); // placeholder
-        // Actualizar directamente — la validación de propietario se hará en la siguiente fase
-        const updated = await updateExpediente(input.id, { nombre: input.nombre });
+        if (!ctx.user) throw new Error("No autenticado");
+        const row = await getExpedienteByUuid(input.uuid);
+        if (!row) throw new Error("Expediente no encontrado");
+        const isAdmin = ctx.user.role === "admin";
+        if (!isAdmin && row.creadorId !== ctx.user.id) throw new Error("No autorizado");
+        const updated = await updateExpediente(row.id, { nombre: input.nombre });
         await createAuditLog({
-          userId,
-          username: ctx.localUser?.username ?? "desconocido",
+          userId: ctx.user.id,
+          username: ctx.user.username,
           action: "UPDATE",
           entity: "expediente",
-          entityId: input.id,
+          entityId: row.id,
           changes: { after: { nombre: input.nombre } },
         });
         return updated;
       }),
 
-    /** Elimina un expediente. Solo el creador o admin. */
+    /** Elimina expediente y registros hijos (acta, evaluación, resultado). */
     eliminar: protectedProcedure
-      .input(z.object({ id: z.number() }))
+      .input(z.object({ uuid: z.string().min(1) }))
       .mutation(async ({ ctx, input }) => {
-        const userId = Number(ctx.localUser?.id);
-        const role = ctx.localUser?.role;
-        await deleteExpediente(input.id);
+        if (!ctx.user) throw new Error("No autenticado");
+        const row = await getExpedienteByUuid(input.uuid);
+        if (!row) throw new Error("Expediente no encontrado");
+        const isAdmin = ctx.user.role === "admin";
+        if (!isAdmin && row.creadorId !== ctx.user.id) throw new Error("No autorizado");
+        await deleteExpedienteCascadeByUuid(input.uuid);
         await createAuditLog({
-          userId,
-          username: ctx.localUser?.username ?? "desconocido",
+          userId: ctx.user.id,
+          username: ctx.user.username,
           action: "DELETE",
           entity: "expediente",
-          entityId: input.id,
+          entityId: row.id,
         });
-        return { success: true };
+        return { success: true as const };
       }),
 
     /** Obtiene el audit log. Solo admin y manager. */

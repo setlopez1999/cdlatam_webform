@@ -4,12 +4,14 @@
  * el nombre del expediente editable, y el contenido de la pestaña activa.
  */
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useLocation } from "wouter";
 import { FileText, BarChart2, ClipboardList, Pencil, Check, X, ChevronLeft, Rocket } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useExpedienteStore } from "@/features/expedientes/store";
+import { mapDetalleToExpediente } from "@/features/expedientes/fromServer";
+import { trpc } from "@/lib/trpc";
 import type { FormStatus } from "@/features/expedientes/types";
 import { cn } from "@/lib/utils";
 import { useCan } from "@/hooks/useCan";
@@ -92,10 +94,28 @@ interface Props {
 
 export default function ExpedienteLayout({ expedienteId, activeTab, children }: Props) {
   const [, navigate] = useLocation();
-  const { getExpediente, renombrar } = useExpedienteStore();
+  const { getExpediente, renombrar, mergeDetalleEnStore } = useExpedienteStore();
   const expediente = getExpediente(expedienteId);
   const can = useCan();
   const TABS = getVisibleTabs(can);
+
+  const mergedRef = useRef(false);
+  const detalleQuery = trpc.expediente.detalle.useQuery(
+    { uuid: expedienteId },
+    { enabled: !expediente && !!expedienteId, retry: false },
+  );
+  const renombrarSrv = trpc.expediente.renombrar.useMutation();
+
+  useEffect(() => {
+    mergedRef.current = false;
+  }, [expedienteId]);
+
+  useEffect(() => {
+    if (detalleQuery.data && !mergedRef.current) {
+      mergedRef.current = true;
+      mergeDetalleEnStore(mapDetalleToExpediente(detalleQuery.data));
+    }
+  }, [detalleQuery.data, mergeDetalleEnStore]);
 
   const [editando, setEditando] = useState(false);
   const [nombreTemp, setNombreTemp] = useState(expediente?.nombre ?? "");
@@ -105,12 +125,36 @@ export default function ExpedienteLayout({ expedienteId, activeTab, children }: 
   }, [expediente?.nombre]);
 
   if (!expediente) {
+    if (detalleQuery.isLoading || detalleQuery.isFetching) {
+      return (
+        <div className="flex flex-col items-center justify-center h-64 gap-4">
+          <p className="text-muted-foreground">Cargando expediente…</p>
+        </div>
+      );
+    }
+    if (detalleQuery.error) {
+      return (
+        <div className="flex flex-col items-center justify-center h-64 gap-4">
+          <p className="text-muted-foreground">No se pudo cargar el expediente.</p>
+          <Button variant="outline" onClick={() => navigate("/historial")}>
+            <ChevronLeft className="w-4 h-4 mr-2" /> Volver al Historial
+          </Button>
+        </div>
+      );
+    }
+    if (detalleQuery.data === null) {
+      return (
+        <div className="flex flex-col items-center justify-center h-64 gap-4">
+          <p className="text-muted-foreground">Expediente no encontrado.</p>
+          <Button variant="outline" onClick={() => navigate("/historial")}>
+            <ChevronLeft className="w-4 h-4 mr-2" /> Volver al Historial
+          </Button>
+        </div>
+      );
+    }
     return (
       <div className="flex flex-col items-center justify-center h-64 gap-4">
-        <p className="text-muted-foreground">Expediente no encontrado.</p>
-        <Button variant="outline" onClick={() => navigate("/historial")}>
-          <ChevronLeft className="w-4 h-4 mr-2" /> Volver al Historial
-        </Button>
+        <p className="text-muted-foreground">Cargando expediente…</p>
       </div>
     );
   }
@@ -118,6 +162,7 @@ export default function ExpedienteLayout({ expedienteId, activeTab, children }: 
   const handleGuardarNombre = () => {
     if (nombreTemp.trim()) {
       renombrar(expedienteId, nombreTemp.trim());
+      renombrarSrv.mutate({ uuid: expedienteId, nombre: nombreTemp.trim() });
     }
     setEditando(false);
   };

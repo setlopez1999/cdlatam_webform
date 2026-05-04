@@ -61,8 +61,14 @@ export const actas = sqliteTable("actas", {
   formasPagoImplementacion: text("formasPagoImplementacion", { mode: "json" }),
   formasPagoMantencion: text("formasPagoMantencion", { mode: "json" }),
 
-  // Estado
+  // Estado workflow (borrador / completado / exportado)
   status: text("status").default("borrador").notNull(),
+
+  /** Snapshot JSON completo de F1 (F1Data) */
+  f1Datos: text("f1Datos", { mode: "json" }),
+  /** Estado UI del slot F1: nuevo | sin_guardar | guardado */
+  f1FormStatus: text("f1FormStatus").default("nuevo").notNull(),
+  f1SavedAt: integer("f1SavedAt", { mode: "timestamp" }),
 
   createdAt: integer("createdAt", { mode: "timestamp" }).default(sql`(strftime('%s', 'now'))`).notNull(),
   updatedAt: integer("updatedAt", { mode: "timestamp" }).default(sql`(strftime('%s', 'now'))`).notNull(),
@@ -76,6 +82,8 @@ export const evaluaciones = sqliteTable("evaluaciones", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   userId: integer("userId").notNull(),
   actaId: integer("actaId"),
+  /** Mismo valor que expedientes.uuid */
+  expedienteUuid: text("expedienteUuid"),
 
   // Información General
   unidadNegocios: text("unidadNegocios"),
@@ -108,7 +116,13 @@ export const evaluaciones = sqliteTable("evaluaciones", {
   totalOtros: real("totalOtros"),
   totalGastos: real("totalGastos"),
 
-  // Estado
+  firmaImagen: text("firmaImagen"),
+
+  /** Estado UI del slot F2 */
+  f2FormStatus: text("f2FormStatus").default("nuevo").notNull(),
+  f2SavedAt: integer("f2SavedAt", { mode: "timestamp" }),
+
+  // Estado workflow EP
   status: text("status").default("borrador").notNull(),
 
   createdAt: integer("createdAt", { mode: "timestamp" }).default(sql`(strftime('%s', 'now'))`).notNull(),
@@ -404,6 +418,21 @@ export const expedientes = sqliteTable("expedientes", {
 
 export type Expediente = typeof expedientes.$inferSelect;
 export type InsertExpediente = typeof expedientes.$inferInsert;
+
+/** Resultados F3 persistidos por expediente (snapshot + estado UI) */
+export const resultadosExpediente = sqliteTable("resultados_expediente", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  expedienteUuid: text("expedienteUuid").notNull().unique(),
+  /** JSON: salida de calcularResultadoF3 u objeto extendido */
+  payload: text("payload", { mode: "json" }).notNull(),
+  f3FormStatus: text("f3FormStatus").default("nuevo").notNull(),
+  f3SavedAt: integer("f3SavedAt", { mode: "timestamp" }),
+  createdAt: integer("createdAt", { mode: "timestamp" }).default(sql`(strftime('%s', 'now'))`).notNull(),
+  updatedAt: integer("updatedAt", { mode: "timestamp" }).default(sql`(strftime('%s', 'now'))`).notNull(),
+});
+
+export type ResultadoExpediente = typeof resultadosExpediente.$inferSelect;
+export type InsertResultadoExpediente = typeof resultadosExpediente.$inferInsert;
 
 // ─── Audit Log — trazabilidad de acciones ────────────────────────────────────
 /**

@@ -19,12 +19,20 @@
  *   await trpc.evaluaciones.update.mutate({ id, data })
  */
 import { useCallback } from "react";
+import { trpc } from "@/lib/trpc";
 import { useExpedienteStore } from "../store";
+import { f2DataToEvalSyncData } from "../fromServer";
 import type { F2Data, F1Data } from "../types";
 
 export function useF2(expedienteId: string) {
   const store = useExpedienteStore();
   const expediente = store.getExpediente(expedienteId);
+
+  const syncF2Mutation = trpc.evaluaciones.syncF2.useMutation({
+    onError: (err) => {
+      console.warn("[useF2] No se pudo sincronizar F2 con BD:", err.message);
+    },
+  });
 
   const data    = expediente?.f2.data   ?? null;
   const status  = expediente?.f2.status ?? "nuevo";
@@ -49,10 +57,17 @@ export function useF2(expedienteId: string) {
     [expedienteId, store]
   );
 
-  const guardar = useCallback(
-    () => store.guardarF2(expedienteId),
-    [expedienteId, store]
-  );
+  const guardar = useCallback(() => {
+    if (!data) return;
+    const savedIso = new Date().toISOString();
+    store.guardarF2(expedienteId);
+    syncF2Mutation.mutate({
+      expedienteUuid: expedienteId,
+      f2FormStatus: "guardado",
+      f2SavedAt: savedIso,
+      data: f2DataToEvalSyncData(data),
+    });
+  }, [data, expedienteId, store, syncF2Mutation]);
 
   /** Importa los campos sugeridos de F1 a F2 de una sola vez */
   const importarDesdeF1 = useCallback(() => {
@@ -60,5 +75,15 @@ export function useF2(expedienteId: string) {
     update(f1Suggestions);
   }, [f1Suggestions, update]);
 
-  return { data, status, savedAt, f1Data, f1Suggestions, update, guardar, importarDesdeF1 };
+  return {
+    data,
+    status,
+    savedAt,
+    f1Data,
+    f1Suggestions,
+    update,
+    guardar,
+    importarDesdeF1,
+    isSyncing: syncF2Mutation.isPending,
+  };
 }

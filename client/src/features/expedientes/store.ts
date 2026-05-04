@@ -104,10 +104,26 @@ export function useExpedienteStore() {
     return exp;
   }, []);
 
-  /** Elimina un expediente por id */
+  /** Elimina un expediente por id (solo cliente; el servidor debe borrarse aparte). */
   const eliminar = useCallback((id: string) => {
     setExpedientes(prev => {
       const next = prev.filter(e => e.id !== id);
+      _persist(next);
+      return next;
+    });
+  }, []);
+
+  /** Reemplaza la lista completa (p. ej. tras `expediente.listarResumen`). */
+  const reemplazarListaDesdeServidor = useCallback((list: Expediente[]) => {
+    setExpedientes(list);
+    _persist(list);
+  }, []);
+
+  /** Inserta o actualiza un expediente desde `expediente.detalle`. */
+  const mergeDetalleEnStore = useCallback((exp: Expediente) => {
+    setExpedientes(prev => {
+      const idx = prev.findIndex(e => e.id === exp.id);
+      const next = idx >= 0 ? prev.map(e => (e.id === exp.id ? exp : e)) : [...prev, exp];
       _persist(next);
       return next;
     });
@@ -195,6 +211,8 @@ export function useExpedienteStore() {
     expedientes,
     crear,
     eliminar,
+    reemplazarListaDesdeServidor,
+    mergeDetalleEnStore,
     renombrar,
     getExpediente,
     updateF1,
