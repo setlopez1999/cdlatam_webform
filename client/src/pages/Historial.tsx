@@ -271,6 +271,7 @@ function ExpedienteCard({ exp, onEliminar }: { exp: Expediente; onEliminar: () =
         <div className="flex-1 min-w-0">
           <p className="text-sm font-semibold truncate">{exp.nombre}</p>
           <p className="text-xs text-muted-foreground">
+            {exp.codigo ? <span className="font-mono text-foreground/70">{exp.codigo} · </span> : null}
             {empresa ? <span className="text-foreground/70">{empresa} · </span> : null}
             {fechaDisplay}
           </p>

@@ -4,6 +4,7 @@ import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
 import { clausulasRouter } from "./routers/clausulas";
+import { buildActaCodigo, buildExpedienteCodigo } from "./documentCodes";
 
 // 1. IMPORTACIONES (actas/evaluaciones/búsqueda — siempre SQLite)
 import {
@@ -589,6 +590,7 @@ export const appRouter = router({
         const userId = ctx.user.id;
         const { expedienteUuid, f1SavedAt: f1SavedAtStr, ...actaRest } = input;
         const f1SavedAt = f1SavedAtStr ? new Date(f1SavedAtStr) : undefined;
+        const codigoActa = buildActaCodigo(expedienteUuid);
         /** No persistir firma dibujada en f1Datos (solo PDF con hueco vacío). */
         const f1DatosSinFirma = (raw: unknown): unknown => {
           if (!raw || typeof raw !== "object" || Array.isArray(raw)) return raw;
@@ -603,6 +605,8 @@ export const appRouter = router({
           const prevF1 = f1DatosSinFirma(existing.f1Datos);
           await updateActa(existing.id, {
             ...actaRest,
+            codigo: codigoActa,
+            noActa: codigoActa,
             fecha: actaRest.fecha ? new Date(actaRest.fecha) : undefined,
             serviciosContratados: actaRest.serviciosContratados ?? existing.serviciosContratados,
             formasPagoImplementacion: actaRest.formasPagoImplementacion ?? existing.formasPagoImplementacion,
@@ -617,6 +621,8 @@ export const appRouter = router({
             userId,
             expedienteUuid,
             ...actaRest,
+            codigo: codigoActa,
+            noActa: codigoActa,
             fecha: actaRest.fecha ? new Date(actaRest.fecha) : undefined,
             serviciosContratados: actaRest.serviciosContratados ?? [],
             formasPagoImplementacion: actaRest.formasPagoImplementacion ?? [],
@@ -1064,10 +1070,16 @@ export const appRouter = router({
         const userId = Number(ctx.localUser?.id);
         // Si ya existe en BD, devolver el existente
         const existing = await getExpedienteByUuid(input.uuid);
-        if (existing) return existing;
+        if (existing) {
+          if (!existing.codigo) {
+            return (await updateExpediente(existing.id, { codigo: buildExpedienteCodigo(existing.uuid) })) ?? existing;
+          }
+          return existing;
+        }
         // Si no existe, crear
         const created = await createExpediente({
           uuid: input.uuid,
+          codigo: buildExpedienteCodigo(input.uuid),
           nombre: input.nombre,
           creadorId: userId,
         });

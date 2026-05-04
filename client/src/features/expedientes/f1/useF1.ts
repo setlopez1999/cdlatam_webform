@@ -26,6 +26,11 @@ export function useF1(expedienteId: string) {
 
   // Mutation para sincronizar F1 con la BD
   const syncF1Mutation = trpc.actas.syncF1.useMutation({
+    onSuccess: (acta) => {
+      if (acta?.noActa) {
+        store.updateF1(expedienteId, { noActa: acta.noActa });
+      }
+    },
     onError: (err) => {
       console.warn("[useF1] No se pudo sincronizar F1 con BD:", err.message);
       // No revertir el estado local — el acta sigue guardada en localStorage

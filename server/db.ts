@@ -5,6 +5,7 @@ import { migrate } from "drizzle-orm/better-sqlite3/migrator";
 import * as Database from 'better-sqlite3';
 import { join, dirname } from 'path';
 import { existsSync, mkdirSync } from 'fs';
+import { buildActaCodigo, buildExpedienteCodigo } from "./documentCodes";
 // Importamos los esquemas (asegúrate de que esta ruta sea correcta)
 import {
   InsertUser, users, roles, type Role, type InsertRole,
@@ -457,6 +458,7 @@ export async function runMigrations() {
         CREATE TABLE IF NOT EXISTS actas (
           id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
           userId INTEGER NOT NULL,
+          codigo TEXT UNIQUE,
           noActa TEXT, atencion TEXT, fecha INTEGER,
           razonSocial TEXT, nombreFantasia TEXT, rucDniRut TEXT, direccionComercial TEXT,
           representanteLegal TEXT, representanteDni TEXT, representanteEmail TEXT, representanteFono TEXT,
@@ -535,6 +537,7 @@ export async function runMigrations() {
         CREATE TABLE IF NOT EXISTS expedientes (
           id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
           uuid TEXT NOT NULL UNIQUE,
+          codigo TEXT UNIQUE,
           nombre TEXT NOT NULL,
           creadorId INTEGER NOT NULL,
           actaId INTEGER,
@@ -578,6 +581,7 @@ export async function runMigrations() {
       /* ya aplicado */
     }
   };
+  tryAlter(`ALTER TABLE actas ADD COLUMN codigo TEXT`, "Column codigo added to actas");
   tryAlter(`ALTER TABLE actas ADD COLUMN f1Datos TEXT`, "Column f1Datos added to actas");
   tryAlter(`ALTER TABLE actas ADD COLUMN f1FormStatus TEXT DEFAULT 'nuevo'`, "Column f1FormStatus added to actas");
   tryAlter(`ALTER TABLE actas ADD COLUMN f1SavedAt INTEGER`, "Column f1SavedAt added to actas");
@@ -585,6 +589,7 @@ export async function runMigrations() {
   tryAlter(`ALTER TABLE evaluaciones ADD COLUMN firmaImagen TEXT`, "Column firmaImagen added to evaluaciones");
   tryAlter(`ALTER TABLE evaluaciones ADD COLUMN f2FormStatus TEXT DEFAULT 'nuevo'`, "Column f2FormStatus added to evaluaciones");
   tryAlter(`ALTER TABLE evaluaciones ADD COLUMN f2SavedAt INTEGER`, "Column f2SavedAt added to evaluaciones");
+  tryAlter(`ALTER TABLE expedientes ADD COLUMN codigo TEXT`, "Column codigo added to expedientes");
   tryAlter(`
     CREATE TABLE IF NOT EXISTS resultados_expediente (
       id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
@@ -596,6 +601,41 @@ export async function runMigrations() {
       updatedAt INTEGER DEFAULT (strftime('%s', 'now')) NOT NULL
     )
   `, "Table resultados_expediente ensured");
+
+  try {
+    const db = await getDb();
+    const expRows = await db
+      .select({ id: expedientes.id, uuid: expedientes.uuid, codigo: expedientes.codigo })
+      .from(expedientes);
+    for (const row of expRows) {
+      if (!row.codigo) {
+        await db.update(expedientes)
+          .set({ codigo: buildExpedienteCodigo(row.uuid), updatedAt: new Date() })
+          .where(eq(expedientes.id, row.id));
+      }
+    }
+
+    const actaRows = await db
+      .select({
+        id: actas.id,
+        expedienteUuid: actas.expedienteUuid,
+        codigo: actas.codigo,
+        noActa: actas.noActa,
+      })
+      .from(actas);
+    for (const row of actaRows) {
+      if (!row.expedienteUuid) continue;
+      const codigo = buildActaCodigo(row.expedienteUuid);
+      if (!row.codigo || row.noActa !== codigo) {
+        await db.update(actas)
+          .set({ codigo, noActa: codigo, updatedAt: new Date() })
+          .where(eq(actas.id, row.id));
+      }
+    }
+    console.log("[DB] Compact code backfill completed");
+  } catch (codeBackfillErr: any) {
+    console.warn("[DB] Could not backfill compact codes:", codeBackfillErr?.message ?? codeBackfillErr);
+  }
 
   // Paso 3 (post-migración): garantizar roles nuevos en BDs ya migradas
   // INSERT OR IGNORE es idempotente — seguro de correr siempre al arrancar
@@ -1079,10 +1119,11 @@ export async function getBloquesSemanales(): Promise<Array<SchBloqueHorario & { 
  * Crea un expediente en BD con su metadata.
  * Los datos de formulario (F1/F2) siguen en localStorage por ahora.
  */
-export async function createExpediente(data: { uuid: string; nombre: string; creadorId: number }) {
+export async function createExpediente(data: { uuid: string; nombre: string; creadorId: number; codigo?: string }) {
   const db = await getDb();
   const result = await db.insert(expedientes).values({
     uuid: data.uuid,
+    codigo: data.codigo ?? buildExpedienteCodigo(data.uuid),
     nombre: data.nombre,
     creadorId: data.creadorId,
     status: "borrador",
@@ -1118,7 +1159,7 @@ export async function getExpedienteById(id: number) {
 }
 
 /** Actualiza el nombre o status de un expediente. */
-export async function updateExpediente(id: number, data: Partial<Pick<Expediente, "nombre" | "status" | "actaId" | "evaluacionId">>) {
+export async function updateExpediente(id: number, data: Partial<Pick<Expediente, "nombre" | "status" | "actaId" | "evaluacionId" | "codigo">>) {
   const db = await getDb();
   const result = await db.update(expedientes)
     .set({ ...data, updatedAt: new Date() })

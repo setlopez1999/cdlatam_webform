@@ -212,6 +212,11 @@ export default function ExpedienteLayout({ expedienteId, activeTab, children }: 
             <Pencil className="w-3 h-3 opacity-0 group-hover:opacity-60 transition-opacity" />
           </button>
         )}
+        {expediente.codigo ? (
+          <span className="text-[11px] px-2 py-0.5 rounded border bg-muted/40 text-muted-foreground font-mono">
+            {expediente.codigo}
+          </span>
+        ) : null}
       </div>
 
       {/* Tabs de navegación */}

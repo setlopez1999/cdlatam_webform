@@ -308,6 +308,8 @@ export interface FormSlot<T> {
 export interface Expediente {
   /** nanoid único — será el id en BD cuando se conecte */
   id: string;
+  /** Codigo compacto autogenerado del expediente (solo backend) */
+  codigo?: string;
   /** Nombre editable por el usuario */
   nombre: string;
   /** F1 — Acta */

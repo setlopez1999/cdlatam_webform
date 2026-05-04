@@ -168,6 +168,7 @@ export type ExpedienteResumenRow = {
   expediente: Record<string, unknown> & {
     id: number;
     uuid: string;
+    codigo?: string | null;
     nombre: string;
     creadorId: number;
   };
@@ -240,6 +241,7 @@ export function mapResumenRowToExpediente(row: ExpedienteResumenRow): Expediente
   const updatedAt = uAt ? new Date(uAt).toISOString() : createdAt;
   return {
     id: e.uuid,
+    codigo: e.codigo ? String(e.codigo) : undefined,
     nombre: e.nombre,
     f1,
     f2,
