@@ -24,6 +24,8 @@ import {
   expedientes, type Expediente, type InsertExpediente,
   resultadosExpediente, type ResultadoExpediente, type InsertResultadoExpediente,
   auditLog, type InsertAuditLog,
+  // Catálogo de Cláusulas Legales
+  catalogClausulas, type CatalogClausula, type InsertCatalogClausula,
 } from "../drizzle/schema";
 
 // 1. Inicializar conexión al archivo local "gestion.db"

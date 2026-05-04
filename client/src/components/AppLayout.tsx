@@ -17,6 +17,7 @@ import {
   FilePlus,
   Table,
   FileSearch,
+  FileText,
   type LucideIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -49,6 +50,7 @@ const ICON_MAP: Record<string, LucideIcon> = {
   FilePlus,
   Table,
   FileSearch,
+  FileText,
 };
 
 function resolveIcon(name?: string): LucideIcon {

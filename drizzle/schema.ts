@@ -457,3 +457,18 @@ export const auditLog = sqliteTable("audit_log", {
 
 export type AuditLog = typeof auditLog.$inferSelect;
 export type InsertAuditLog = typeof auditLog.$inferInsert;
+
+// ─── Catálogo de Cláusulas Legales (PDFs) ────────────────────────────────
+export const catalogClausulas = sqliteTable("catalog_clausulas", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  valor: text("valor").notNull(),           // nombre de la cláusula
+  solucionId: integer("solucionId"),         // FK opcional a catalog_soluciones
+  filePath: text("filePath").notNull(),     // ruta relativa al archivo PDF
+  fileName: text("fileName").notNull(),    // nombre original del archivo
+  fileSize: integer("fileSize"),           // tamaño en bytes
+  activo: integer("activo").default(1).notNull(),
+  createdAt: integer("createdAt", { mode: "timestamp" }).default(sql`(strftime('%s', 'now'))`).notNull(),
+});
+
+export type CatalogClausula = typeof catalogClausulas.$inferSelect;
+export type InsertCatalogClausula = typeof catalogClausulas.$inferInsert;

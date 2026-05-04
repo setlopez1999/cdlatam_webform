@@ -9,8 +9,10 @@ import { serveStatic, setupVite } from "./vite";
 import { seedDefaultUsers, seedDefaultRoles, registerLocalAuthRoutes } from "../localAuth";
 import { runMigrations, seedCatalogMeta } from "../db";
 import { registerDbManagementRoutes } from "./dbManagement";
+import { registerClausulasUpload } from "../routes/clausulas-upload";
 import { ENV } from "./env";
 import type { Request, Response, NextFunction } from "express";
+import { join } from "path";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -55,6 +57,9 @@ async function startServer() {
   // DB Management Routes (Export/Import)
   registerDbManagementRoutes(app);
 
+  // Clausulas Upload Route
+  registerClausulasUpload(app);
+
   // ─── Runtime config endpoint ──────────────────────────────────────────────
   // Expone variables de entorno al cliente SIN necesidad de rebuild.
   // El cliente carga este script en index.html y lee window.__ENV__
@@ -72,6 +77,9 @@ async function startServer() {
       createContext,
     })
   );
+  // Serve static files for clause PDFs
+  app.use('/clauses', express.static(join(process.cwd(), 'data', 'clauses')));
+
   // development mode uses Vite, production mode uses static files
   if (process.env.NODE_ENV === "development") {
     await setupVite(app, server);
