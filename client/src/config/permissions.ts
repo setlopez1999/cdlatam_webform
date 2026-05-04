@@ -129,6 +129,12 @@ export const ROUTE_PERMISSIONS: Record<string, RoutePermission> = {
     icon: "History",
     showInNav: true,
   },
+  "/auditoria": {
+    roles: [ROLE_ADMIN],
+    label: "Auditoría",
+    icon: "FileSearch",
+    showInNav: true,
+  },
 
   // ── Rutas por rol RBAC ──────────────────────────────────────────────────────
   "/gestor-horarios": {

@@ -16,6 +16,7 @@ import {
   BarChart3,
   FilePlus,
   Table,
+  FileSearch,
   type LucideIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -47,6 +48,7 @@ const ICON_MAP: Record<string, LucideIcon> = {
   BarChart3,
   FilePlus,
   Table,
+  FileSearch,
 };
 
 function resolveIcon(name?: string): LucideIcon {

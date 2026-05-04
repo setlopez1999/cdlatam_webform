@@ -19,6 +19,7 @@ import ExpedienteResultados from "./pages/ExpedienteResultados";
 import ExpedienteImplementacion from "./pages/ExpedienteImplementacion";
 import SpreadsheetView from "./pages/SpreadsheetView";
 import GestorHorarios from "./pages/GestorHorarios";
+import AuditLog from "./pages/AuditLog";
 import { useLocalAuth } from "./hooks/useLocalAuth";
 import { Loader2 } from "lucide-react";
 import { ROUTE_PERMISSIONS, evaluatePermission, ROLE_ANY } from "@/config/permissions";
@@ -127,6 +128,9 @@ function Router() {
       </Route>
       <Route path="/usuarios">
         {() => <ProtectedRoute component={Usuarios} routePath="/usuarios" />}
+      </Route>
+      <Route path="/auditoria">
+        {() => <ProtectedRoute component={AuditLog} routePath="/auditoria" />}
       </Route>
 
       {/* Rutas protegidas por rol RBAC */}
