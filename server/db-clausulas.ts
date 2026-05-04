@@ -1,9 +1,9 @@
 import { eq } from "drizzle-orm";
 import { getDb } from "./db";
-import { catalogClausulas, catalogSoluciones } from "../drizzle/schema";
+import { catalogClausulas, catalogUnidadesNegocio } from "../drizzle/schema";
 import type { CatalogClausula, InsertCatalogClausula } from "../drizzle/schema";
 
-// ─── Queries ─────────────────────────────────────────────────────────────
+// ─── Queries ─────────────────────────────────────────────────────
 export const getClausulas = async () => {
   const db = await getDb();
   return db.select().from(catalogClausulas).orderBy(catalogClausulas.valor);
@@ -15,14 +15,14 @@ export const getClausulaById = async (id: number) => {
   return results[0] ?? null;
 };
 
-export const getClausulasBySolucion = async (solucionId: number) => {
+export const getClausulasByUnidadNegocio = async (unidadNegocioId: number) => {
   const db = await getDb();
   return db.select().from(catalogClausulas)
-    .where(eq(catalogClausulas.solucionId, solucionId))
+    .where(eq(catalogClausulas.unidadNegocioId, unidadNegocioId))
     .orderBy(catalogClausulas.valor);
 };
 
-// ─── Mutations ───────────────────────────────────────────────────────────
+// ─── Mutations ───────────────────────────────────────────────────
 export const createClausula = async (data: InsertCatalogClausula) => {
   const db = await getDb();
   return db.insert(catalogClausulas).values(data).returning();
@@ -43,11 +43,11 @@ export const toggleClausulaStatus = async (id: number, activo: number) => {
   return db.update(catalogClausulas).set({ activo }).where(eq(catalogClausulas.id, id)).returning();
 };
 
-// ─── Utilidad: Obtener soluciones para el select ───────────────────────
-export const getSolucionesForSelect = async () => {
+// ─── Utilidad: Obtener unidades de negocio para el select ───────────────────────
+export const getUnidadesNegocioForSelect = async () => {
   const db = await getDb();
-  return db.select({ id: catalogSoluciones.id, valor: catalogSoluciones.valor })
-    .from(catalogSoluciones)
-    .where(eq(catalogSoluciones.activo, 1))
-    .orderBy(catalogSoluciones.valor);
+  return db.select({ id: catalogUnidadesNegocio.id, valor: catalogUnidadesNegocio.valor })
+    .from(catalogUnidadesNegocio)
+    .where(eq(catalogUnidadesNegocio.activo, 1))
+    .orderBy(catalogUnidadesNegocio.valor);
 };

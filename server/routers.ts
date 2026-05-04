@@ -18,7 +18,7 @@ import {
   getBloquesByContrato, setBloques, getBloquesSemanales,
   // Expedientes y Audit Log
   createExpediente, getExpedientes, getExpedientesByUser, getExpedienteByUuid,
-  updateExpediente, createAuditLog, getAuditLog,
+  updateExpediente, getAuditLog, getAuditLogFiltered,
   // Actas por expediente
   getActaByExpedienteUuid,
   getEvaluacionByExpedienteUuid,
@@ -66,9 +66,10 @@ import {
 
 // 2. IMPORTACIONES DE LOCALAUTH (Solo para cifrado/tokens, NO BD)
 import {
-  verifyPassword, signLocalJWT,
+  verifyPassword, signLocalJWT, verifyLocalJWT,
   LOCAL_AUTH_COOKIE, hashPassword,
 } from "./localAuth";
+import { recordAuditFromTrpc, recordAuditDirect, getClientIp } from "./audit/record";
 
 // 3. RBAC — verificación de roles
 import { requireRole, requireAnyRole } from "./rbac";
@@ -212,6 +213,45 @@ const EvaluacionInputSchema = z.object({
 export const appRouter = router({
   system: systemRouter,
 
+  /** Auditoría: listado filtrado (admin / manager). */
+  audit: router({
+    list: protectedProcedure
+      .input(z.object({
+        fromSec: z.number().optional(),
+        toSec: z.number().optional(),
+        actions: z.array(z.string()).optional(),
+        entities: z.array(z.string()).optional(),
+        userId: z.number().optional(),
+        usernameContains: z.string().optional(),
+        expedienteUuidContains: z.string().optional(),
+        limit: z.number().min(1).max(500).default(100),
+        cursor: z.object({
+          id: z.number(),
+          createdAtSec: z.number(),
+        }).optional(),
+      }))
+      .query(async ({ ctx, input }) => {
+        await requireAnyRole(ctx, ["admin", "manager"]);
+        const cursor = input.cursor
+          ? {
+              id: input.cursor.id,
+              createdAt: new Date(input.cursor.createdAtSec * 1000),
+            }
+          : undefined;
+        return getAuditLogFiltered({
+          from: input.fromSec != null ? new Date(input.fromSec * 1000) : undefined,
+          to: input.toSec != null ? new Date(input.toSec * 1000) : undefined,
+          actions: input.actions,
+          entities: input.entities,
+          userId: input.userId,
+          usernameContains: input.usernameContains,
+          expedienteUuidContains: input.expedienteUuidContains,
+          limit: input.limit,
+          cursor,
+        });
+      }),
+  }),
+
   auth: router({
     me: publicProcedure.query(opts => opts.ctx.user),
     logout: publicProcedure.mutation(({ ctx }) => {
@@ -229,12 +269,29 @@ export const appRouter = router({
         password: z.string().min(1),
       }))
       .mutation(async ({ ctx, input }) => {
+        const ip = getClientIp(ctx.req);
         const user = await ds_findUserByUsername(input.username);
         if (!user || user.isActive !== 1) {
+          await recordAuditDirect({
+            username: input.username,
+            userId: null,
+            action: "LOGIN_FAILED",
+            entity: "auth",
+            ip,
+            changes: { after: { reason: "user_or_inactive" } },
+          });
           throw new Error("Usuario o contraseña incorrectos");
         }
         const valid = await verifyPassword(input.password, user.passwordHash);
         if (!valid) {
+          await recordAuditDirect({
+            username: user.username,
+            userId: user.id,
+            action: "LOGIN_FAILED",
+            entity: "auth",
+            ip,
+            changes: { after: { reason: "bad_password" } },
+          });
           throw new Error("Usuario o contraseña incorrectos");
         }
         const token = await signLocalJWT({
@@ -248,6 +305,13 @@ export const appRouter = router({
           ...cookieOpts,
           maxAge: 8 * 60 * 60 * 1000,
         });
+        await recordAuditDirect({
+          username: user.username,
+          userId: user.id,
+          action: "LOGIN",
+          entity: "auth",
+          ip,
+        });
         return {
           success: true,
           user: {
@@ -259,9 +323,31 @@ export const appRouter = router({
         };
       }),
 
-    logout: publicProcedure.mutation(({ ctx }) => {
+    logout: publicProcedure.mutation(async ({ ctx }) => {
       const cookieOpts = getCookieOpts(ctx.req);
+      const cookieHeader = ctx.req.headers.cookie ?? "";
+      const match = cookieHeader.match(new RegExp(`(?:^|;\\s*)${LOCAL_AUTH_COOKIE}=([^;]+)`));
+      const token = match ? decodeURIComponent(match[1]) : null;
+      let userId: number | null = null;
+      let username = "desconocido";
+      if (token) {
+        const p = await verifyLocalJWT(token);
+        if (p) {
+          userId = p.id;
+          username = p.username;
+        }
+      }
+      const ip = getClientIp(ctx.req);
       ctx.res.clearCookie(LOCAL_AUTH_COOKIE, { ...cookieOpts, maxAge: -1 });
+      if (userId != null) {
+        await recordAuditDirect({
+          userId,
+          username,
+          action: "LOGOUT",
+          entity: "auth",
+          ip,
+        });
+      }
       return { success: true } as const;
     }),
 
@@ -294,6 +380,13 @@ export const appRouter = router({
           role: input.role,
           roleId: input.roleId ?? null,
         });
+        const created = await ds_findUserByUsername(input.username);
+        await recordAuditFromTrpc(ctx, {
+          action: "CREATE",
+          entity: "user",
+          entityId: created?.id,
+          changes: { after: { username: input.username, role: input.role } },
+        });
         return { success: true };
       }),
 
@@ -308,6 +401,12 @@ export const appRouter = router({
         await requireRole(ctx, "admin");
         const { id, ...data } = input;
         await ds_updateUser(id, data);
+        await recordAuditFromTrpc(ctx, {
+          action: "UPDATE",
+          entity: "user",
+          entityId: id,
+          changes: { after: data },
+        });
         return { success: true };
       }),
 
@@ -319,6 +418,12 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         await requireRole(ctx, "admin");
         await ds_toggleUserStatus(input.id, input.isActive);
+        await recordAuditFromTrpc(ctx, {
+          action: "UPDATE",
+          entity: "user",
+          entityId: input.id,
+          changes: { after: { isActive: input.isActive } },
+        });
         return { success: true };
       }),
 
@@ -361,6 +466,12 @@ export const appRouter = router({
 
         const passwordHash = await hashPassword(input.newPassword);
         await ds_updateUserCredentials(input.targetUserId, { passwordHash });
+        await recordAuditFromTrpc(ctx, {
+          action: "PASSWORD_CHANGE",
+          entity: "user",
+          entityId: input.targetUserId,
+          changes: { after: { self: isSelf, admin: isAdmin } },
+        });
         return { success: true };
       }),
 
@@ -395,6 +506,12 @@ export const appRouter = router({
         }
 
         await ds_updateUserCredentials(input.targetUserId, { username: input.newUsername });
+        await recordAuditFromTrpc(ctx, {
+          action: "USERNAME_CHANGE",
+          entity: "user",
+          entityId: input.targetUserId,
+          changes: { after: { newUsername: input.newUsername } },
+        });
         return { success: true };
       }),
   }),
@@ -803,32 +920,63 @@ export const appRouter = router({
 
     create: protectedProcedure
       .input(z.object({ tableName: z.string(), data: z.any() }))
-      .mutation(async ({ input }) => {
-        return await ds_createCatalogRecord(input.tableName, input.data);
+      .mutation(async ({ ctx, input }) => {
+        const r = await ds_createCatalogRecord(input.tableName, input.data);
+        await recordAuditFromTrpc(ctx, {
+          action: "CREATE",
+          entity: `catalog:${input.tableName}`,
+          changes: { after: { data: input.data } },
+        });
+        return r;
       }),
 
     update: protectedProcedure
       .input(z.object({ tableName: z.string(), id: z.number(), data: z.any() }))
-      .mutation(async ({ input }) => {
-        return await ds_updateCatalogRecord(input.tableName, input.id, input.data);
+      .mutation(async ({ ctx, input }) => {
+        const r = await ds_updateCatalogRecord(input.tableName, input.id, input.data);
+        await recordAuditFromTrpc(ctx, {
+          action: "UPDATE",
+          entity: `catalog:${input.tableName}`,
+          entityId: input.id,
+          changes: { after: { data: input.data } },
+        });
+        return r;
       }),
 
     delete: protectedProcedure
       .input(z.object({ tableName: z.string(), id: z.number() }))
-      .mutation(async ({ input }) => {
-        return await ds_deleteCatalogRecord(input.tableName, input.id);
+      .mutation(async ({ ctx, input }) => {
+        const r = await ds_deleteCatalogRecord(input.tableName, input.id);
+        await recordAuditFromTrpc(ctx, {
+          action: "DELETE",
+          entity: `catalog:${input.tableName}`,
+          entityId: input.id,
+        });
+        return r;
       }),
 
     bulkUpdate: protectedProcedure
       .input(z.object({ tableName: z.string(), ids: z.array(z.number()), data: z.any() }))
-      .mutation(async ({ input }) => {
-        return await ds_bulkUpdateCatalogRecords(input.tableName, input.ids, input.data);
+      .mutation(async ({ ctx, input }) => {
+        const r = await ds_bulkUpdateCatalogRecords(input.tableName, input.ids, input.data);
+        await recordAuditFromTrpc(ctx, {
+          action: "UPDATE",
+          entity: "catalog",
+          changes: { after: { tableName: input.tableName, idsCount: input.ids.length, op: "bulkUpdate" } },
+        });
+        return r;
       }),
 
     bulkDelete: protectedProcedure
       .input(z.object({ tableName: z.string(), ids: z.array(z.number()) }))
-      .mutation(async ({ input }) => {
-        return await ds_bulkDeleteCatalogRecords(input.tableName, input.ids);
+      .mutation(async ({ ctx, input }) => {
+        const r = await ds_bulkDeleteCatalogRecords(input.tableName, input.ids);
+        await recordAuditFromTrpc(ctx, {
+          action: "DELETE",
+          entity: "catalog",
+          changes: { after: { tableName: input.tableName, idsCount: input.ids.length, op: "bulkDelete" } },
+        });
+        return r;
       }),
 
     summary: protectedProcedure.query(async () => {
@@ -848,20 +996,38 @@ export const appRouter = router({
 
     createTable: protectedProcedure
       .input(z.object({ tableName: z.string(), title: z.string() }))
-      .mutation(async ({ input }) => {
-        return ds_createCatalogTable(input.tableName, input.title);
+      .mutation(async ({ ctx, input }) => {
+        const r = await ds_createCatalogTable(input.tableName, input.title);
+        await recordAuditFromTrpc(ctx, {
+          action: "CREATE",
+          entity: "catalog_meta",
+          changes: { after: { tableName: input.tableName, title: input.title } },
+        });
+        return r;
       }),
 
     renameTable: protectedProcedure
       .input(z.object({ tableName: z.string(), newTitle: z.string() }))
-      .mutation(async ({ input }) => {
-        return ds_renameCatalogTable(input.tableName, input.newTitle);
+      .mutation(async ({ ctx, input }) => {
+        const r = await ds_renameCatalogTable(input.tableName, input.newTitle);
+        await recordAuditFromTrpc(ctx, {
+          action: "UPDATE",
+          entity: "catalog_meta",
+          changes: { after: { tableName: input.tableName, newTitle: input.newTitle } },
+        });
+        return r;
       }),
 
     deleteTable: protectedProcedure
       .input(z.object({ tableName: z.string() }))
-      .mutation(async ({ input }) => {
-        return ds_deleteCatalogTable(input.tableName);
+      .mutation(async ({ ctx, input }) => {
+        const r = await ds_deleteCatalogTable(input.tableName);
+        await recordAuditFromTrpc(ctx, {
+          action: "DELETE",
+          entity: "catalog_meta",
+          changes: { after: { tableName: input.tableName } },
+        });
+        return r;
       }),
 
     // CRUD genérico que soporta tablas fijas y dinámicas
@@ -873,26 +1039,51 @@ export const appRouter = router({
 
     createGeneric: protectedProcedure
       .input(z.object({ tableName: z.string(), data: z.any() }))
-      .mutation(async ({ input }) => {
-        return ds_createCatalogRecordGeneric(input.tableName, input.data);
+      .mutation(async ({ ctx, input }) => {
+        const r = await ds_createCatalogRecordGeneric(input.tableName, input.data);
+        await recordAuditFromTrpc(ctx, {
+          action: "CREATE",
+          entity: `catalog_custom:${input.tableName}`,
+          changes: { after: { data: input.data } },
+        });
+        return r;
       }),
 
     updateGeneric: protectedProcedure
       .input(z.object({ tableName: z.string(), id: z.number(), data: z.any() }))
-      .mutation(async ({ input }) => {
-        return ds_updateCatalogRecordGeneric(input.tableName, input.id, input.data);
+      .mutation(async ({ ctx, input }) => {
+        const r = await ds_updateCatalogRecordGeneric(input.tableName, input.id, input.data);
+        await recordAuditFromTrpc(ctx, {
+          action: "UPDATE",
+          entity: `catalog_custom:${input.tableName}`,
+          entityId: input.id,
+          changes: { after: { data: input.data } },
+        });
+        return r;
       }),
 
     deleteGeneric: protectedProcedure
       .input(z.object({ tableName: z.string(), id: z.number() }))
-      .mutation(async ({ input }) => {
-        return ds_deleteCatalogRecordGeneric(input.tableName, input.id);
+      .mutation(async ({ ctx, input }) => {
+        const r = await ds_deleteCatalogRecordGeneric(input.tableName, input.id);
+        await recordAuditFromTrpc(ctx, {
+          action: "DELETE",
+          entity: `catalog_custom:${input.tableName}`,
+          entityId: input.id,
+        });
+        return r;
       }),
 
     bulkDeleteGeneric: protectedProcedure
       .input(z.object({ tableName: z.string(), ids: z.array(z.number()) }))
-      .mutation(async ({ input }) => {
-        return ds_bulkDeleteCatalogRecordsGeneric(input.tableName, input.ids);
+      .mutation(async ({ ctx, input }) => {
+        const r = await ds_bulkDeleteCatalogRecordsGeneric(input.tableName, input.ids);
+        await recordAuditFromTrpc(ctx, {
+          action: "DELETE",
+          entity: "catalog_custom",
+          changes: { after: { tableName: input.tableName, idsCount: input.ids.length, op: "bulkDeleteGeneric" } },
+        });
+        return r;
       }),
 
     // Conteo de registros activos para todas las tablas (fijas + dinámicas)
@@ -1067,7 +1258,7 @@ export const appRouter = router({
         nombre: z.string().min(1),
       }))
       .mutation(async ({ ctx, input }) => {
-        const userId = Number(ctx.localUser?.id);
+        const userId = ctx.user!.id;
         // Si ya existe en BD, devolver el existente
         const existing = await getExpedienteByUuid(input.uuid);
         if (existing) {
@@ -1083,12 +1274,12 @@ export const appRouter = router({
           nombre: input.nombre,
           creadorId: userId,
         });
-        await createAuditLog({
-          userId,
-          username: ctx.localUser?.username ?? "desconocido",
+        await recordAuditFromTrpc(ctx, {
           action: "CREATE",
           entity: "expediente",
           entityId: created.id,
+          expedienteUuid: input.uuid,
+          expedienteCodigo: created.codigo ?? null,
           changes: { after: { uuid: input.uuid, nombre: input.nombre } },
         });
         return created;
@@ -1135,13 +1326,13 @@ export const appRouter = router({
           payload: input.payload,
           f3FormStatus: input.f3FormStatus,
         });
-        await createAuditLog({
-          userId: ctx.user.id,
-          username: ctx.user.username,
+        await recordAuditFromTrpc(ctx, {
           action: "UPDATE",
           entity: "expediente",
           entityId: det.expediente.id,
-          changes: { after: { resultado: true } },
+          expedienteUuid: input.expedienteUuid,
+          expedienteCodigo: det.expediente.codigo ?? null,
+          changes: { after: { resultado: true, f3FormStatus: input.f3FormStatus } },
         });
         return { success: true as const };
       }),
@@ -1159,12 +1350,12 @@ export const appRouter = router({
         const isAdmin = ctx.user.role === "admin";
         if (!isAdmin && row.creadorId !== ctx.user.id) throw new Error("No autorizado");
         const updated = await updateExpediente(row.id, { nombre: input.nombre });
-        await createAuditLog({
-          userId: ctx.user.id,
-          username: ctx.user.username,
+        await recordAuditFromTrpc(ctx, {
           action: "UPDATE",
           entity: "expediente",
           entityId: row.id,
+          expedienteUuid: row.uuid,
+          expedienteCodigo: row.codigo ?? null,
           changes: { after: { nombre: input.nombre } },
         });
         return updated;
@@ -1180,12 +1371,12 @@ export const appRouter = router({
         const isAdmin = ctx.user.role === "admin";
         if (!isAdmin && row.creadorId !== ctx.user.id) throw new Error("No autorizado");
         await deleteExpedienteCascadeByUuid(input.uuid);
-        await createAuditLog({
-          userId: ctx.user.id,
-          username: ctx.user.username,
+        await recordAuditFromTrpc(ctx, {
           action: "DELETE",
           entity: "expediente",
           entityId: row.id,
+          expedienteUuid: input.uuid,
+          expedienteCodigo: row.codigo ?? null,
         });
         return { success: true as const };
       }),

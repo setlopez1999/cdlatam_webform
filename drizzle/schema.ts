@@ -443,17 +443,19 @@ export type InsertResultadoExpediente = typeof resultadosExpediente.$inferInsert
  * Tabla audit_log — registra toda actividad relevante del sistema.
  * Se graba desde el momento del despliegue. Sin retención automática por ahora.
  *
- * action: "LOGIN" | "LOGOUT" | "CREATE" | "UPDATE" | "DELETE"
- * entity: "expediente" | "acta" | "evaluacion" | "user" | "implementacion"
- * changes: JSON { before: {...}, after: {...} } — solo en UPDATE
+ * action: LOGIN, LOGOUT, LOGIN_FAILED, CREATE, UPDATE, DELETE, UPLOAD, …
+ * entity: expediente, acta, auth, catalog_clausulas, …
+ * changes: JSON { before, after } u otro resumen
  */
 export const auditLog = sqliteTable("audit_log", {
   id: integer("id").primaryKey({ autoIncrement: true }),
-  userId: integer("userId"),                       // null si sesión expirada
+  userId: integer("userId"),                       // null si sesión expirada o intento fallido
   username: text("username").notNull(),            // copia del username al momento de la acción
   action: text("action").notNull(),
   entity: text("entity").notNull(),
-  entityId: integer("entityId"),                   // null para LOGIN/LOGOUT
+  entityId: integer("entityId"),                   // null p. ej. LOGIN
+  expedienteUuid: text("expedienteUuid"),         // denormalizado para filtros / UI
+  expedienteCodigo: text("expedienteCodigo"),
   changes: text("changes", { mode: "json" }),      // { before, after } o null
   ip: text("ip"),
   createdAt: integer("createdAt", { mode: "timestamp" }).default(sql`(strftime('%s', 'now'))`).notNull(),

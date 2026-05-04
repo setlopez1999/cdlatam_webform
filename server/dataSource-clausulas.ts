@@ -6,20 +6,20 @@
 import {
   getClausulas,
   getClausulaById,
-  getClausulasBySolucion,
+  getClausulasByUnidadNegocio,
   createClausula,
   updateClausula,
   deleteClausula,
   toggleClausulaStatus,
-  getSolucionesForSelect,
+  getUnidadesNegocioForSelect,
 } from "./db-clausulas";
 
 // Exportar funciones envueltas (pattern dataSource)
 export const ds_getClausulas = getClausulas;
 export const ds_getClausulaById = getClausulaById;
-export const ds_getClausulasBySolucion = getClausulasBySolucion;
+export const ds_getClausulasByUnidadNegocio = getClausulasByUnidadNegocio;
 export const ds_createClausula = createClausula;
 export const ds_updateClausula = updateClausula;
 export const ds_deleteClausula = deleteClausula;
 export const ds_toggleClausulaStatus = toggleClausulaStatus;
-export const ds_getSolucionesForSelect = getSolucionesForSelect;
+export const ds_getUnidadesNegocioForSelect = getUnidadesNegocioForSelect;

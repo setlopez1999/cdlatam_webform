@@ -1,5 +1,5 @@
 // server/db.ts
-import { eq, like, or, and, sql, desc, sum, count, inArray } from "drizzle-orm";
+import { eq, like, or, and, sql, desc, sum, count, inArray, lt, lte, gte } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import { migrate } from "drizzle-orm/better-sqlite3/migrator";
 import * as Database from 'better-sqlite3';
@@ -553,6 +553,8 @@ export async function runMigrations() {
           action TEXT NOT NULL,
           entity TEXT NOT NULL,
           entityId INTEGER,
+          expedienteUuid TEXT,
+          expedienteCodigo TEXT,
           changes TEXT,
           ip TEXT,
           createdAt INTEGER DEFAULT (strftime('%s', 'now')) NOT NULL
@@ -601,6 +603,25 @@ export async function runMigrations() {
       updatedAt INTEGER DEFAULT (strftime('%s', 'now')) NOT NULL
     )
   `, "Table resultados_expediente ensured");
+
+  tryAlter(`
+    CREATE TABLE IF NOT EXISTS catalog_clausulas (
+      id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+      valor TEXT NOT NULL,
+      unidadNegocioId INTEGER,
+      filePath TEXT NOT NULL,
+      fileName TEXT NOT NULL,
+      fileSize INTEGER,
+      activo INTEGER DEFAULT 1 NOT NULL,
+      createdAt INTEGER DEFAULT (strftime('%s', 'now')) NOT NULL
+    )
+  `, "Table catalog_clausulas ensured");
+
+  tryAlter(`ALTER TABLE audit_log ADD COLUMN expedienteUuid TEXT`, "Column expedienteUuid on audit_log");
+  tryAlter(`ALTER TABLE audit_log ADD COLUMN expedienteCodigo TEXT`, "Column expedienteCodigo on audit_log");
+  tryAlter(`CREATE INDEX IF NOT EXISTS idx_audit_log_created_at ON audit_log(createdAt)`, "Index audit_log createdAt");
+  tryAlter(`CREATE INDEX IF NOT EXISTS idx_audit_log_user_created ON audit_log(userId, createdAt)`, "Index audit_log userId+createdAt");
+  tryAlter(`CREATE INDEX IF NOT EXISTS idx_audit_log_expediente_uuid ON audit_log(expedienteUuid)`, "Index audit_log expedienteUuid");
 
   try {
     const db = await getDb();
@@ -1215,9 +1236,11 @@ export async function getExpedienteDetalle(uuid: string, userId: number, canView
 export async function createAuditLog(data: {
   userId?: number;
   username: string;
-  action: "LOGIN" | "LOGOUT" | "CREATE" | "UPDATE" | "DELETE";
+  action: string;
   entity: string;
   entityId?: number;
+  expedienteUuid?: string | null;
+  expedienteCodigo?: string | null;
   changes?: { before?: unknown; after?: unknown };
   ip?: string;
 }) {
@@ -1228,13 +1251,78 @@ export async function createAuditLog(data: {
     action: data.action,
     entity: data.entity,
     entityId: data.entityId ?? null,
+    expedienteUuid: data.expedienteUuid ?? null,
+    expedienteCodigo: data.expedienteCodigo ?? null,
     changes: data.changes ?? null,
     ip: data.ip ?? null,
   });
 }
 
-/** Obtiene el audit log completo, ordenado por más reciente. */
+export type AuditLogQueryFilter = {
+  from?: Date;
+  to?: Date;
+  actions?: string[];
+  entities?: string[];
+  userId?: number;
+  usernameContains?: string;
+  expedienteUuidContains?: string;
+  limit: number;
+  cursor?: { id: number; createdAt: Date };
+};
+
+function likeFragment(raw: string): string {
+  const safe = raw.replace(/[%_\\]/g, "");
+  return `%${safe}%`;
+}
+
+/** Lista audit con filtros en SQL + paginación por cursor (createdAt desc, id desc). */
+export async function getAuditLogFiltered(f: AuditLogQueryFilter) {
+  const db = await getDb();
+  const conditions = [];
+
+  if (f.from) conditions.push(gte(auditLog.createdAt, f.from));
+  if (f.to) conditions.push(lte(auditLog.createdAt, f.to));
+  if (f.actions?.length) conditions.push(inArray(auditLog.action, f.actions));
+  if (f.entities?.length) conditions.push(inArray(auditLog.entity, f.entities));
+  if (f.userId != null) conditions.push(eq(auditLog.userId, f.userId));
+  if (f.usernameContains?.trim()) {
+    conditions.push(like(auditLog.username, likeFragment(f.usernameContains.trim())));
+  }
+  if (f.expedienteUuidContains?.trim()) {
+    conditions.push(like(auditLog.expedienteUuid, likeFragment(f.expedienteUuidContains.trim())));
+  }
+
+  if (f.cursor) {
+    const cAt = f.cursor.createdAt;
+    const cId = f.cursor.id;
+    conditions.push(
+      or(lt(auditLog.createdAt, cAt), and(eq(auditLog.createdAt, cAt), lt(auditLog.id, cId)))
+    );
+  }
+
+  const whereClause = conditions.length ? and(...conditions) : undefined;
+  const limit = Math.min(Math.max(f.limit, 1), 500);
+
+  const rows = await db
+    .select()
+    .from(auditLog)
+    .where(whereClause)
+    .orderBy(desc(auditLog.createdAt), desc(auditLog.id))
+    .limit(limit + 1);
+
+  const hasMore = rows.length > limit;
+  const items = hasMore ? rows.slice(0, limit) : rows;
+  const last = items[items.length - 1];
+  const nextCursor =
+    hasMore && last
+      ? { id: last.id, createdAt: last.createdAt instanceof Date ? last.createdAt : new Date(last.createdAt) }
+      : undefined;
+
+  return { items, nextCursor };
+}
+
+/** Obtiene el audit log completo, ordenado por más reciente (sin paginación +1). */
 export async function getAuditLog(limit = 200) {
   const db = await getDb();
-  return db.select().from(auditLog).orderBy(desc(auditLog.createdAt)).limit(limit);
+  return db.select().from(auditLog).orderBy(desc(auditLog.createdAt), desc(auditLog.id)).limit(limit);
 }

@@ -12,7 +12,7 @@ El sistema se basa en una tabla maestra llamada `catalog_meta`.
 ## 2. Definición de Interfaz: `catalogConfig.ts`
 Para que el sistema sepa cómo dibujar los formularios de cada tabla, usamos un objeto de configuración. Cada entrada define:
 - `tableName`: Nombre técnico.
-- `fields`: Arreglo de campos (`valor`, `activo`, y ahora `unidadNegocioId`).
+- `fields`: Arreglo de campos (`valor`, `activo`, y ahora `solucionId`).
 - `type`: Define si es un input de texto, un checkbox (booleano) o un select.
 
 ## 3. Capa de Datos Genérica: `server/db.ts`
@@ -35,6 +35,44 @@ Para las relaciones (como la de Solución -> Unidad de Negocio):
 - El frontend envía el `unidadNegocioId`.
 - `CatalogCrudView` se asegura de que ese ID sea un número (`parseInt`).
 - Drizzle lo inserta en la columna correspondiente de la tabla indicada.
+
+---
+
+## 6. Nueva Tabla: `catalog_clausulas` (Gestión de PDFs)
+Creada para almacenar metadatos de cláusulas legales en formato PDF.
+
+- **Archivo de Definición**: `drizzle/schema.ts` (final del archivo).
+- **Migración**: `drizzle/migrations/0007_catalog_clausulas.sql`.
+- **Lógica BD**: `server/db-clausulas.ts`.
+- **DataSource**: `server/dataSource-clausulas.ts`.
+- **Router tRPC**: `server/routers/clausulas.ts`.
+- **Upload**: `server/routes/clausulas-upload.ts` (usa multer).
+- **UI**: `client/src/pages/ClausulasPage.tsx`.
+
+### Estructura de la tabla:
+| Campo | Tipo | Descripción |
+|-------|------|-------------|
+| `id` | integer PK | Autoincremental |
+| `valor` | text | Nombre de la cláusula |
+| `unidadNegocioId` | integer (FK) | Relación a `catalog_unidades_negocio` |
+| `filePath` | text | Ruta relativa al archivo PDF (`/clauses/xyz.pdf`) |
+| `fileName` | text | Nombre original del archivo subido |
+| `fileSize` | integer | Tamaño en bytes |
+| `activo` | integer | 1 = activo, 0 = inactivo |
+| `createdAt` | integer | Timestamp de creación |
+
+### Relaciones:
+- **`catalog_clausulas`** N:1 **`catalog_unidades_negocio`** (vía `unidadNegocioId`).
+
+### Almacenamiento de Archivos:
+- **Físico**: `data/clauses/` (Compatible Windows/Linux vía `path.join`).
+- **Servidor Estático**: Configurado en `server/_core/index.ts` (`app.use('/clauses', express.static(...))`).
+- **Límite**: 10MB por archivo (configurado en `server/multer-config.ts`).
+
+### Permisos:
+- **Ruta**: `/clausulas` (agregada en `client/src/config/permissions.ts`).
+- **Acceso**: Solo administradores (`roles: [ROLE_ADMIN]`).
+- **Sidebar**: Aparece automáticamente en el aside (icono `FileText`).
 
 ---
 

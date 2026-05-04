@@ -9,12 +9,12 @@ import { PageLayout } from "@/components/PageLayout";
 interface Clausula {
   id: number;
   valor: string;
-  solucionId?: number | null;
+  unidadNegocioId?: number | null;
   filePath: string;
   fileName: string;
   fileSize?: number | null;
   activo: number;
-  createdAt: number;
+  createdAt: Date;
 }
 
 export default function ClausulasPage() {
@@ -22,11 +22,11 @@ export default function ClausulasPage() {
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [nombre, setNombre] = useState("");
-  const [solucionId, setSolucionId] = useState<string>("");
+  const [unidadNegocioId, setUnidadNegocioId] = useState<string>("");
 
   // Queries
   const { data: clausulas = [], refetch } = trpc.clausulas.list.useQuery();
-  const { data: soluciones = [] } = trpc.clausulas.getSoluciones.useQuery();
+  const { data: unidadesNegocio = [] } = trpc.clausulas.getUnidadesNegocio.useQuery();
 
   // Mutations
   const deleteMutation = trpc.clausulas.delete.useMutation({
@@ -61,17 +61,21 @@ export default function ClausulasPage() {
     const formData = new FormData();
     formData.append("pdf", file);
     formData.append("valor", nombre);
-    if (solucionId) formData.append("solucionId", solucionId);
+    if (unidadNegocioId) formData.append("unidadNegocioId", unidadNegocioId);
 
     try {
       const res = await fetch("/api/clausulas/upload", {
         method: "POST",
         body: formData,
+        credentials: "include",
       });
-      if (!res.ok) throw new Error("Error subiendo archivo");
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error((body as { error?: string }).error || "Error subiendo archivo");
+      }
       toast.success("Cláusula subida exitosamente");
       setNombre("");
-      setSolucionId("");
+      setUnidadNegocioId("");
       if (fileInputRef.current) fileInputRef.current.value = "";
       refetch();
     } catch (err: any) {
@@ -82,7 +86,7 @@ export default function ClausulasPage() {
   };
 
   return (
-    <PageLayout title="Cláusulas Legales (PDFs)" subtitle="Gestión de cláusulas legales por solución">
+    <PageLayout title="Cláusulas Legales (PDFs)" subtitle="Gestión de cláusulas legales por unidad de negocio (solo admin)">
       <div className="space-y-4 animate-in fade-in zoom-in-95 duration-200">
         {/* Upload Form */}
         <form onSubmit={handleUpload} className="bg-[#1a1f2e] border border-white/5 p-4 rounded-xl space-y-3">
@@ -98,13 +102,13 @@ export default function ClausulasPage() {
               required
             />
             <select
-              value={solucionId}
-              onChange={e => setSolucionId(e.target.value)}
+              value={unidadNegocioId}
+              onChange={e => setUnidadNegocioId(e.target.value)}
               className="bg-[#242b3d] border border-white/10 text-white rounded-md px-3 py-2 text-sm"
             >
-              <option value="">Sin solución específica</option>
-              {soluciones.map((s: any) => (
-                <option key={s.id} value={s.id}>{s.valor}</option>
+              <option value="">Sin unidad de negocio</option>
+              {unidadesNegocio.map((u: any) => (
+                <option key={u.id} value={u.id}>{u.valor}</option>
               ))}
             </select>
             <Input
