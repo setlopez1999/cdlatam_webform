@@ -32,7 +32,8 @@ export function mapDbActaToF1(acta: Record<string, unknown> | null): {
   }
   const rawJson = acta.f1Datos;
   if (rawJson && typeof rawJson === "object") {
-    const data = { ...F1_INITIAL, ...(rawJson as Partial<F1Data>) } as F1Data;
+    const { firmaImagen: _omitFirma, ...restJson } = rawJson as Partial<F1Data> & Record<string, unknown>;
+    const data = { ...F1_INITIAL, ...restJson } as F1Data;
     const saved = acta.f1SavedAt
       ? new Date(acta.f1SavedAt as string | number).toISOString()
       : undefined;

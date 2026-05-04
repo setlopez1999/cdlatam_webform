@@ -3,6 +3,7 @@ import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
+import { clausulasRouter } from "./routers/clausulas";
 
 // 1. IMPORTACIONES (actas/evaluaciones/búsqueda — siempre SQLite)
 import {
@@ -588,16 +589,25 @@ export const appRouter = router({
         const userId = ctx.user.id;
         const { expedienteUuid, f1SavedAt: f1SavedAtStr, ...actaRest } = input;
         const f1SavedAt = f1SavedAtStr ? new Date(f1SavedAtStr) : undefined;
+        /** No persistir firma dibujada en f1Datos (solo PDF con hueco vacío). */
+        const f1DatosSinFirma = (raw: unknown): unknown => {
+          if (!raw || typeof raw !== "object" || Array.isArray(raw)) return raw;
+          const o = { ...(raw as Record<string, unknown>) };
+          delete o.firmaImagen;
+          return o;
+        };
+        const f1DatosMerged = f1DatosSinFirma(actaRest.f1Datos);
         const existing = await getActaByExpedienteUuid(expedienteUuid);
         let acta;
         if (existing) {
+          const prevF1 = f1DatosSinFirma(existing.f1Datos);
           await updateActa(existing.id, {
             ...actaRest,
             fecha: actaRest.fecha ? new Date(actaRest.fecha) : undefined,
             serviciosContratados: actaRest.serviciosContratados ?? existing.serviciosContratados,
             formasPagoImplementacion: actaRest.formasPagoImplementacion ?? existing.formasPagoImplementacion,
             formasPagoMantencion: actaRest.formasPagoMantencion ?? existing.formasPagoMantencion,
-            f1Datos: actaRest.f1Datos ?? existing.f1Datos ?? undefined,
+            f1Datos: (f1DatosMerged ?? prevF1) as typeof actaRest.f1Datos,
             f1FormStatus: actaRest.f1FormStatus ?? existing.f1FormStatus ?? "nuevo",
             f1SavedAt: f1SavedAt ?? existing.f1SavedAt ?? undefined,
           });
@@ -612,7 +622,7 @@ export const appRouter = router({
             formasPagoImplementacion: actaRest.formasPagoImplementacion ?? [],
             formasPagoMantencion: actaRest.formasPagoMantencion ?? [],
             status: actaRest.status ?? "borrador",
-            f1Datos: actaRest.f1Datos ?? undefined,
+            f1Datos: f1DatosMerged as typeof actaRest.f1Datos,
             f1FormStatus: actaRest.f1FormStatus ?? "nuevo",
             f1SavedAt: f1SavedAt ?? undefined,
           });
@@ -1176,6 +1186,9 @@ export const appRouter = router({
         return await getAuditLog(input.limit);
       }),
   }),
+
+  // ─── Cláusulas Legales (PDFs) ────────────────────────────────
+  clausulas: clausulasRouter,
 });
 
 export type AppRouter = typeof appRouter;

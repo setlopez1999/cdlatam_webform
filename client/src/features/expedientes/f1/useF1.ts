@@ -49,7 +49,8 @@ export function useF1(expedienteId: string) {
     store.guardarF1(expedienteId);
 
     const savedIso = new Date().toISOString();
-    // 2. Sincronizar con BD en background (snapshot completo F1 + columnas planas)
+    const { firmaImagen: _omitFirma, ...f1DatosSinFirma } = data;
+    // 2. Sincronizar con BD en background (snapshot F1 sin firma; el PDF usa hueco vacío)
     syncF1Mutation.mutate({
       expedienteUuid: expedienteId,
       noActa: data.noActa,
@@ -73,7 +74,7 @@ export function useF1(expedienteId: string) {
       formasPagoImplementacion: data.formasPagoImplementacion,
       formasPagoMantencion: data.formasPagoMantencion,
       status: "borrador",
-      f1Datos: { ...data } as Record<string, unknown>,
+      f1Datos: f1DatosSinFirma as Record<string, unknown>,
       f1FormStatus: "guardado",
       f1SavedAt: savedIso,
     });

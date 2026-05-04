@@ -275,7 +275,7 @@ export default function F1Form({ expedienteId }: Props) {
 
       <F1Consideraciones data={data} onUpdate={update} restricted={!canViewSensitiveFields} />
 
-      <F1Firmas data={data} onUpdate={update} />
+      <F1Firmas />
 
       <div className="flex justify-end gap-3 pb-6">
         <Button variant="outline" onClick={handleReset}>
