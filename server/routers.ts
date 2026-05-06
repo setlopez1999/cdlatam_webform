@@ -1,10 +1,12 @@
 import { z } from "zod";
+import { TRPCError } from "@trpc/server";
 import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
 import { clausulasRouter } from "./routers/clausulas";
 import { buildActaCodigo, buildExpedienteCodigo } from "./documentCodes";
+import { mayAccessAllExpedientes } from "./expedienteAccess";
 
 // 1. IMPORTACIONES (actas/evaluaciones/búsqueda — siempre SQLite)
 import {
@@ -17,7 +19,7 @@ import {
   getContratosByEmpleado, getContratoActivoByEmpleado, createContrato, updateContrato,
   getBloquesByContrato, setBloques, getBloquesSemanales,
   // Expedientes y Audit Log
-  createExpediente, getExpedientes, getExpedientesByUser, getExpedienteByUuid,
+  createExpediente, getExpedientesByUser, getExpedienteByUuid,
   updateExpediente, getAuditLog, getAuditLogFiltered,
   // Actas por expediente
   getActaByExpedienteUuid,
@@ -25,7 +27,10 @@ import {
   upsertResultadoExpediente,
   deleteExpedienteCascadeByUuid,
   listExpedientesResumen,
+  listExpedientesResumenGlobal,
   getExpedienteDetalle,
+  getExpedienteDetalleGlobal,
+  findUserById,
 } from "./db";
 
 // dataSource — abstracción SQLite / API externa (controlado por USE_API en .env)
@@ -213,7 +218,7 @@ const EvaluacionInputSchema = z.object({
 export const appRouter = router({
   system: systemRouter,
 
-  /** Auditoría: listado filtrado (admin / manager). */
+  /** Auditoría: listado filtrado (solo admin). */
   audit: router({
     list: protectedProcedure
       .input(z.object({
@@ -231,7 +236,7 @@ export const appRouter = router({
         }).optional(),
       }))
       .query(async ({ ctx, input }) => {
-        await requireAnyRole(ctx, ["admin", "manager"]);
+        await requireAnyRole(ctx, ["admin"]);
         const cursor = input.cursor
           ? {
               id: input.cursor.id,
@@ -704,7 +709,15 @@ export const appRouter = router({
         expedienteUuid: z.string().min(1),  // Requerido para syncF1
       }))
       .mutation(async ({ ctx, input }) => {
-        const userId = ctx.user.id;
+        const expedienteRow = await getExpedienteByUuid(input.expedienteUuid);
+        if (!expedienteRow) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "Expediente no encontrado" });
+        }
+        if (!mayAccessAllExpedientes(ctx.user.role) && expedienteRow.creadorId !== ctx.user.id) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "No autorizado" });
+        }
+        /** Filas acta ligadas a expediente: userId = creador del expediente (no el operador). */
+        const ownerUserId = expedienteRow.creadorId;
         const { expedienteUuid, f1SavedAt: f1SavedAtStr, ...actaRest } = input;
         const f1SavedAt = f1SavedAtStr ? new Date(f1SavedAtStr) : undefined;
         const codigoActa = buildActaCodigo(expedienteUuid);
@@ -735,7 +748,7 @@ export const appRouter = router({
           acta = await getActaById(existing.id);
         } else {
           acta = await createActa({
-            userId,
+            userId: ownerUserId,
             expedienteUuid,
             ...actaRest,
             codigo: codigoActa,
@@ -749,9 +762,8 @@ export const appRouter = router({
             f1FormStatus: actaRest.f1FormStatus ?? "nuevo",
             f1SavedAt: f1SavedAt ?? undefined,
           });
-          const expediente = await getExpedienteByUuid(expedienteUuid);
-          if (expediente && acta) {
-            await updateExpediente(expediente.id, { actaId: acta.id });
+          if (expedienteRow && acta) {
+            await updateExpediente(expedienteRow.id, { actaId: acta.id });
           }
         }
         return acta;
@@ -761,10 +773,12 @@ export const appRouter = router({
     getByExpedienteUuid: protectedProcedure
       .input(z.object({ expedienteUuid: z.string().min(1) }))
       .query(async ({ ctx, input }) => {
-        const acta = await getActaByExpedienteUuid(input.expedienteUuid);
-        if (!acta) return null;
-        if (acta.userId !== ctx.user.id) throw new Error("Acta no encontrada");
-        return acta;
+        const expediente = await getExpedienteByUuid(input.expedienteUuid);
+        if (!expediente) return null;
+        if (!mayAccessAllExpedientes(ctx.user.role) && expediente.creadorId !== ctx.user.id) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "No autorizado" });
+        }
+        return getActaByExpedienteUuid(input.expedienteUuid);
       }),
   }),
 
@@ -842,9 +856,15 @@ export const appRouter = router({
         data: EvaluacionInputSchema,
       }))
       .mutation(async ({ ctx, input }) => {
-        const userId = ctx.user.id;
-        const acta = await getActaByExpedienteUuid(input.expedienteUuid);
         const expediente = await getExpedienteByUuid(input.expedienteUuid);
+        if (!expediente) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "Expediente no encontrado" });
+        }
+        if (!mayAccessAllExpedientes(ctx.user.role) && expediente.creadorId !== ctx.user.id) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "No autorizado" });
+        }
+        const ownerUserId = expediente.creadorId;
+        const acta = await getActaByExpedienteUuid(input.expedienteUuid);
         const existing = await getEvaluacionByExpedienteUuid(input.expedienteUuid);
         const d = input.data;
         const stripLabel = <T extends { label?: unknown }>(row: T) => {
@@ -890,7 +910,7 @@ export const appRouter = router({
           row = await getEvaluacionById(existing.id);
         } else {
           row = await createEvaluacion({
-            userId,
+            userId: ownerUserId,
             ...basePatch,
           });
         }
@@ -1285,28 +1305,51 @@ export const appRouter = router({
         return created;
       }),
 
-    /** Lista expedientes. Admin/manager ven todos; el resto solo los propios. */
+    /** Lista expedientes del usuario actual (sin listado global). */
     listar: protectedProcedure.query(async ({ ctx }) => {
       const userId = Number(ctx.localUser?.id);
-      const role = ctx.localUser?.role;
-      const canViewAll = role === "admin" || (role as string) === "perfil_full";
-      return canViewAll ? await getExpedientes() : await getExpedientesByUser(userId);
+      return getExpedientesByUser(userId);
     }),
 
-    /** Lista expedientes con acta, evaluación y resultado (para historial / hidratación). */
+    /** Lista expedientes con acta, evaluación y resultado (historial: solo del usuario autenticado). */
     listarResumen: protectedProcedure.query(async ({ ctx }) => {
       if (!ctx.user) throw new Error("No autenticado");
-      const canViewAll = ctx.user.role === "admin" || ctx.user.role === "perfil_full";
-      return listExpedientesResumen(ctx.user.id, canViewAll);
+      return listExpedientesResumen(ctx.user.id);
     }),
 
-    /** Detalle completo de un expediente por uuid (F1/F2/F3 desde tablas). */
+    /**
+     * Todos los expedientes + resumen F1/F2/F3. Solo roles en EXPEDIENTES_WORKSPACE_GLOBAL_ROLES (servidor).
+     * Incluye `creadorDisplay` para la tabla admin.
+     */
+    listarResumenWorkspace: protectedProcedure.query(async ({ ctx }) => {
+      if (!ctx.user) throw new Error("No autenticado");
+      if (!mayAccessAllExpedientes(ctx.user.role)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "No autorizado" });
+      }
+      const rows = await listExpedientesResumenGlobal();
+      const ids = Array.from(new Set(rows.map(r => r.expediente.creadorId)));
+      const labelMap = new Map<number, string>();
+      for (const id of ids) {
+        const u = await findUserById(id);
+        labelMap.set(id, u?.displayName?.trim() || u?.username || `#${id}`);
+      }
+      return rows.map(r => ({
+        expediente: r.expediente,
+        acta: r.acta,
+        evaluacion: r.evaluacion,
+        resultado: r.resultado,
+        creadorDisplay: labelMap.get(r.expediente.creadorId) ?? `#${r.expediente.creadorId}`,
+      }));
+    }),
+
+    /** Detalle completo de un expediente por uuid (F1/F2/F3 desde tablas). Dueño o rol workspace global. */
     detalle: protectedProcedure
       .input(z.object({ uuid: z.string().min(1) }))
       .query(async ({ ctx, input }) => {
         if (!ctx.user) throw new Error("No autenticado");
-        const canViewAll = ctx.user.role === "admin" || ctx.user.role === "perfil_full";
-        return getExpedienteDetalle(input.uuid, ctx.user.id, canViewAll);
+        return mayAccessAllExpedientes(ctx.user.role)
+          ? getExpedienteDetalleGlobal(input.uuid)
+          : getExpedienteDetalle(input.uuid, ctx.user.id);
       }),
 
     /** Persiste snapshot de resultados F3. */
@@ -1318,8 +1361,9 @@ export const appRouter = router({
       }))
       .mutation(async ({ ctx, input }) => {
         if (!ctx.user) throw new Error("No autenticado");
-        const canViewAll = ctx.user.role === "admin" || ctx.user.role === "perfil_full";
-        const det = await getExpedienteDetalle(input.expedienteUuid, ctx.user.id, canViewAll);
+        const det = mayAccessAllExpedientes(ctx.user.role)
+          ? await getExpedienteDetalleGlobal(input.expedienteUuid)
+          : await getExpedienteDetalle(input.expedienteUuid, ctx.user.id);
         if (!det) throw new Error("Expediente no encontrado");
         await upsertResultadoExpediente({
           expedienteUuid: input.expedienteUuid,
@@ -1337,7 +1381,7 @@ export const appRouter = router({
         return { success: true as const };
       }),
 
-    /** Renombra un expediente por uuid. Solo el creador o admin. */
+    /** Renombra un expediente por uuid. Solo el creador. */
     renombrar: protectedProcedure
       .input(z.object({
         uuid: z.string().min(1),
@@ -1347,8 +1391,9 @@ export const appRouter = router({
         if (!ctx.user) throw new Error("No autenticado");
         const row = await getExpedienteByUuid(input.uuid);
         if (!row) throw new Error("Expediente no encontrado");
-        const isAdmin = ctx.user.role === "admin";
-        if (!isAdmin && row.creadorId !== ctx.user.id) throw new Error("No autorizado");
+        if (row.creadorId !== ctx.user.id && !mayAccessAllExpedientes(ctx.user.role)) {
+          throw new Error("No autorizado");
+        }
         const updated = await updateExpediente(row.id, { nombre: input.nombre });
         await recordAuditFromTrpc(ctx, {
           action: "UPDATE",
@@ -1361,15 +1406,16 @@ export const appRouter = router({
         return updated;
       }),
 
-    /** Elimina expediente y registros hijos (acta, evaluación, resultado). */
+    /** Elimina expediente y registros hijos (acta, evaluación, resultado). Solo el creador. */
     eliminar: protectedProcedure
       .input(z.object({ uuid: z.string().min(1) }))
       .mutation(async ({ ctx, input }) => {
         if (!ctx.user) throw new Error("No autenticado");
         const row = await getExpedienteByUuid(input.uuid);
         if (!row) throw new Error("Expediente no encontrado");
-        const isAdmin = ctx.user.role === "admin";
-        if (!isAdmin && row.creadorId !== ctx.user.id) throw new Error("No autorizado");
+        if (row.creadorId !== ctx.user.id && !mayAccessAllExpedientes(ctx.user.role)) {
+          throw new Error("No autorizado");
+        }
         await deleteExpedienteCascadeByUuid(input.uuid);
         await recordAuditFromTrpc(ctx, {
           action: "DELETE",
@@ -1381,11 +1427,11 @@ export const appRouter = router({
         return { success: true as const };
       }),
 
-    /** Obtiene el audit log. Solo admin y manager. */
+    /** Obtiene el audit log. Solo admin. */
     auditLog: protectedProcedure
       .input(z.object({ limit: z.number().min(1).max(1000).default(200) }))
       .query(async ({ ctx, input }) => {
-        await requireAnyRole(ctx, ["admin", "manager"]);
+        await requireAnyRole(ctx, ["admin"]);
         return await getAuditLog(input.limit);
       }),
   }),

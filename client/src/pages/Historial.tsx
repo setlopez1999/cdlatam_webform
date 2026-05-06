@@ -239,7 +239,16 @@ function ResultadosExpandidos({ exp }: { exp: Expediente }) {
 
 // ─── Tarjeta de Expediente ────────────────────────────────────────────────────
 
-function ExpedienteCard({ exp, onEliminar }: { exp: Expediente; onEliminar: () => void }) {
+export function ExpedienteCard({
+  exp,
+  onEliminar,
+  creadorDisplay,
+}: {
+  exp: Expediente;
+  onEliminar: () => void;
+  /** Solo vista workspace admin: etiqueta del usuario creador del expediente */
+  creadorDisplay?: string;
+}) {
   const [, navigate] = useLocation();
   const [expandido, setExpandido] = useState(false);
 
@@ -272,6 +281,9 @@ function ExpedienteCard({ exp, onEliminar }: { exp: Expediente; onEliminar: () =
           <p className="text-sm font-semibold truncate">{exp.nombre}</p>
           <p className="text-xs text-muted-foreground">
             {exp.codigo ? <span className="font-mono text-foreground/70">{exp.codigo} · </span> : null}
+            {creadorDisplay ? (
+              <span className="text-foreground/80">Creador: {creadorDisplay} · </span>
+            ) : null}
             {empresa ? <span className="text-foreground/70">{empresa} · </span> : null}
             {fechaDisplay}
           </p>

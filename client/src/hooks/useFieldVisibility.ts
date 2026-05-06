@@ -7,7 +7,7 @@
  *   - Servicios (valores unitarios, totales, descuentos)
  *
  * Reglas de visibilidad (definidas en permissions.ts → "expediente:view_sensitive_fields"):
- *   - admin / perfil_full / manager → siempre ve todo
+ *   - admin / perfil_full → siempre ve todo (vía expediente:view_sensitive_fields)
  *   - Creador del acta              → ve todo (independiente del rol)
  *   - Otro usuario con perfil_ventas → solo ve servicios básicos, SIN montos ni consideraciones
  *

@@ -1073,11 +1073,9 @@ export async function deleteExpediente(id: number) {
   await db.delete(expedientes).where(eq(expedientes.id, id));
 }
 
-/** Lista expedientes con acta, evaluación y resultado por uuid (N consultas por fila). */
-export async function listExpedientesResumen(userId: number, canViewAll: boolean) {
-  const list = canViewAll
-    ? await getExpedientes()
-    : await getExpedientesByUser(userId);
+/** Lista expedientes del usuario con acta/eval/resultado (solo expedientes creados por userId; N consultas por fila). */
+export async function listExpedientesResumen(userId: number) {
+  const list = await getExpedientesByUser(userId);
   const rows: Array<{
     expediente: Expediente;
     acta: typeof actas.$inferSelect | null;
@@ -1093,16 +1091,42 @@ export async function listExpedientesResumen(userId: number, canViewAll: boolean
   return rows;
 }
 
-export async function getExpedienteDetalle(uuid: string, userId: number, canViewAll: boolean) {
+/** Detalle solo si el expediente pertenece al usuario (creadorId). Sin listados globales. */
+export async function getExpedienteDetalle(uuid: string, userId: number) {
   const exp = await getExpedienteByUuid(uuid);
-  if (!exp) return null;
-  if (!canViewAll && exp.creadorId !== userId) return null;
+  if (!exp || exp.creadorId !== userId) return null;
   const acta = await getActaByExpedienteUuid(uuid);
   const evaluacion = await getEvaluacionByExpedienteUuid(uuid);
   const resultado = await getResultadoByExpedienteUuid(uuid);
-  if (acta && acta.userId !== userId && !canViewAll) return null;
-  if (evaluacion && evaluacion.userId !== userId && !canViewAll) return null;
   return { expediente: exp, acta, evaluacion, resultado };
+}
+
+/** Detalle sin filtrar por dueño (solo uso con autorización workspace global en routers). */
+export async function getExpedienteDetalleGlobal(uuid: string) {
+  const exp = await getExpedienteByUuid(uuid);
+  if (!exp) return null;
+  const acta = await getActaByExpedienteUuid(uuid);
+  const evaluacion = await getEvaluacionByExpedienteUuid(uuid);
+  const resultado = await getResultadoByExpedienteUuid(uuid);
+  return { expediente: exp, acta, evaluacion, resultado };
+}
+
+/** Listado resumen de todos los expedientes (solo autorización en capa HTTP/tRPC). */
+export async function listExpedientesResumenGlobal() {
+  const list = await getExpedientes();
+  const rows: Array<{
+    expediente: Expediente;
+    acta: typeof actas.$inferSelect | null;
+    evaluacion: typeof evaluaciones.$inferSelect | null;
+    resultado: ResultadoExpediente | null;
+  }> = [];
+  for (const e of list) {
+    const acta = await getActaByExpedienteUuid(e.uuid);
+    const evaluacion = await getEvaluacionByExpedienteUuid(e.uuid);
+    const resultado = await getResultadoByExpedienteUuid(e.uuid);
+    rows.push({ expediente: e, acta, evaluacion, resultado });
+  }
+  return rows;
 }
 
 // ─── MÓDULO: AUDIT LOG ────────────────────────────────────────────────────────

@@ -24,7 +24,7 @@ El sistema de autenticación fue diseñado para ser robusto y seguro para un ent
 El flujo de inicio de sesión es el siguiente:
 
 1.  **Ingreso de Credenciales**: El usuario introduce su nombre de usuario y contraseña.
-2.  **Verificación en Servidor**: El backend busca el usuario en la tabla `localUsers` de la base de datos SQLite.
+2.  **Verificación en Servidor**: El backend busca el usuario en la tabla `users` de la base de datos SQLite.
 3.  **Hashing de Contraseña**: La contraseña enviada se compara con el hash almacenado usando **bcrypt**. Las contraseñas nunca se comparan en texto plano.
 4.  **Generación de Token**: Si las credenciales son válidas, el servidor firma un **JSON Web Token (JWT)** que contiene la información del usuario (ID, rol, etc.). Este token está firmado con una clave secreta (`JWT_SECRET`) definida en el archivo `.env`.
 5.  **Sesión del Cliente**: El JWT es enviado al cliente, que lo almacena y lo adjunta en el encabezado `Authorization` de cada petición subsecuente a la API.
@@ -139,9 +139,15 @@ Simula el entorno de producción en tu máquina local.
 
 ---
 
-## 5. Despliegue en Servidor de Producción
+## 5. Documentacion por casos
 
-### 5.1. Configuración Inicial (Solo la primera vez)
+Para cambios integrales (BD + backend + frontend + deploy), usa el indice central:
+
+- [`docs/README.md`](./docs/README.md)
+
+## 6. Despliegue en Servidor de Producción
+
+### 6.1. Configuración Inicial (Solo la primera vez)
 
 1.  **Clonar el repositorio**:
     ```bash
@@ -162,7 +168,7 @@ Simula el entorno de producción en tu máquina local.
     - Crea el archivo `nginx/conf.d/default.conf` con la configuración del proxy reverso.
     - Copia tus certificados `fullchain.pem` y `privkey.pem` a `nginx/conf.d/`.
 
-### 5.2. Despliegue o Actualización
+### 6.2. Despliegue o Actualización
 
 Para desplegar cambios desde el repositorio:
 

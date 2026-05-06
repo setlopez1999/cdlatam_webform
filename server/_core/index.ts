@@ -46,7 +46,7 @@ async function startServer() {
   // Seed catalog_meta (tablas fijas del sistema)
   seedCatalogMeta();
 
-  // Seed default roles (admin, manager, viewer, user, gestor_horarios)
+  // Seed default roles (admin, viewer, user, gestor_horarios)
   await seedDefaultRoles().catch(err => console.error("[Seed] Roles failed:", err));
   // Seed default users (admin/1234 and usuario/5678)
   await seedDefaultUsers().catch(err => console.error("[Seed] Users failed:", err));

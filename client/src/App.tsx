@@ -20,6 +20,7 @@ import ExpedienteImplementacion from "./pages/ExpedienteImplementacion";
 import SpreadsheetView from "./pages/SpreadsheetView";
 import GestorHorarios from "./pages/GestorHorarios";
 import AuditLog from "./pages/AuditLog";
+import AdminExpedientesWorkspace from "./pages/AdminExpedientesWorkspace";
 import ClausulasPage from "./pages/ClausulasPage";
 import { useLocalAuth } from "./hooks/useLocalAuth";
 import { Loader2 } from "lucide-react";
@@ -129,6 +130,9 @@ function Router() {
       </Route>
       <Route path="/usuarios">
         {() => <ProtectedRoute component={Usuarios} routePath="/usuarios" />}
+      </Route>
+      <Route path="/admin-expedientes">
+        {() => <ProtectedRoute component={AdminExpedientesWorkspace} routePath="/admin-expedientes" />}
       </Route>
       <Route path="/auditoria">
         {() => <ProtectedRoute component={AuditLog} routePath="/auditoria" />}
