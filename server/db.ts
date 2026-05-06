@@ -514,7 +514,7 @@ export async function runMigrations() {
         CREATE TABLE IF NOT EXISTS catalog_empresas (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, valor TEXT NOT NULL UNIQUE, activo INTEGER DEFAULT 1 NOT NULL);
         CREATE TABLE IF NOT EXISTS catalog_documento_identidad (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, valor TEXT NOT NULL UNIQUE, activo INTEGER DEFAULT 1 NOT NULL);
         CREATE TABLE IF NOT EXISTS catalog_unidades_negocio (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, valor TEXT NOT NULL UNIQUE, activo INTEGER DEFAULT 1 NOT NULL);
-        CREATE TABLE IF NOT EXISTS catalog_soluciones (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, valor TEXT NOT NULL UNIQUE, activo INTEGER DEFAULT 1 NOT NULL);
+        CREATE TABLE IF NOT EXISTS catalog_soluciones (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, valor TEXT NOT NULL UNIQUE, unidadNegocioId INTEGER, activo INTEGER DEFAULT 1 NOT NULL);
         CREATE TABLE IF NOT EXISTS catalog_detalle_servicio (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, valor TEXT NOT NULL UNIQUE, activo INTEGER DEFAULT 1 NOT NULL);
         CREATE TABLE IF NOT EXISTS catalog_tipo_venta (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, valor TEXT NOT NULL UNIQUE, activo INTEGER DEFAULT 1 NOT NULL);
         CREATE TABLE IF NOT EXISTS catalog_plazos (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, valor TEXT NOT NULL UNIQUE, activo INTEGER DEFAULT 1 NOT NULL);
@@ -620,6 +620,11 @@ export async function runMigrations() {
   tryAlter(`ALTER TABLE evaluaciones ADD COLUMN f2FormStatus TEXT DEFAULT 'nuevo'`, "Column f2FormStatus added to evaluaciones");
   tryAlter(`ALTER TABLE evaluaciones ADD COLUMN f2SavedAt INTEGER`, "Column f2SavedAt added to evaluaciones");
   tryAlter(`ALTER TABLE expedientes ADD COLUMN codigo TEXT`, "Column codigo added to expedientes");
+  // Schema drizzle/schema.ts — migraciones 0000/0001 no añadieron esta FK; necesaria para ds_getCatalogSummary / summary UI
+  tryAlter(
+    `ALTER TABLE catalog_soluciones ADD COLUMN unidadNegocioId INTEGER`,
+    "Column unidadNegocioId added to catalog_soluciones"
+  );
   tryAlter(`
     CREATE TABLE IF NOT EXISTS resultados_expediente (
       id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
