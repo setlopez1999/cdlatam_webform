@@ -66,12 +66,15 @@
     "gsap": "^3.15.0",
     "input-otp": "^1.4.2",
     "jose": "6.1.0",
+    "jspdf": "^4.2.1",
+    "jspdf-autotable": "^5.0.7",
     "lottie-react": "^2.4.1",
     "lucide-react": "^0.453.0",
     "multer": "^2.1.1",
     "mysql2": "^3.15.0",
     "nanoid": "^5.1.11",
     "next-themes": "^0.4.6",
+    "pdf-lib": "^1.17.1",
     "react": "^19.2.1",
     "react-day-picker": "^9.11.1",
     "react-dom": "^19.2.1",
@@ -104,7 +107,6 @@
     "cross-env": "^10.1.0",
     "drizzle-kit": "^0.31.9",
     "esbuild": "^0.25.0",
-    "pnpm": "^10.15.1",
     "postcss": "^8.4.47",
     "prettier": "^3.6.2",
     "tailwindcss": "^4.1.14",
@@ -115,13 +117,9 @@
     "vite-plugin-manus-runtime": "^0.0.57",
     "vitest": "^2.1.4"
   },
-  "packageManager": "pnpm@10.4.1+sha512.c753b6c3ad7afa13af388fa6d808035a008e30ea9993f58c6663e2bc5ff21679aa834db094987129aa4d488b86df57f7b634981b2f827cdcacc698cc0cfb88af",
-  "pnpm": {
-    "patchedDependencies": {
-      "wouter@3.7.1": "patches/wouter@3.7.1.patch"
-    },
-    "overrides": {
-      "tailwindcss>nanoid": "3.3.7"
+  "overrides": {
+    "tailwindcss": {
+      "nanoid": "3.3.7"
     }
   }
 }
