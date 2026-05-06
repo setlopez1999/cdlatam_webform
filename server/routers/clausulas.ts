@@ -4,6 +4,7 @@ import {
   ds_getClausulas,
   ds_getClausulaById,
   ds_getClausulasByUnidadNegocio,
+  ds_getClausulasByUnidades,
   ds_createClausula,
   ds_updateClausula,
   ds_deleteClausula,
@@ -32,6 +33,26 @@ export const clausulasRouter = router({
     .query(async ({ ctx, input }) => {
       await requireRole(ctx, "admin");
       return await ds_getClausulasByUnidadNegocio(input.unidadNegocioId);
+    }),
+
+  /**
+   * Devuelve cláusulas activas para un conjunto de unidades de negocio.
+   * Pensado para que F1 (export PDF) las anexe automáticamente al final del
+   * Acta. Es `protectedProcedure` (NO admin) porque cualquier usuario que
+   * pueda ver F1 debe poder exportar su acta con cláusulas. Solo expone los
+   * campos mínimos necesarios.
+   */
+  getByUnidades: protectedProcedure
+    .input(z.object({ unidadNegocioIds: z.array(z.number().int()) }))
+    .query(async ({ input }) => {
+      const rows = await ds_getClausulasByUnidades(input.unidadNegocioIds);
+      return rows.map((r) => ({
+        id: r.id,
+        valor: r.valor,
+        filePath: r.filePath,
+        fileName: r.fileName,
+        unidadNegocioId: r.unidadNegocioId,
+      }));
     }),
 
   getUnidadesNegocio: protectedProcedure.query(async ({ ctx }) => {

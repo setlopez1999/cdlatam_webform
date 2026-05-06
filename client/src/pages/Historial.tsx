@@ -374,10 +374,13 @@ export function ExpedienteCard({
 
 export default function Historial() {
   const [, navigate] = useLocation();
-  const { expedientes, eliminar, reemplazarListaDesdeServidor } = useExpedienteStore();
+  const { expedientes, eliminar, mergeListaDesdeServidor } = useExpedienteStore();
   const [search, setSearch] = useState("");
 
-  const resumenQuery = trpc.expediente.listarResumen.useQuery(undefined, { staleTime: 15_000 });
+  // staleTime: 0 + invalidación tras guardar/renombrar/eliminar garantizan que
+  // al volver a Historial se vea la versión más reciente del server. El merge
+  // protege los locales con cambios `sin_guardar`.
+  const resumenQuery = trpc.expediente.listarResumen.useQuery(undefined, { staleTime: 0 });
   const eliminarSrv = trpc.expediente.eliminar.useMutation({
     onSuccess: (_data, input) => {
       eliminar(input.uuid);
@@ -391,9 +394,9 @@ export default function Historial() {
 
   useEffect(() => {
     if (resumenQuery.data) {
-      reemplazarListaDesdeServidor(resumenQuery.data.map(mapResumenRowToExpediente));
+      mergeListaDesdeServidor(resumenQuery.data.map(mapResumenRowToExpediente));
     }
-  }, [resumenQuery.data, reemplazarListaDesdeServidor]);
+  }, [resumenQuery.data, mergeListaDesdeServidor]);
 
   const filtrados = useMemo(() => {
     if (!search.trim()) return expedientes;

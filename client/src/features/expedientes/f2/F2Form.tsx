@@ -16,6 +16,8 @@ import { trpc } from "@/lib/trpc";
 import { formatCurrency, getCurrencyCode } from "@/lib/formatters";
 import { nanoid } from "nanoid";
 import { useF2 } from "./useF2";
+import { useNavGuard } from "@/hooks/useNavGuard";
+import { UnsavedChangesDialog } from "@/components/UnsavedChangesDialog";
 import { F2_INITIAL } from "../types";
 import type { FilaCosto, FilaRRHH, FilaOtros } from "../types";
 import { F2InfoGeneral, F2CostTable, F2RRHHTable, F2OtrosTable, TotalRow } from "./sections";
@@ -57,9 +59,15 @@ interface Props {
 }
 
 export default function F2Form({ expedienteId, onVerResultado }: Props) {
-  const { data, status, f1Suggestions, update, guardar, importarDesdeF1 } = useF2(expedienteId);
+  const { data, status, f1Suggestions, update, guardar, descartar, importarDesdeF1, isSyncing } = useF2(expedienteId);
   const { data: catalogs } = trpc.catalogs.getAll.useQuery();
   const [confirmRegenMes, setConfirmRegenMes] = useState<1 | 2 | 3 | null>(null);
+
+  // Bloqueo de navegación cuando hay cambios sin guardar.
+  // Activa beforeunload (cerrar tab/F5) y modal en navegación SPA.
+  const { pendingTo, confirm: confirmNav, cancel: cancelNav } = useNavGuard({
+    when: status === "sin_guardar",
+  });
 
   if (!data) return <div className="p-6 text-muted-foreground">Expediente no encontrado.</div>;
 
@@ -134,15 +142,37 @@ export default function F2Form({ expedienteId, onVerResultado }: Props) {
   };
 
   // ── Guardar ────────────────────────────────────────────────────────────────
-  const handleSave = useCallback(() => {
+  const validate = useCallback((): boolean => {
     if (!data.nombreCliente && !data.empresa) {
       toast.error("El nombre del cliente o empresa es requerido");
-      return;
+      return false;
     }
-    guardar();
-    toast.success("F2 guardado correctamente");
-    // TODO: await trpc.evaluaciones.create.mutate(data)
-  }, [data, guardar]);
+    return true;
+  }, [data]);
+
+  const handleSave = useCallback(async () => {
+    if (!validate()) return;
+    const ok = await guardar();
+    if (ok) toast.success("F2 guardado correctamente");
+    // El toast rojo de fallo lo emite el propio hook en onError.
+  }, [validate, guardar]);
+
+  // Handlers del modal de cambios sin guardar
+  const handleNavSave = useCallback(async (): Promise<boolean> => {
+    if (!validate()) return false;
+    const ok = await guardar();
+    if (ok) {
+      toast.success("F2 guardado correctamente");
+      confirmNav();
+    }
+    return ok;
+  }, [validate, guardar, confirmNav]);
+
+  const handleNavDiscard = useCallback(async () => {
+    await descartar();
+    toast.info("Cambios descartados");
+    confirmNav();
+  }, [descartar, confirmNav]);
 
   const handleReset = useCallback(() => {
     update(F2_INITIAL);
@@ -171,8 +201,8 @@ export default function F2Form({ expedienteId, onVerResultado }: Props) {
             <Button variant="outline" size="sm" onClick={handleReset}>
               <RefreshCw className="w-3.5 h-3.5 mr-1.5" /> Limpiar
             </Button>
-            <Button size="sm" onClick={handleSave}>
-              <Save className="w-3.5 h-3.5 mr-1.5" /> Guardar
+            <Button size="sm" onClick={handleSave} disabled={isSyncing}>
+              <Save className="w-3.5 h-3.5 mr-1.5" /> {isSyncing ? "Guardando..." : "Guardar"}
             </Button>
           </div>
         }
@@ -332,10 +362,18 @@ export default function F2Form({ expedienteId, onVerResultado }: Props) {
             <Eye className="w-4 h-4 mr-2" /> Ver Resultado F3
           </Button>
         )}
-        <Button onClick={handleSave}>
-          <Save className="w-4 h-4 mr-2" /> Guardar F2
+        <Button onClick={handleSave} disabled={isSyncing}>
+          <Save className="w-4 h-4 mr-2" /> {isSyncing ? "Guardando..." : "Guardar F2"}
         </Button>
       </div>
+
+      <UnsavedChangesDialog
+        open={pendingTo !== null}
+        formLabel="F2"
+        onSave={handleNavSave}
+        onDiscard={handleNavDiscard}
+        onCancel={cancelNav}
+      />
     </div>
   );
 }

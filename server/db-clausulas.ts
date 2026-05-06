@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { eq, inArray, and } from "drizzle-orm";
 import { getDb } from "./db";
 import { catalogClausulas, catalogUnidadesNegocio } from "../drizzle/schema";
 import type { CatalogClausula, InsertCatalogClausula } from "../drizzle/schema";
@@ -19,6 +19,23 @@ export const getClausulasByUnidadNegocio = async (unidadNegocioId: number) => {
   const db = await getDb();
   return db.select().from(catalogClausulas)
     .where(eq(catalogClausulas.unidadNegocioId, unidadNegocioId))
+    .orderBy(catalogClausulas.valor);
+};
+
+/**
+ * Devuelve cláusulas activas (activo=1) cuyo `unidadNegocioId` esté en `ids`.
+ * Lo usa el procedure público `clausulas.getByUnidades` para que F1 anexe los
+ * PDFs correctos al exportar el Acta. Si `ids` está vacío, retorna []  para
+ * evitar pegarle a la BD inútilmente.
+ */
+export const getClausulasByUnidades = async (ids: number[]) => {
+  if (ids.length === 0) return [];
+  const db = await getDb();
+  return db.select().from(catalogClausulas)
+    .where(and(
+      inArray(catalogClausulas.unidadNegocioId, ids),
+      eq(catalogClausulas.activo, 1),
+    ))
     .orderBy(catalogClausulas.valor);
 };
 

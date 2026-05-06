@@ -20,7 +20,10 @@ import { FileText, Save, RefreshCw, Download } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { generateActaPDF } from "@/lib/pdfExport";
 import { useF1 } from "./useF1";
+import { useClausulasVigentes } from "./useClausulasVigentes";
 import { useFieldVisibility } from "@/hooks/useFieldVisibility";
+import { useNavGuard } from "@/hooks/useNavGuard";
+import { UnsavedChangesDialog } from "@/components/UnsavedChangesDialog";
 import { F1_INITIAL } from "../types";
 import type { ServicioContratado } from "../types";
 import { nanoid } from "nanoid";
@@ -36,11 +39,12 @@ import {
 
 // ─── Campos requeridos ────────────────────────────────────────────────────────
 
+// `noActa` NO va aquí: lo autogenera el server (buildActaCodigo) durante syncF1
+// y el input es readOnly. Validarlo en cliente bloquearía el primer guardado.
 const REQUIRED_FIELDS = [
   { key: "sres"        as const, label: "Sres.",          anchor: "f1-sres" },
   { key: "atencion"    as const, label: "Atención",        anchor: "f1-atencion" },
   { key: "fecha"       as const, label: "Fecha",           anchor: "f1-fecha" },
-  { key: "noActa"      as const, label: "N° Acta",         anchor: "f1-noActa" },
   { key: "razonSocial" as const, label: "Razón Social",    anchor: "f1-razonSocial" },
   { key: "rucDniRut"   as const, label: "RUC / DNI / RUT", anchor: "f1-rucDniRut" },
   { key: "moneda"      as const, label: "Moneda",          anchor: "f1-moneda" },
@@ -75,10 +79,22 @@ interface Props {
 }
 
 export default function F1Form({ expedienteId }: Props) {
-  const { data, status, update, guardar, isSyncing } = useF1(expedienteId);
+  const { data, status, update, guardar, descartar, isSyncing } = useF1(expedienteId);
   // Visibilidad de campos sensibles — cuando el acta persista en BD, pasar data.creadorId
   const { canViewSensitiveFields } = useFieldVisibility(undefined);
   const { data: catalogs } = trpc.catalogs.getAll.useQuery();
+
+  // Cláusulas legales que se anexarán al PDF al exportar. Es la misma fuente
+  // que muestra F1Consideraciones — un solo hook para evitar divergencias.
+  const { clausulas: clausulasParaPdf, isLoading: clausulasLoading } = useClausulasVigentes(
+    data?.serviciosContratados,
+  );
+
+  // Bloqueo de navegación cuando hay cambios sin guardar.
+  // Activa beforeunload (cerrar tab/F5) y modal en navegación SPA.
+  const { pendingTo, confirm: confirmNav, cancel: cancelNav } = useNavGuard({
+    when: status === "sin_guardar",
+  });
 
   if (!data) return <div className="p-6 text-muted-foreground">Expediente no encontrado.</div>;
 
@@ -159,7 +175,11 @@ export default function F1Form({ expedienteId }: Props) {
 
   // ── Guardar ────────────────────────────────────────────────────────────────
 
-  const handleSave = useCallback(() => {
+  /**
+   * Valida los campos requeridos. Si falla, muestra toast y scrollea al campo.
+   * Devuelve true si pasa la validación.
+   */
+  const validate = useCallback((): boolean => {
     for (const req of REQUIRED_FIELDS) {
       const val = data[req.key];
       if (!val || (typeof val === "string" && val.trim() === "")) {
@@ -179,13 +199,35 @@ export default function F1Form({ expedienteId }: Props) {
         });
         const el = document.getElementById(req.anchor);
         if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
-        return;
+        return false;
       }
     }
-    guardar();
-    toast.success("F1 guardado correctamente");
-    // La sincronización con BD ocurre dentro de guardar() via trpc.actas.syncF1
-  }, [data, guardar]);
+    return true;
+  }, [data]);
+
+  const handleSave = useCallback(async () => {
+    if (!validate()) return;
+    const ok = await guardar();
+    if (ok) toast.success("F1 guardado correctamente");
+    // El toast rojo de fallo lo emite el propio hook en onError.
+  }, [validate, guardar]);
+
+  // Handlers del modal de cambios sin guardar
+  const handleNavSave = useCallback(async (): Promise<boolean> => {
+    if (!validate()) return false;
+    const ok = await guardar();
+    if (ok) {
+      toast.success("F1 guardado correctamente");
+      confirmNav();
+    }
+    return ok;
+  }, [validate, guardar, confirmNav]);
+
+  const handleNavDiscard = useCallback(async () => {
+    await descartar();
+    toast.info("Cambios descartados");
+    confirmNav();
+  }, [descartar, confirmNav]);
 
   const handleReset = useCallback(() => {
     update(F1_INITIAL);
@@ -193,15 +235,37 @@ export default function F1Form({ expedienteId }: Props) {
   }, [update]);
 
   const handleExportPDF = useCallback(async () => {
+    if (!data) return;
     try {
       toast.loading("Generando PDF...", { id: "pdf-f1" });
-      // generateActaPDF espera ActaData — pasamos data que es compatible
-      await generateActaPDF(data as any);
-      toast.success("PDF exportado", { id: "pdf-f1" });
+      // Pasamos las cláusulas vigentes para que se anexen al final del PDF.
+      // Si una cláusula falla al cargar (PDF corrupto / 404), el callback
+      // muestra un warning y el resto del flujo sigue.
+      const failed: string[] = [];
+      await generateActaPDF(
+        data as any,
+        clausulasParaPdf.map(c => ({
+          id: c.id,
+          valor: c.valor,
+          filePath: c.filePath,
+          fileName: c.fileName,
+        })),
+        {
+          onClausulaError: (c) => failed.push(c.fileName),
+        },
+      );
+      if (failed.length > 0) {
+        toast.warning(`PDF exportado, pero ${failed.length} cláusula(s) no se pudieron anexar`, {
+          id: "pdf-f1",
+          description: failed.join(", "),
+        });
+      } else {
+        toast.success("PDF exportado", { id: "pdf-f1" });
+      }
     } catch {
       toast.error("Error al exportar PDF", { id: "pdf-f1" });
     }
-  }, [data]);
+  }, [data, clausulasParaPdf]);
 
   // ── Render ─────────────────────────────────────────────────────────────────
 
@@ -221,8 +285,15 @@ export default function F1Form({ expedienteId }: Props) {
             <Button variant="outline" size="sm" onClick={handleReset}>
               <RefreshCw className="w-3.5 h-3.5 mr-1.5" /> Limpiar
             </Button>
-            <Button variant="outline" size="sm" onClick={handleExportPDF}>
-              <Download className="w-3.5 h-3.5 mr-1.5" /> PDF
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleExportPDF}
+              disabled={clausulasLoading}
+              title={clausulasLoading ? "Cargando cláusulas legales…" : "Exportar PDF"}
+            >
+              <Download className="w-3.5 h-3.5 mr-1.5" />
+              {clausulasLoading ? "Cargando…" : "PDF"}
             </Button>
             <Button size="sm" onClick={handleSave} disabled={isSyncing}>
               <Save className="w-3.5 h-3.5 mr-1.5" /> {isSyncing ? "Guardando..." : "Guardar"}
@@ -288,6 +359,14 @@ export default function F1Form({ expedienteId }: Props) {
           <Save className="w-4 h-4 mr-2" /> {isSyncing ? "Guardando..." : "Guardar F1"}
         </Button>
       </div>
+
+      <UnsavedChangesDialog
+        open={pendingTo !== null}
+        formLabel="F1"
+        onSave={handleNavSave}
+        onDiscard={handleNavDiscard}
+        onCancel={cancelNav}
+      />
     </div>
   );
 }

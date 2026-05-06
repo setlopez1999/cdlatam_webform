@@ -15,8 +15,10 @@ import { ExpedienteCard } from "@/pages/Historial";
 export default function AdminExpedientesWorkspace() {
   const [search, setSearch] = useState("");
 
+  // staleTime: 0 + invalidación tras guardar/renombrar/eliminar garantizan que
+  // al volver al workspace se vea la versión más reciente del server.
   const resumenQuery = trpc.expediente.listarResumenWorkspace.useQuery(undefined, {
-    staleTime: 15_000,
+    staleTime: 0,
     retry: false,
   });
 

@@ -98,24 +98,60 @@ export default function ExpedienteLayout({ expedienteId, activeTab, children }: 
   const expediente = getExpediente(expedienteId);
   const can = useCan();
   const TABS = getVisibleTabs(can);
+  const utils = trpc.useUtils();
 
-  const mergedRef = useRef(false);
+  // Siempre fetcha el detalle al entrar al expediente para garantizar que
+  // muestramos la versión más reciente del server. Antes era
+  // `enabled: !expediente && !!expedienteId`, lo que solo fetchaba si el store
+  // estaba vacío — pero Historial llena el store con datos del resumen
+  // (potencialmente stale), por lo que el detalle nunca se refrescaba al
+  // navegar y el usuario veía la versión vieja hasta hacer F5.
   const detalleQuery = trpc.expediente.detalle.useQuery(
     { uuid: expedienteId },
-    { enabled: !expediente && !!expedienteId, retry: false },
+    { enabled: !!expedienteId, retry: false },
   );
-  const renombrarSrv = trpc.expediente.renombrar.useMutation();
+  const renombrarSrv = trpc.expediente.renombrar.useMutation({
+    onSuccess: () => {
+      // Mantener listas y detalle sincronizados tras renombrar.
+      void utils.expediente.listarResumen.invalidate();
+      void utils.expediente.listarResumenWorkspace.invalidate();
+      void utils.expediente.detalle.invalidate({ uuid: expedienteId });
+    },
+  });
+
+  // Trackea la última `detalleQuery.data` que se mergeó para evitar loops
+  // infinitos. NO podemos poner `getExpediente` en deps porque se recrea cada
+  // vez que el store cambia (depende de `expedientes`), y como mergeDetalle
+  // ACTUALIZA el store, eso dispararía el effect de nuevo en bucle. Trackeando
+  // la referencia de `data`, garantizamos que solo mergeamos una vez por
+  // respuesta del server. Cuando se invalida la cache y llega una nueva
+  // respuesta, la referencia cambia y el merge se aplica de nuevo.
+  const lastMergedRef = useRef<typeof detalleQuery.data | null>(null);
 
   useEffect(() => {
-    mergedRef.current = false;
+    lastMergedRef.current = null;
   }, [expedienteId]);
 
   useEffect(() => {
-    if (detalleQuery.data && !mergedRef.current) {
-      mergedRef.current = true;
-      mergeDetalleEnStore(mapDetalleToExpediente(detalleQuery.data));
-    }
-  }, [detalleQuery.data, mergeDetalleEnStore]);
+    const data = detalleQuery.data;
+    if (!data) return;
+    if (lastMergedRef.current === data) return;
+    // Proteger trabajo en curso: si el usuario tiene cambios `sin_guardar`,
+    // NO pisamos el local con la versión del server. El modal de unsaved
+    // changes ya se encarga de pedirle que guarde o descarte antes de salir.
+    const local = getExpediente(expedienteId);
+    const tieneCambiosPendientes =
+      local?.f1.status === "sin_guardar" || local?.f2.status === "sin_guardar";
+    // Marcamos como visto SIEMPRE (incluso si lo saltamos por sin_guardar) para
+    // no re-evaluar en el próximo render hasta que llegue una `data` nueva.
+    lastMergedRef.current = data;
+    if (tieneCambiosPendientes) return;
+    mergeDetalleEnStore(mapDetalleToExpediente(data));
+    // Deps mínimas: solo la referencia de la data del server. `getExpediente`
+    // y `mergeDetalleEnStore` se acceden por closure; no las ponemos en deps
+    // porque su recreación tras cada merge volvería a disparar el effect.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [detalleQuery.data, expedienteId]);
 
   const [editando, setEditando] = useState(false);
   const [nombreTemp, setNombreTemp] = useState(expediente?.nombre ?? "");

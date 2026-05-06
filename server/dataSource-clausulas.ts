@@ -7,6 +7,7 @@ import {
   getClausulas,
   getClausulaById,
   getClausulasByUnidadNegocio,
+  getClausulasByUnidades,
   createClausula,
   updateClausula,
   deleteClausula,
@@ -18,6 +19,7 @@ import {
 export const ds_getClausulas = getClausulas;
 export const ds_getClausulaById = getClausulaById;
 export const ds_getClausulasByUnidadNegocio = getClausulasByUnidadNegocio;
+export const ds_getClausulasByUnidades = getClausulasByUnidades;
 export const ds_createClausula = createClausula;
 export const ds_updateClausula = updateClausula;
 export const ds_deleteClausula = deleteClausula;
