@@ -437,6 +437,33 @@ function ensureExpedientesTableAfterMigrate(): void {
   }
 }
 
+/**
+ * Misma situación que expedientes: migraciones/fallback pueden no haber creado audit_log.
+ * Sin esta tabla, audit.list y recordAudit fallan con "no such table".
+ */
+function ensureAuditLogTableAfterMigrate(): void {
+  try {
+    sqlite.exec(`
+      CREATE TABLE IF NOT EXISTS audit_log (
+        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+        userId INTEGER,
+        username TEXT NOT NULL,
+        action TEXT NOT NULL,
+        entity TEXT NOT NULL,
+        entityId INTEGER,
+        expedienteUuid TEXT,
+        expedienteCodigo TEXT,
+        changes TEXT,
+        ip TEXT,
+        createdAt INTEGER DEFAULT (strftime('%s', 'now')) NOT NULL
+      )
+    `);
+    console.log("[DB] Table audit_log ensured");
+  } catch (e: unknown) {
+    console.warn("[DB] Could not ensure audit_log table:", e instanceof Error ? e.message : e);
+  }
+}
+
 export async function runMigrations() {
   // Paso 0: Migrar schema viejo automáticamente si es necesario (idempotente)
   autoMigrateUsersSchemaIfNeeded();
@@ -593,6 +620,7 @@ export async function runMigrations() {
   }
 
   ensureExpedientesTableAfterMigrate();
+  ensureAuditLogTableAfterMigrate();
 
   // Paso 2 (post-migración): garantizar columnas nuevas en BDs existentes
   // ALTER TABLE ADD COLUMN IF NOT EXISTS no existe en SQLite, usamos try/catch
