@@ -46,9 +46,7 @@ export interface FormaPago {
   item: number;
   tipoVenta: string;
   nCuotas: number;
-  primeraCuota: CuotaPago;
-  segundaCuota: CuotaPago;
-  terceraCuota: CuotaPago;
+  cuotas: CuotaPago[]; // Arreglo dinámico de 1 a 4 cuotas
 }
 
 // ─── F1 — Acta ────────────────────────────────────────────────────────────────
@@ -310,6 +308,8 @@ export interface FormSlot<T> {
 export interface Expediente {
   /** nanoid único — será el id en BD cuando se conecte */
   id: string;
+  /** Codigo compacto autogenerado del expediente (solo backend) */
+  codigo?: string;
   /** Nombre editable por el usuario */
   nombre: string;
   /** F1 — Acta */

@@ -10,8 +10,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { FormSection } from "@/components/FormSection";
-import { ClipboardList, Plus, Trash2, Lock } from "lucide-react";
+import { ClipboardList, Plus, Trash2, Lock, ShieldOff, FileText, ExternalLink, Loader2 } from "lucide-react";
 import type { F1Data } from "../../types";
+import { useClausulasVigentes } from "../useClausulasVigentes";
 
 // Consideraciones fijas — no editables desde la UI
 const CONSIDERACIONES_FIJAS = [
@@ -26,12 +27,20 @@ const CONSIDERACIONES_FIJAS = [
 interface Props {
   data: F1Data;
   onUpdate: (partial: Partial<F1Data>) => void;
+  /** Si true, oculta el contenido sensible y muestra un placeholder de acceso restringido */
+  restricted?: boolean;
 }
 
-export function F1Consideraciones({ data, onUpdate }: Props) {
+export function F1Consideraciones({ data, onUpdate, restricted = false }: Props) {
   const [nuevoItem, setNuevoItem] = useState("");
 
   const personalizadas = data.consideracionesPersonalizadas ?? [];
+
+  // Cláusulas legales auto: derivadas de las unidades de negocio en
+  // serviciosContratados. Estas son las que se anexarán al PDF al exportar.
+  const { clausulas, isLoading: clausulasLoading, hasUnidades } = useClausulasVigentes(
+    data.serviciosContratados,
+  );
 
   const agregarItem = () => {
     const texto = nuevoItem.trim();
@@ -49,6 +58,19 @@ export function F1Consideraciones({ data, onUpdate }: Props) {
   const eliminarItem = (idx: number) => {
     onUpdate({ consideracionesPersonalizadas: personalizadas.filter((_, i) => i !== idx) });
   };
+
+  if (restricted) {
+    return (
+      <FormSection title="Consideraciones y Alcances Comerciales" icon={ClipboardList} accent="indigo" collapsible defaultOpen>
+        <div className="flex items-center gap-3 py-6 px-2 text-muted-foreground">
+          <ShieldOff className="w-5 h-5 shrink-0" />
+          <p className="text-sm">
+            <span className="font-semibold">[Restringido]</span> — No tienes acceso a las consideraciones comerciales de este expediente.
+          </p>
+        </div>
+      </FormSection>
+    );
+  }
 
   return (
     <FormSection title="Consideraciones y Alcances Comerciales" icon={ClipboardList} accent="indigo" collapsible defaultOpen>
@@ -130,6 +152,59 @@ export function F1Consideraciones({ data, onUpdate }: Props) {
             value={data.clausulasLegales ?? ""}
             onChange={e => onUpdate({ clausulasLegales: e.target.value })}
           />
+        </div>
+
+        {/* ── Cláusulas legales adjuntas (auto, según unidades en Servicios) ── */}
+        <div className="space-y-2">
+          <div className="flex items-center gap-1.5">
+            <FileText className="w-3 h-3 text-muted-foreground" />
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+              Cláusulas legales adjuntas (auto)
+            </p>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Estas cláusulas se anexarán automáticamente al final del PDF del Acta al exportar,
+            según las Unidades de Negocio elegidas en Servicios Contratados.
+          </p>
+
+          {!hasUnidades && (
+            <p className="text-xs text-muted-foreground italic px-3 py-3 bg-muted/30 rounded-md border border-border/40">
+              Selecciona Unidades de Negocio en la sección Servicios Contratados para ver las cláusulas asociadas.
+            </p>
+          )}
+
+          {hasUnidades && clausulasLoading && (
+            <p className="text-xs text-muted-foreground flex items-center gap-2 px-3 py-3 bg-muted/30 rounded-md border border-border/40">
+              <Loader2 className="w-3.5 h-3.5 animate-spin" /> Cargando cláusulas…
+            </p>
+          )}
+
+          {hasUnidades && !clausulasLoading && clausulas.length === 0 && (
+            <p className="text-xs text-muted-foreground italic px-3 py-3 bg-muted/30 rounded-md border border-border/40">
+              No hay cláusulas registradas para las unidades seleccionadas.
+            </p>
+          )}
+
+          {hasUnidades && clausulas.length > 0 && (
+            <ul className="space-y-1.5 px-3 py-3 bg-muted/30 rounded-md border border-border/40">
+              {clausulas.map(c => (
+                <li key={c.id} className="flex items-center gap-2 text-sm">
+                  <FileText className="w-3.5 h-3.5 text-primary shrink-0" />
+                  <span className="flex-1 text-foreground/90 truncate" title={c.fileName}>
+                    {c.valor}
+                  </span>
+                  <a
+                    href={c.filePath}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 text-xs text-primary hover:underline shrink-0"
+                  >
+                    Ver PDF <ExternalLink className="w-3 h-3" />
+                  </a>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
 
       </div>

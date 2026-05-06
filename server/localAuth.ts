@@ -148,7 +148,6 @@ export async function seedDefaultRoles(): Promise<void> {
 
   const defaultRoles: Array<{ nombre: string; label: string; descripcion: string }> = [
     { nombre: "admin",            label: "Administrador",      descripcion: "Acceso total al sistema" },
-    { nombre: "manager",          label: "Gerente",             descripcion: "Puede ver todo, no puede gestionar usuarios" },
     { nombre: "viewer",           label: "Solo lectura",        descripcion: "Acceso de solo lectura" },
     { nombre: "user",             label: "Usuario",             descripcion: "Acceso basico al sistema" },
     { nombre: "gestor_horarios",  label: "Gestor de Horarios",  descripcion: "Acceso a la pantalla de gestion de horarios" },

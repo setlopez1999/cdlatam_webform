@@ -18,9 +18,11 @@
  *  - "*"      → cualquier usuario autenticado tiene acceso
  *
  * ROLES RBAC (definidos en la tabla `roles` de la BD)
- *  - "gestor_horarios" → acceso a la pantalla de Gestor de Horarios
- *  - "manager"         → puede ver todo, no puede gestionar usuarios
- *  - "viewer"          → acceso de solo lectura
+ *  - "gestor_horarios"       → acceso a la pantalla de Gestor de Horarios
+ *  - "viewer"                → acceso de solo lectura
+ *  - "perfil_full"           → acceso completo a F1-Acta, F2-EP, Resultados e Implementación
+ *  - "perfil_ventas"         → acceso restringido únicamente a F1-Acta
+ *  - "perfil_implementacion" → acceso restringido únicamente a Implementación
  *
  * USO EN COMPONENTES
  *  import { useCan } from "@/hooks/useCan";
@@ -44,7 +46,7 @@ export const ROLE_ANY = "*" as const;
 export const ROLE_ADMIN = "admin" as const;
 
 export type SpecialRole = typeof ROLE_ANY | typeof ROLE_ADMIN;
-export type RbacRole = "gestor_horarios" | "manager" | "viewer";
+export type RbacRole = "user" | "gestor_horarios" | "viewer" | "perfil_full" | "perfil_ventas" | "perfil_implementacion";
 export type AppRole = SpecialRole | RbacRole;
 
 export interface RoutePermission {
@@ -65,6 +67,12 @@ export interface ActionPermission {
   roles: AppRole[];
   /** Descripción legible de la acción */
   description: string;
+  /**
+   * Si true, el rol "admin" NO tiene acceso automático.
+   * El usuario debe tener el rol explícitamente en user_roles.
+   * Usado para el easter egg de gestor_horarios.
+   */
+  strictRoles?: boolean;
 }
 
 // ─── Permisos de rutas ────────────────────────────────────────────────────────
@@ -114,10 +122,33 @@ export const ROUTE_PERMISSIONS: Record<string, RoutePermission> = {
     icon: "Users",
     showInNav: true,
   },
+  /**
+   * Historial: lista solo expedientes del usuario actual (filtrado en servidor).
+   * Visibilidad del menú: roles listados. El rol admin entra por bypass global en evaluatePermission.
+   * Ampliar esta lista o usar matriz de permisos en BD cuando corresponda.
+   */
   "/historial": {
-    roles: [ROLE_ADMIN],
+    roles: ["user", "perfil_full", "perfil_ventas", "perfil_implementacion", "viewer"],
     label: "Historial",
     icon: "History",
+    showInNav: true,
+  },
+  "/admin-expedientes": {
+    roles: [ROLE_ADMIN],
+    label: "Todos los expedientes",
+    icon: "Folders",
+    showInNav: true,
+  },
+  "/auditoria": {
+    roles: [ROLE_ADMIN],
+    label: "Auditoría",
+    icon: "FileSearch",
+    showInNav: true,
+  },
+  "/clausulas": {
+    roles: [ROLE_ADMIN],
+    label: "Cláusulas Legales",
+    icon: "FileText",
     showInNav: true,
   },
 
@@ -126,7 +157,7 @@ export const ROUTE_PERMISSIONS: Record<string, RoutePermission> = {
     roles: ["gestor_horarios"],
     label: "Gestor de Horarios",
     icon: "CalendarClock",
-    showInNav: true,
+    showInNav: false,
   },
 
   // ── Rutas para todos los usuarios autenticados ──────────────────────────────
@@ -155,6 +186,11 @@ export const ROUTE_PERMISSIONS: Record<string, RoutePermission> = {
   "/expediente/:id/resultados": {
     roles: [ROLE_ANY],
     label: "Resultados",
+    showInNav: false,
+  },
+  "/expediente/:id/implementacion": {
+    roles: [ROLE_ANY],
+    label: "Implementación",
     showInNav: false,
   },
 };
@@ -198,7 +234,7 @@ export const ACTION_PERMISSIONS: Record<string, ActionPermission> = {
     description: "Crear, editar y eliminar registros de catálogos",
   },
   "catalogs:view": {
-    roles: [ROLE_ADMIN, "manager"],
+    roles: [ROLE_ADMIN, "perfil_full"],
     description: "Ver registros de catálogos",
   },
 
@@ -212,14 +248,46 @@ export const ACTION_PERMISSIONS: Record<string, ActionPermission> = {
     description: "Ver expedientes propios",
   },
   "expedientes:view_all": {
-    roles: [ROLE_ADMIN, "manager"],
-    description: "Ver expedientes de todos los usuarios",
+    roles: [ROLE_ADMIN],
+    description: "Legacy; preferir expedientes:workspace_global para vista global",
+  },
+  /** Workspace global: listar/editar cualquier expediente (sincronizar con shared/const EXPEDIENTES_WORKSPACE_GLOBAL_ROLES). */
+  "expedientes:workspace_global": {
+    roles: [ROLE_ADMIN],
+    description: "Ver y gestionar todos los expedientes (ruta /admin-expedientes y APIs asociadas)",
+  },
+
+  // ── Visibilidad de tabs de expediente ───────────────────────────────────────
+  "expediente:tab_f1": {
+    roles: [ROLE_ANY],
+    description: "Ver tab F1-Acta (todos los usuarios)",
+  },
+  "expediente:tab_f2": {
+    roles: [ROLE_ADMIN, "perfil_full", "viewer"],
+    description: "Ver tab F2-EP (no disponible para perfil_ventas ni perfil_implementacion)",
+  },
+  "expediente:tab_resultados": {
+    roles: [ROLE_ADMIN, "perfil_full", "viewer"],
+    description: "Ver tab Resultados",
+  },
+  "expediente:tab_implementacion": {
+    roles: [ROLE_ADMIN, "perfil_full", "perfil_implementacion"],
+    description: "Ver tab Implementación",
+  },
+
+  // ── Campos sensibles de expediente ──────────────────────────────────────────
+  "expediente:view_sensitive_fields": {
+    roles: [ROLE_ADMIN, "perfil_full"],
+    description: "Ver campos sensibles del acta: montos, formas de pago, consideraciones personalizadas y cláusulas legales",
   },
 
   // ── Gestor de horarios ──────────────────────────────────────────────────────
+  // EASTER EGG: strictRoles=true → admin NO tiene acceso automático.
+  // Solo quien tenga gestor_horarios explícito (vía 5 clicks en el Dashboard).
   "horarios:manage": {
-    roles: ["gestor_horarios", ROLE_ADMIN],
-    description: "Acceder y gestionar el módulo de horarios",
+    roles: ["gestor_horarios"],
+    strictRoles: true,
+    description: "Acceder y gestionar el módulo de horarios (easter egg)",
   },
 };
 
@@ -234,10 +302,11 @@ export const ACTION_PERMISSIONS: Record<string, ActionPermission> = {
  */
 export function evaluatePermission(
   userRoles: string[],
-  required: AppRole[]
+  required: AppRole[],
+  strict = false
 ): boolean {
-  // Admin siempre tiene acceso total
-  if (userRoles.includes(ROLE_ADMIN)) return true;
+  // Si strictRoles=true, el admin NO tiene acceso automático
+  if (!strict && userRoles.includes(ROLE_ADMIN)) return true;
   // Si el permiso es para todos los autenticados
   if (required.includes(ROLE_ANY)) return true;
   // Verificar si el usuario tiene al menos uno de los roles requeridos

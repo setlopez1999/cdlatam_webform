@@ -113,11 +113,12 @@ export function F1Encabezado({ data, onUpdate, catalogs }: Props) {
             onChange={e => onUpdate({ fecha: e.target.value })}
           />
         </FieldGroup>
-        <FieldGroup label="N° Acta" required>
+        <FieldGroup label="Código Acta (autogenerado)">
           <Input
-            id="f1-noActa" placeholder="Ej: 2026-001"
+            id="f1-noActa" placeholder="Autogenerado al guardar"
             value={data.noActa}
-            onChange={e => onUpdate({ noActa: e.target.value })}
+            readOnly
+            disabled
           />
         </FieldGroup>
       </div>

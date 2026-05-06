@@ -2,6 +2,8 @@
 
 Este documento detalla el proceso para crear una nueva tabla en la base de datos (ej. `roles`) y establecer una relación con una tabla existente (ej. `users`), asegurando que el CRUD y la interfaz de usuario se actualicen correctamente.
 
+> Nota de vigencia: el orden de capas de este documento sigue siendo valido. Para ejecutar migraciones hoy, usar el flujo oficial de [`DATABASE_SCHEMA.md`](./DATABASE_SCHEMA.md) con Drizzle (`drizzle/schema.ts`, `drizzle/migrations`, `_journal.json`, `server/schemaBootstrap.ts` y `runMigrations` Paso 2 en `server/db.ts`). Los scripts Python aqui son referencia historica.
+
 ## 1. Definición en el Schema (`drizzle/schema.ts`)
 
 El primer paso es definir la nueva tabla y actualizar la tabla existente para incluir la clave foránea (FK blanda en SQLite).

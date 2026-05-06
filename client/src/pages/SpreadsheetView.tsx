@@ -22,8 +22,10 @@ const PRESET_COLORS = [
   { label: "Rojo",     value: "#f87171" },
 ];
 
+import { catalogConfigs } from "@/config/catalogConfig";
+
 // ─── Componente de grilla por tabla ──────────────────────────────────────────
-function CatalogSheet({ tableName, textColor }: { tableName: string; textColor: string }) {
+function CatalogSheet({ tableName, textColor, allCatalogs }: { tableName: string; textColor: string; allCatalogs?: any }) {
   const gridRef = useRef<AgGridReact>(null);
   const [selectedRows, setSelectedRows] = useState<any[]>([]);
 
@@ -36,22 +38,79 @@ function CatalogSheet({ tableName, textColor }: { tableName: string; textColor: 
   const updateMutation    = trpc.catalogsDB.updateGeneric.useMutation();
   const bulkDeleteMutation = trpc.catalogsDB.bulkDeleteGeneric.useMutation();
 
-  const colDefs: ColDef[] = useMemo(() => [
-    { field: "id",     headerName: "ID",    width: 80, editable: false, pinned: "left" as const, cellStyle: { color: "#64748b", fontWeight: 600 } },
-    { field: "valor",  headerName: "Valor", flex: 1, editable: true, cellEditor: "agTextCellEditor", cellStyle: { color: textColor, fontWeight: 400 } },
-    {
-      field: "activo", headerName: "Activo", width: 110, editable: true,
-      cellEditor: "agSelectCellEditor", cellEditorParams: { values: [1, 0] },
-      valueFormatter: (p: any) => (p.value === 1 || p.value === true ? "✓ Sí" : "✗ No"),
-      cellStyle: (p: any) => ({ color: p.value === 1 || p.value === true ? "#4ade80" : "#f87171", fontWeight: 600 }),
-    },
-  ], [textColor]);
+  const colDefs: ColDef[] = useMemo(() => {
+    // 1. Obtener config (hardcodeado o genérico)
+    const config = catalogConfigs[tableName] || {
+      fields: [
+        { key: "valor", label: "Valor", type: "text" },
+        { key: "activo", label: "Activo", type: "boolean" },
+      ]
+    };
+
+    // 2. Generar columnas base
+    const cols: ColDef[] = [
+      { field: "id", headerName: "ID", width: 80, editable: false, pinned: "left" as const, cellStyle: { color: "#64748b", fontWeight: 600 } },
+    ];
+
+    // 3. Mapear campos del config
+    config.fields.forEach(f => {
+      const col: ColDef = {
+        field: f.key,
+        headerName: f.label,
+        flex: f.key === "valor" ? 1 : 0,
+        width: f.key === "activo" ? 110 : 150,
+        editable: true,
+        cellStyle: { color: f.key === "valor" ? textColor : undefined },
+      };
+
+      if (f.type === "boolean") {
+        col.cellEditor = "agSelectCellEditor";
+        col.cellEditorParams = { values: [1, 0] };
+        col.valueFormatter = (p) => (p.value === 1 || p.value === true ? "✓ Sí" : "✗ No");
+        col.cellStyle = (p) => ({ color: p.value === 1 || p.value === true ? "#4ade80" : "#f87171", fontWeight: 600 });
+      } 
+      else if (f.type === "select") {
+        // Buscar opciones si es un campo relacional (ej: unidadNegocioId)
+        // Intentamos obtener las opciones de allCatalogs inyectado o del propio field
+        let options = f.options || [];
+        
+        // Inyección dinámica para relaciones conocidas
+        if (f.key === "unidadNegocioId" && allCatalogs?.unidades) {
+          options = allCatalogs.unidades.map((u: any) => ({ value: String(u.id), label: u.valor }));
+        }
+
+        col.cellEditor = "agSelectCellEditor";
+        col.cellEditorParams = { values: options.map(o => o.value) };
+        col.valueFormatter = (p) => {
+          const opt = options.find(o => String(o.value) === String(p.value));
+          return opt ? opt.label : (p.value || "-");
+        };
+      } else {
+        col.cellEditor = "agTextCellEditor";
+      }
+
+      cols.push(col);
+    });
+
+    return cols;
+  }, [tableName, textColor, allCatalogs]);
 
   const onCellValueChanged = useCallback(async (event: CellValueChangedEvent) => {
     const { data, colDef, newValue } = event;
     if (!data?.id || colDef.field === "id") return;
     try {
-      await updateMutation.mutateAsync({ tableName, id: data.id, data: { [colDef.field as string]: newValue } });
+      let finalValue = newValue;
+      
+      // Sanitización para SQLite (IDs deben ser números)
+      if (colDef.field?.endsWith("Id") && typeof newValue === "string") {
+        finalValue = newValue === "" ? null : parseInt(newValue, 10);
+      }
+
+      await updateMutation.mutateAsync({ 
+        tableName, 
+        id: data.id, 
+        data: { [colDef.field as string]: finalValue } 
+      });
       toast.success("Guardado");
     } catch (err: any) {
       toast.error("Error al guardar: " + err.message);
@@ -163,6 +222,9 @@ export default function SpreadsheetView() {
     },
   } as any);
 
+  // Cargar datos de resumen para inyectar opciones en los selects (ej: unidades de negocio)
+  const { data: summary } = trpc.catalogsDB.getSummary.useQuery();
+
   const handleColorChange = (color: string) => {
     setTextColor(color);
     localStorage.setItem("spreadsheet_text_color", color);
@@ -246,7 +308,7 @@ export default function SpreadsheetView() {
 
       {/* Contenido */}
       <div className="flex-1 p-5 min-h-0 flex flex-col" onClick={() => setShowColorPicker(false)}>
-        {activeTab && <CatalogSheet key={activeTab} tableName={activeTab} textColor={textColor} />}
+        {activeTab && <CatalogSheet key={activeTab} tableName={activeTab} textColor={textColor} allCatalogs={summary} />}
       </div>
     </div>
   );

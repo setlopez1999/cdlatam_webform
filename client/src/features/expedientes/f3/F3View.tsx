@@ -8,7 +8,7 @@
  * F3-b: La fila de gastos se llama "Total Gastos Imputados".
  * F3-c: La distribución GIM/GP tiene porcentajes editables por el usuario.
  */
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -18,6 +18,7 @@ import {
   Cpu, Package, Users, MoreHorizontal, DollarSign, Building2,
 } from "lucide-react";
 import { formatCurrency, formatPercent } from "@/lib/formatters";
+import { trpc } from "@/lib/trpc";
 import { useExpedienteStore } from "../store";
 import { calcularResultadoF3 } from "../types";
 
@@ -29,8 +30,32 @@ interface Props {
 }
 
 export default function F3View({ expedienteId, onVolverF2 }: Props) {
-  const { getExpediente } = useExpedienteStore();
+  const { getExpediente, marcarF3Visto } = useExpedienteStore();
   const expediente = getExpediente(expedienteId);
+
+  const syncResultado = trpc.expediente.syncResultado.useMutation({
+    onSuccess: () => marcarF3Visto(expedienteId),
+  });
+  const resultadoSyncedRef = useRef(false);
+
+  useEffect(() => {
+    resultadoSyncedRef.current = false;
+  }, [expedienteId]);
+
+  useEffect(() => {
+    if (expediente?.f2.status !== "guardado") resultadoSyncedRef.current = false;
+  }, [expediente?.f2.status]);
+
+  useEffect(() => {
+    if (!expediente || expediente.f2.status !== "guardado" || resultadoSyncedRef.current) return;
+    resultadoSyncedRef.current = true;
+    const base = calcularResultadoF3(expediente.f2.data, expediente.f1.data);
+    syncResultado.mutate({
+      expedienteUuid: expedienteId,
+      payload: base,
+      f3FormStatus: "guardado",
+    });
+  }, [expediente, expedienteId, syncResultado]);
 
   // F3-c: porcentajes editables (default 10% GIM / 90% GP)
   const [pctGIM, setPctGIM] = useState(10);

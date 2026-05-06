@@ -1,38 +1,35 @@
 /**
  * UserHome — Pantalla de inicio para usuarios con rol "user"
  *
- * Muestra dos acciones principales: Expediente nuevo e Historial (Expedientes)
+ * Muestra dos acciones principales: Expediente nuevo e Historial (Expedientes).
+ * Usa el nuevo store (features/expedientes/store.ts) como única fuente de verdad.
  */
+import { useMemo } from "react";
 import { useLocation } from "wouter";
 import { useLocalAuth } from "@/hooks/useLocalAuth";
-import { loadActasList, loadEPList, type ActaData, type EPData } from "@/hooks/useFormStore";
+import { useExpedienteStore } from "@/features/expedientes/store";
+import type { Expediente } from "@/features/expedientes/types";
 import { Badge } from "@/components/ui/badge";
 import {
-  FileText, BarChart2, Clock, FolderOpen,
+  FileText, Clock, FolderOpen,
   ArrowRight, CheckCircle2, AlertCircle, Circle, Plus,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { formatCurrency } from "@/lib/formatters";
 import { PageLayout } from "@/components/PageLayout";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 function StatusIcon({ status }: { status: string }) {
-  if (status === "completado" || status === "exportado") {
-    return <CheckCircle2 className="w-4 h-4 text-emerald-500" />;
-  }
-  if (status === "borrador") {
-    return <AlertCircle className="w-4 h-4 text-amber-500" />;
-  }
+  if (status === "guardado") return <CheckCircle2 className="w-4 h-4 text-emerald-500" />;
+  if (status === "borrador") return <AlertCircle className="w-4 h-4 text-amber-500" />;
   return <Circle className="w-4 h-4 text-muted-foreground" />;
 }
 
 function StatusBadge({ status }: { status: string }) {
   const map: Record<string, { label: string; className: string }> = {
-    borrador: { label: "Borrador", className: "bg-amber-50 text-amber-700 border-amber-200" },
-    completado: { label: "Completado", className: "bg-emerald-50 text-emerald-700 border-emerald-200" },
-    exportado: { label: "Exportado", className: "bg-blue-50 text-blue-700 border-blue-200" },
-    nuevo: { label: "Nuevo", className: "bg-muted text-muted-foreground" },
+    borrador:  { label: "Borrador",  className: "bg-amber-50 text-amber-700 border-amber-200" },
+    guardado:  { label: "Guardado",  className: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+    nuevo:     { label: "Nuevo",     className: "bg-muted text-muted-foreground" },
   };
   const s = map[status] ?? map.nuevo;
   return (
@@ -42,46 +39,43 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
+/** Convierte un expediente del nuevo store en un item de actividad reciente */
+function toHistorialItem(exp: Expediente) {
+  const razonSocial = exp.f1.data.razonSocial;
+  const titulo = razonSocial || exp.nombre;
+  const noActa = exp.f1.data.noActa;
+  const subtitulo = noActa ? `N° ${noActa}` : exp.nombre;
+  const status = exp.f1.status;
+  return {
+    id: exp.id,
+    titulo,
+    subtitulo,
+    fecha: exp.updatedAt,
+    status,
+    path: `/expediente/${exp.id}/acta`,
+  };
+}
+
 // ── Componente principal ──────────────────────────────────────────────────────
 
 export default function UserHome() {
   const { currentUser } = useLocalAuth();
-  const actas: ActaData[] = loadActasList();
-  const eps: EPData[] = loadEPList();
+  const { expedientes } = useExpedienteStore();
   const [, navigate] = useLocation();
 
-  // Historial combinado para actividad reciente
-  const historial = [
-    ...actas.map(a => ({
-      id: a.id,
-      tipo: "Acta",
-      titulo: a.razonSocial || `Acta ${a.noActa || "sin número"}`,
-      subtitulo: a.noActa ? `N° ${a.noActa}` : "Sin número",
-      fecha: a.updatedAt,
-      status: a.status,
-      path: "/historial",
-      icon: FileText,
-      color: "text-indigo-500",
-      bgColor: "bg-indigo-50",
-    })),
-    ...eps.map(e => ({
-      id: e.id,
-      tipo: "EP",
-      titulo: e.nombreCliente || e.empresa || "Evaluación sin nombre",
-      subtitulo: e.tipoMoneda ? `${e.tipoMoneda} ${formatCurrency(e.montoProyecto)}` : "Sin monto",
-      fecha: e.updatedAt,
-      status: e.status,
-      path: "/historial",
-      icon: BarChart2,
-      color: "text-emerald-500",
-      bgColor: "bg-emerald-50",
-    })),
-  ].sort((a, b) => new Date(b.fecha ?? 0).getTime() - new Date(a.fecha ?? 0).getTime());
+  // Actividad reciente: expedientes ordenados por fecha de actualización
+  const historial = useMemo(
+    () =>
+      [...expedientes]
+        .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+        .map(toHistorialItem),
+    [expedientes]
+  );
 
   const hora = new Date().getHours();
   const saludo = hora < 12 ? "Buenos días" : hora < 18 ? "Buenas tardes" : "Buenas noches";
-  const nombre = currentUser?.username || "Usuario";
-  const totalExpedientes = Math.max(actas.length, eps.length);
+  const nombre = currentUser?.displayName || currentUser?.username || "Usuario";
+  const total = expedientes.length;
 
   return (
     <PageLayout
@@ -123,8 +117,8 @@ export default function UserHome() {
               <div>
                 <p className="font-semibold text-foreground">Historial</p>
                 <p className="text-xs text-muted-foreground">
-                  {totalExpedientes > 0
-                    ? `${totalExpedientes} expediente${totalExpedientes !== 1 ? "s" : ""}`
+                  {total > 0
+                    ? `${total} expediente${total !== 1 ? "s" : ""}`
                     : "Sin expedientes aún"}
                 </p>
               </div>
@@ -133,37 +127,6 @@ export default function UserHome() {
           </div>
         </button>
       </div>
-
-      {/* ── Sub-accesos del expediente ───────────────────────────────────────── 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <button
-          onClick={() => navigate("/nuevo-expediente")}
-          className="group flex items-center gap-3 p-4 rounded-xl border border-indigo-200 hover:border-indigo-400 bg-indigo-50/50 dark:bg-indigo-950/10 transition-all"
-        >
-          <div className="w-8 h-8 rounded-lg bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center flex-shrink-0">
-            <FileText className="w-4 h-4 text-indigo-600" />
-          </div>
-          <div className="flex-1 min-w-0 text-left">
-            <p className="text-sm font-medium text-foreground">Acta de Aceptación</p>
-            <p className="text-xs text-muted-foreground">Formulario 1 (F1)</p>
-          </div>
-          <ArrowRight className="w-3.5 h-3.5 text-indigo-400 opacity-0 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all flex-shrink-0" />
-        </button>
-
-        <button
-          onClick={() => navigate("/nuevo-expediente")}
-          className="group flex items-center gap-3 p-4 rounded-xl border border-emerald-200 hover:border-emerald-400 bg-emerald-50/50 dark:bg-emerald-950/10 transition-all"
-        >
-          <div className="w-8 h-8 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center flex-shrink-0">
-            <BarChart2 className="w-4 h-4 text-emerald-600" />
-          </div>
-          <div className="flex-1 min-w-0 text-left">
-            <p className="text-sm font-medium text-foreground">Evaluación de Proyecto</p>
-            <p className="text-xs text-muted-foreground">Formulario 2 (F2)</p>
-          </div>
-          <ArrowRight className="w-3.5 h-3.5 text-emerald-400 opacity-0 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all flex-shrink-0" />
-        </button>
-      </div> */}
 
       {/* ── Actividad reciente ───────────────────────────────────────────────── */}
       <div>
@@ -189,28 +152,25 @@ export default function UserHome() {
           </div>
         ) : (
           <div className="space-y-2">
-            {historial.slice(0, 5).map(item => {
-              const Icon = item.icon;
-              return (
-                <button
-                  key={`${item.tipo}-${item.id}`}
-                  onClick={() => navigate(item.path)}
-                  className="w-full flex items-center gap-3 p-3 rounded-lg border border-border hover:border-border/80 hover:bg-muted/30 transition-all text-left group"
-                >
-                  <div className={`w-8 h-8 rounded-lg ${item.bgColor} flex items-center justify-center flex-shrink-0`}>
-                    <Icon className={`w-4 h-4 ${item.color}`} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-foreground truncate">{item.titulo}</p>
-                    <p className="text-xs text-muted-foreground">{item.subtitulo}</p>
-                  </div>
-                  <div className="flex items-center gap-2 flex-shrink-0">
-                    <StatusBadge status={item.status} />
-                    <StatusIcon status={item.status} />
-                  </div>
-                </button>
-              );
-            })}
+            {historial.slice(0, 5).map(item => (
+              <button
+                key={item.id}
+                onClick={() => navigate(item.path)}
+                className="w-full flex items-center gap-3 p-3 rounded-lg border border-border hover:border-border/80 hover:bg-muted/30 transition-all text-left group"
+              >
+                <div className="w-8 h-8 rounded-lg bg-indigo-50 flex items-center justify-center flex-shrink-0">
+                  <FileText className="w-4 h-4 text-indigo-500" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-foreground truncate">{item.titulo}</p>
+                  <p className="text-xs text-muted-foreground">{item.subtitulo}</p>
+                </div>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <StatusBadge status={item.status} />
+                  <StatusIcon status={item.status} />
+                </div>
+              </button>
+            ))}
           </div>
         )}
       </div>

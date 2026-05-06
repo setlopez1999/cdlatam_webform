@@ -6,6 +6,8 @@
  * USE_API=true            → fetch a API_URL externa
  *
  * La API externa debe devolver el mismo shape que SQLite.
+ *
+ * Cláusulas legales: ver dataSource-clausulas.ts (mismo patrón ds_*, capa aparte).
  */
 
 import {
@@ -134,8 +136,8 @@ export async function ds_getCatalogOptions() {
     nombres:            toOptions(nombres),
     monedas:            toOptions(monedas),
     documentoIdentidad: toOptions(documentoIdentidad),
-    unidadesNegocio:    toOptions(unidadesNegocio),
-    soluciones:         toOptions(soluciones),
+    unidadesNegocio:    unidadesNegocio.map(r => ({ id: r.id, value: r.valor, label: r.valor })),
+    soluciones:         soluciones.map(r => ({ id: r.id, value: r.valor, label: r.valor, unidadNegocioId: r.unidadNegocioId })),
     detalleServicio:    toOptions(detalleServicio),
     tipoVenta:          toOptions(tipoVenta),
     plazos:             toOptions(plazos),

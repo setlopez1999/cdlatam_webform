@@ -16,8 +16,12 @@ import NuevoExpediente from "./pages/NuevoExpediente";
 import ExpedienteActa from "./pages/ExpedienteActa";
 import ExpedienteEP from "./pages/ExpedienteEP";
 import ExpedienteResultados from "./pages/ExpedienteResultados";
+import ExpedienteImplementacion from "./pages/ExpedienteImplementacion";
 import SpreadsheetView from "./pages/SpreadsheetView";
 import GestorHorarios from "./pages/GestorHorarios";
+import AuditLog from "./pages/AuditLog";
+import AdminExpedientesWorkspace from "./pages/AdminExpedientesWorkspace";
+import ClausulasPage from "./pages/ClausulasPage";
 import { useLocalAuth } from "./hooks/useLocalAuth";
 import { Loader2 } from "lucide-react";
 import { ROUTE_PERMISSIONS, evaluatePermission, ROLE_ANY } from "@/config/permissions";
@@ -127,6 +131,15 @@ function Router() {
       <Route path="/usuarios">
         {() => <ProtectedRoute component={Usuarios} routePath="/usuarios" />}
       </Route>
+      <Route path="/admin-expedientes">
+        {() => <ProtectedRoute component={AdminExpedientesWorkspace} routePath="/admin-expedientes" />}
+      </Route>
+      <Route path="/auditoria">
+        {() => <ProtectedRoute component={AuditLog} routePath="/auditoria" />}
+      </Route>
+      <Route path="/clausulas">
+        {() => <ProtectedRoute component={ClausulasPage} routePath="/clausulas" />}
+      </Route>
 
       {/* Rutas protegidas por rol RBAC */}
       <Route path="/gestor-horarios">
@@ -151,6 +164,9 @@ function Router() {
       </Route>
       <Route path="/expediente/:id/resultados">
         {() => <ProtectedRoute component={ExpedienteResultados} routePath="/expediente/:id/resultados" />}
+      </Route>
+      <Route path="/expediente/:id/implementacion">
+        {() => <ProtectedRoute component={ExpedienteImplementacion} routePath="/expediente/:id/implementacion" />}
       </Route>
 
       <Route path="/404" component={NotFound} />

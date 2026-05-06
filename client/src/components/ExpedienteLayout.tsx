@@ -4,23 +4,26 @@
  * el nombre del expediente editable, y el contenido de la pestaña activa.
  */
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useLocation } from "wouter";
-import { FileText, BarChart2, ClipboardList, Pencil, Check, X, ChevronLeft } from "lucide-react";
+import { FileText, BarChart2, ClipboardList, Pencil, Check, X, ChevronLeft, Rocket } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useExpedienteStore } from "@/features/expedientes/store";
+import { mapDetalleToExpediente } from "@/features/expedientes/fromServer";
+import { trpc } from "@/lib/trpc";
 import type { FormStatus } from "@/features/expedientes/types";
 import { cn } from "@/lib/utils";
+import { useCan } from "@/hooks/useCan";
 
 interface Tab {
-  id: "acta" | "ep" | "resultados";
+  id: "acta" | "ep" | "resultados" | "implementacion";
   label: string;
   icon: React.ReactNode;
   path: (id: string) => string;
 }
 
-const TABS: Tab[] = [
+const ALL_TABS: Tab[] = [
   {
     id: "acta",
     label: "F1 — Acta",
@@ -39,7 +42,31 @@ const TABS: Tab[] = [
     icon: <BarChart2 className="w-4 h-4" />,
     path: (id) => `/expediente/${id}/resultados`,
   },
+  {
+    id: "implementacion",
+    label: "Implementación",
+    icon: <Rocket className="w-4 h-4" />,
+    path: (id) => `/expediente/${id}/implementacion`,
+  },
 ];
+
+/**
+ * getVisibleTabs — Devuelve los tabs visibles usando ACTION_PERMISSIONS de permissions.ts.
+ *
+ * Fuente única de verdad: `can("expediente:tab_*")` via useCan().
+ * No hay lógica de roles hardcodeada aquí — todo está en permissions.ts.
+ */
+function getVisibleTabs(can: (action: string) => boolean): Tab[] {
+  return ALL_TABS.filter(tab => {
+    switch (tab.id) {
+      case "acta":           return can("expediente:tab_f1");
+      case "ep":             return can("expediente:tab_f2");
+      case "resultados":     return can("expediente:tab_resultados");
+      case "implementacion": return can("expediente:tab_implementacion");
+      default:               return false;
+    }
+  });
+}
 
 function StatusBadge({ status }: { status: FormStatus }) {
   const styles: Record<FormStatus, string> = {
@@ -61,14 +88,70 @@ function StatusBadge({ status }: { status: FormStatus }) {
 
 interface Props {
   expedienteId: string;
-  activeTab: "acta" | "ep" | "resultados";
+  activeTab: "acta" | "ep" | "resultados" | "implementacion";
   children: React.ReactNode;
 }
 
 export default function ExpedienteLayout({ expedienteId, activeTab, children }: Props) {
   const [, navigate] = useLocation();
-  const { getExpediente, renombrar } = useExpedienteStore();
+  const { getExpediente, renombrar, mergeDetalleEnStore } = useExpedienteStore();
   const expediente = getExpediente(expedienteId);
+  const can = useCan();
+  const TABS = getVisibleTabs(can);
+  const utils = trpc.useUtils();
+
+  // Siempre fetcha el detalle al entrar al expediente para garantizar que
+  // muestramos la versión más reciente del server. Antes era
+  // `enabled: !expediente && !!expedienteId`, lo que solo fetchaba si el store
+  // estaba vacío — pero Historial llena el store con datos del resumen
+  // (potencialmente stale), por lo que el detalle nunca se refrescaba al
+  // navegar y el usuario veía la versión vieja hasta hacer F5.
+  const detalleQuery = trpc.expediente.detalle.useQuery(
+    { uuid: expedienteId },
+    { enabled: !!expedienteId, retry: false },
+  );
+  const renombrarSrv = trpc.expediente.renombrar.useMutation({
+    onSuccess: () => {
+      // Mantener listas y detalle sincronizados tras renombrar.
+      void utils.expediente.listarResumen.invalidate();
+      void utils.expediente.listarResumenWorkspace.invalidate();
+      void utils.expediente.detalle.invalidate({ uuid: expedienteId });
+    },
+  });
+
+  // Trackea la última `detalleQuery.data` que se mergeó para evitar loops
+  // infinitos. NO podemos poner `getExpediente` en deps porque se recrea cada
+  // vez que el store cambia (depende de `expedientes`), y como mergeDetalle
+  // ACTUALIZA el store, eso dispararía el effect de nuevo en bucle. Trackeando
+  // la referencia de `data`, garantizamos que solo mergeamos una vez por
+  // respuesta del server. Cuando se invalida la cache y llega una nueva
+  // respuesta, la referencia cambia y el merge se aplica de nuevo.
+  const lastMergedRef = useRef<typeof detalleQuery.data | null>(null);
+
+  useEffect(() => {
+    lastMergedRef.current = null;
+  }, [expedienteId]);
+
+  useEffect(() => {
+    const data = detalleQuery.data;
+    if (!data) return;
+    if (lastMergedRef.current === data) return;
+    // Proteger trabajo en curso: si el usuario tiene cambios `sin_guardar`,
+    // NO pisamos el local con la versión del server. El modal de unsaved
+    // changes ya se encarga de pedirle que guarde o descarte antes de salir.
+    const local = getExpediente(expedienteId);
+    const tieneCambiosPendientes =
+      local?.f1.status === "sin_guardar" || local?.f2.status === "sin_guardar";
+    // Marcamos como visto SIEMPRE (incluso si lo saltamos por sin_guardar) para
+    // no re-evaluar en el próximo render hasta que llegue una `data` nueva.
+    lastMergedRef.current = data;
+    if (tieneCambiosPendientes) return;
+    mergeDetalleEnStore(mapDetalleToExpediente(data));
+    // Deps mínimas: solo la referencia de la data del server. `getExpediente`
+    // y `mergeDetalleEnStore` se acceden por closure; no las ponemos en deps
+    // porque su recreación tras cada merge volvería a disparar el effect.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [detalleQuery.data, expedienteId]);
 
   const [editando, setEditando] = useState(false);
   const [nombreTemp, setNombreTemp] = useState(expediente?.nombre ?? "");
@@ -78,12 +161,36 @@ export default function ExpedienteLayout({ expedienteId, activeTab, children }: 
   }, [expediente?.nombre]);
 
   if (!expediente) {
+    if (detalleQuery.isLoading || detalleQuery.isFetching) {
+      return (
+        <div className="flex flex-col items-center justify-center h-64 gap-4">
+          <p className="text-muted-foreground">Cargando expediente…</p>
+        </div>
+      );
+    }
+    if (detalleQuery.error) {
+      return (
+        <div className="flex flex-col items-center justify-center h-64 gap-4">
+          <p className="text-muted-foreground">No se pudo cargar el expediente.</p>
+          <Button variant="outline" onClick={() => navigate("/historial")}>
+            <ChevronLeft className="w-4 h-4 mr-2" /> Volver al Historial
+          </Button>
+        </div>
+      );
+    }
+    if (detalleQuery.data === null) {
+      return (
+        <div className="flex flex-col items-center justify-center h-64 gap-4">
+          <p className="text-muted-foreground">Expediente no encontrado.</p>
+          <Button variant="outline" onClick={() => navigate("/historial")}>
+            <ChevronLeft className="w-4 h-4 mr-2" /> Volver al Historial
+          </Button>
+        </div>
+      );
+    }
     return (
       <div className="flex flex-col items-center justify-center h-64 gap-4">
-        <p className="text-muted-foreground">Expediente no encontrado.</p>
-        <Button variant="outline" onClick={() => navigate("/historial")}>
-          <ChevronLeft className="w-4 h-4 mr-2" /> Volver al Historial
-        </Button>
+        <p className="text-muted-foreground">Cargando expediente…</p>
       </div>
     );
   }
@@ -91,6 +198,7 @@ export default function ExpedienteLayout({ expedienteId, activeTab, children }: 
   const handleGuardarNombre = () => {
     if (nombreTemp.trim()) {
       renombrar(expedienteId, nombreTemp.trim());
+      renombrarSrv.mutate({ uuid: expedienteId, nombre: nombreTemp.trim() });
     }
     setEditando(false);
   };
@@ -140,6 +248,11 @@ export default function ExpedienteLayout({ expedienteId, activeTab, children }: 
             <Pencil className="w-3 h-3 opacity-0 group-hover:opacity-60 transition-opacity" />
           </button>
         )}
+        {expediente.codigo ? (
+          <span className="text-[11px] px-2 py-0.5 rounded border bg-muted/40 text-muted-foreground font-mono">
+            {expediente.codigo}
+          </span>
+        ) : null}
       </div>
 
       {/* Tabs de navegación */}

@@ -61,7 +61,6 @@ try:
         'INSERT OR IGNORE INTO roles (nombre, label, descripcion, activo) VALUES (?, ?, ?, 1)',
         [
             ('admin',   'Administrador', 'Acceso total al sistema'),
-            ('manager', 'Gerente',       'Puede ver todo, no puede gestionar usuarios'),
             ('viewer',  'Solo lectura',  'Acceso de solo lectura'),
             ('user',    'Usuario',       'Acceso basico al sistema'),
         ]

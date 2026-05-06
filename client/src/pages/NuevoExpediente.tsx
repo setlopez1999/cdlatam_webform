@@ -2,6 +2,8 @@
  * NuevoExpediente - Página para crear un nuevo expediente.
  * Genera un nombre automático (Expediente #N), permite cambiarlo,
  * y al confirmar redirige al F1 (Acta) del expediente creado.
+ *
+ * Al crear, sincroniza el expediente con la BD via trpc.expediente.sync.
  */
 
 import { useState } from "react";
@@ -11,19 +13,45 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { trpc } from "@/lib/trpc";
 import { useExpedienteStore } from "@/features/expedientes/store";
 
 export default function NuevoExpediente() {
   const [, navigate] = useLocation();
   const { expedientes, crear } = useExpedienteStore();
+  const [isCreating, setIsCreating] = useState(false);
 
   // Calcular nombre sugerido
   const num = expedientes.length + 1;
   const [nombre, setNombre] = useState(`Expediente #${num}`);
 
-  const handleCrear = () => {
-    const exp = crear(nombre.trim() || `Expediente #${num}`);
-    navigate(`/expediente/${exp.id}/acta`);
+  const utils = trpc.useUtils();
+  const syncExpediente = trpc.expediente.sync.useMutation({
+    onSuccess: () => void utils.expediente.listarResumen.invalidate(),
+  });
+
+  const handleCrear = async () => {
+    if (isCreating) return;
+    setIsCreating(true);
+    try {
+      // 1. Crear en localStorage (store de Zustand)
+      const exp = crear(nombre.trim() || `Expediente #${num}`);
+
+      // 2. Sincronizar con BD (fire-and-forget: si falla, el expediente sigue en localStorage)
+      syncExpediente.mutate(
+        { uuid: exp.id, nombre: exp.nombre },
+        {
+          onError: (err) => {
+            console.warn("[NuevoExpediente] No se pudo sincronizar con BD:", err.message);
+          },
+        }
+      );
+
+      // 3. Navegar al F1 del expediente creado
+      navigate(`/expediente/${exp.id}/acta`);
+    } finally {
+      setIsCreating(false);
+    }
   };
 
   return (
@@ -57,7 +85,7 @@ export default function NuevoExpediente() {
           </div>
 
           <div className="flex flex-col gap-2">
-            <Button className="w-full gap-2" onClick={handleCrear}>
+            <Button className="w-full gap-2" onClick={handleCrear} disabled={isCreating}>
               Crear y completar F1 — Acta
               <ArrowRight className="w-4 h-4" />
             </Button>
@@ -65,6 +93,7 @@ export default function NuevoExpediente() {
               variant="ghost"
               className="w-full text-muted-foreground"
               onClick={() => navigate("/historial")}
+              disabled={isCreating}
             >
               Cancelar
             </Button>
