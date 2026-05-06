@@ -6,6 +6,7 @@ import * as Database from 'better-sqlite3';
 import { join, dirname } from 'path';
 import { existsSync, mkdirSync } from 'fs';
 import { buildActaCodigo, buildExpedienteCodigo } from "./documentCodes";
+import { ensureAllProjectTables } from "./schemaBootstrap";
 // Importamos los esquemas (asegúrate de que esta ruta sea correcta)
 import {
   InsertUser, users, roles, type Role, type InsertRole,
@@ -411,59 +412,6 @@ function autoMigrateUsersSchemaIfNeeded(): void {
   }
 }
 
-/**
- * Si migrate() marcó migraciones aplicadas pero la tabla no existe (estado inconsistente),
- * evita fallos en backfill y CRUD de expedientes. Alineado con drizzle/schema expedientes.
- */
-function ensureExpedientesTableAfterMigrate(): void {
-  try {
-    sqlite.exec(`
-      CREATE TABLE IF NOT EXISTS expedientes (
-        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
-        uuid TEXT NOT NULL UNIQUE,
-        codigo TEXT UNIQUE,
-        nombre TEXT NOT NULL,
-        creadorId INTEGER NOT NULL,
-        actaId INTEGER,
-        evaluacionId INTEGER,
-        status TEXT DEFAULT 'borrador' NOT NULL,
-        createdAt INTEGER DEFAULT (strftime('%s', 'now')) NOT NULL,
-        updatedAt INTEGER DEFAULT (strftime('%s', 'now')) NOT NULL
-      )
-    `);
-    console.log("[DB] Table expedientes ensured");
-  } catch (e: unknown) {
-    console.warn("[DB] Could not ensure expedientes table:", e instanceof Error ? e.message : e);
-  }
-}
-
-/**
- * Misma situación que expedientes: migraciones/fallback pueden no haber creado audit_log.
- * Sin esta tabla, audit.list y recordAudit fallan con "no such table".
- */
-function ensureAuditLogTableAfterMigrate(): void {
-  try {
-    sqlite.exec(`
-      CREATE TABLE IF NOT EXISTS audit_log (
-        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
-        userId INTEGER,
-        username TEXT NOT NULL,
-        action TEXT NOT NULL,
-        entity TEXT NOT NULL,
-        entityId INTEGER,
-        expedienteUuid TEXT,
-        expedienteCodigo TEXT,
-        changes TEXT,
-        ip TEXT,
-        createdAt INTEGER DEFAULT (strftime('%s', 'now')) NOT NULL
-      )
-    `);
-    console.log("[DB] Table audit_log ensured");
-  } catch (e: unknown) {
-    console.warn("[DB] Could not ensure audit_log table:", e instanceof Error ? e.message : e);
-  }
-}
-
 export async function runMigrations() {
   // Paso 0: Migrar schema viejo automáticamente si es necesario (idempotente)
   autoMigrateUsersSchemaIfNeeded();
@@ -477,150 +425,19 @@ export async function runMigrations() {
     // Si la migración falla (ej: BD parcialmente migrada), aplicar schema manualmente
     console.warn("[DB] Migration via Drizzle failed, applying schema manually:", error?.message ?? error);
     try {
-      const rawDb = sqlite;
-      rawDb.exec(`
-        CREATE TABLE IF NOT EXISTS roles (
-          id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
-          nombre TEXT NOT NULL UNIQUE,
-          label TEXT NOT NULL DEFAULT '',
-          descripcion TEXT,
-          activo INTEGER DEFAULT 1 NOT NULL,
-          createdAt INTEGER DEFAULT (strftime('%s', 'now')) NOT NULL,
-          updatedAt INTEGER DEFAULT (strftime('%s', 'now')) NOT NULL
-        );
-        CREATE TABLE IF NOT EXISTS users (
-          id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
-          username TEXT NOT NULL UNIQUE,
-          passwordHash TEXT NOT NULL,
-          displayName TEXT,
-          role TEXT DEFAULT 'user' NOT NULL,
-          roleId INTEGER,
-          isActive INTEGER DEFAULT 1 NOT NULL,
-          createdAt INTEGER DEFAULT (strftime('%s', 'now')) NOT NULL,
-          updatedAt INTEGER DEFAULT (strftime('%s', 'now')) NOT NULL,
-          lastSignedIn INTEGER
-        );
-        CREATE TABLE IF NOT EXISTS catalog_meta (
-          id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
-          table_name TEXT NOT NULL UNIQUE,
-          title TEXT NOT NULL,
-          is_custom INTEGER DEFAULT 0 NOT NULL,
-          linked_field TEXT,
-          created_at INTEGER DEFAULT (strftime('%s', 'now')) NOT NULL
-        );
-        CREATE TABLE IF NOT EXISTS actas (
-          id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
-          userId INTEGER NOT NULL,
-          codigo TEXT UNIQUE,
-          noActa TEXT, atencion TEXT, fecha INTEGER,
-          razonSocial TEXT, nombreFantasia TEXT, rucDniRut TEXT, direccionComercial TEXT,
-          representanteLegal TEXT, representanteDni TEXT, representanteEmail TEXT, representanteFono TEXT,
-          contactoTecnico TEXT, contactoTecnicoEmail TEXT, contactoTecnicoFono TEXT,
-          contactoFacturacion TEXT, contactoFacturacionEmail TEXT, contactoFacturacionFono TEXT,
-          serviciosContratados TEXT, formasPagoImplementacion TEXT, formasPagoMantencion TEXT,
-          status TEXT DEFAULT 'borrador' NOT NULL,
-          createdAt INTEGER DEFAULT (strftime('%s', 'now')) NOT NULL,
-          updatedAt INTEGER DEFAULT (strftime('%s', 'now')) NOT NULL
-        );
-        CREATE TABLE IF NOT EXISTS evaluaciones (
-          id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
-          userId INTEGER NOT NULL, actaId INTEGER,
-          unidadNegocios TEXT, empresa TEXT, solucion TEXT, tipoMoneda TEXT,
-          montoProyecto REAL, tipoCambio REAL, totalClp REAL,
-          descripcion TEXT, preventa TEXT, fechaEntrega INTEGER, ejecutivoComercial TEXT,
-          plazoImplementacion TEXT, propuestaNumero TEXT, paisImplementacion TEXT,
-          rut TEXT, nombreCliente TEXT,
-          hardware TEXT, materiales TEXT, rrhh TEXT, otrosGastos TEXT,
-          totalHardware REAL, totalMateriales REAL, totalRrhh REAL, totalOtros REAL, totalGastos REAL,
-          status TEXT DEFAULT 'borrador' NOT NULL,
-          createdAt INTEGER DEFAULT (strftime('%s', 'now')) NOT NULL,
-          updatedAt INTEGER DEFAULT (strftime('%s', 'now')) NOT NULL
-        );
-        CREATE TABLE IF NOT EXISTS catalog_monedas (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, valor TEXT NOT NULL UNIQUE, activo INTEGER DEFAULT 1 NOT NULL);
-        CREATE TABLE IF NOT EXISTS catalog_paises (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, valor TEXT NOT NULL UNIQUE, activo INTEGER DEFAULT 1 NOT NULL);
-        CREATE TABLE IF NOT EXISTS catalog_empresas (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, valor TEXT NOT NULL UNIQUE, activo INTEGER DEFAULT 1 NOT NULL);
-        CREATE TABLE IF NOT EXISTS catalog_documento_identidad (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, valor TEXT NOT NULL UNIQUE, activo INTEGER DEFAULT 1 NOT NULL);
-        CREATE TABLE IF NOT EXISTS catalog_unidades_negocio (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, valor TEXT NOT NULL UNIQUE, activo INTEGER DEFAULT 1 NOT NULL);
-        CREATE TABLE IF NOT EXISTS catalog_soluciones (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, valor TEXT NOT NULL UNIQUE, unidadNegocioId INTEGER, activo INTEGER DEFAULT 1 NOT NULL);
-        CREATE TABLE IF NOT EXISTS catalog_detalle_servicio (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, valor TEXT NOT NULL UNIQUE, activo INTEGER DEFAULT 1 NOT NULL);
-        CREATE TABLE IF NOT EXISTS catalog_tipo_venta (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, valor TEXT NOT NULL UNIQUE, activo INTEGER DEFAULT 1 NOT NULL);
-        CREATE TABLE IF NOT EXISTS catalog_plazos (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, valor TEXT NOT NULL UNIQUE, activo INTEGER DEFAULT 1 NOT NULL);
-        CREATE TABLE IF NOT EXISTS catalog_documentos (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, valor TEXT NOT NULL UNIQUE, activo INTEGER DEFAULT 1 NOT NULL);
-        CREATE TABLE IF NOT EXISTS catalog_cecos (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, valor TEXT NOT NULL UNIQUE, activo INTEGER DEFAULT 1 NOT NULL);
-        CREATE TABLE IF NOT EXISTS catalog_departamentos (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, valor TEXT NOT NULL UNIQUE, activo INTEGER DEFAULT 1 NOT NULL);
-        CREATE TABLE IF NOT EXISTS catalog_areas (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, valor TEXT NOT NULL UNIQUE, activo INTEGER DEFAULT 1 NOT NULL);
-        CREATE TABLE IF NOT EXISTS catalog_nombres (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, valor TEXT NOT NULL, activo INTEGER DEFAULT 1 NOT NULL);
-        CREATE TABLE IF NOT EXISTS user_roles (
-          id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
-          userId INTEGER NOT NULL,
-          roleId INTEGER NOT NULL,
-          assignedAt INTEGER DEFAULT (strftime('%s', 'now')) NOT NULL,
-          UNIQUE(userId, roleId)
-        );
-        CREATE TABLE IF NOT EXISTS sch_empleados (
-          id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
-          nombre TEXT NOT NULL,
-          apellido TEXT NOT NULL,
-          cargo TEXT,
-          activo INTEGER DEFAULT 1 NOT NULL,
-          createdAt INTEGER DEFAULT (strftime('%s', 'now')) NOT NULL,
-          updatedAt INTEGER DEFAULT (strftime('%s', 'now')) NOT NULL
-        );
-        CREATE TABLE IF NOT EXISTS sch_contratos (
-          id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
-          empleadoId INTEGER NOT NULL,
-          fechaInicio TEXT NOT NULL,
-          fechaFin TEXT,
-          horasDiarias REAL NOT NULL,
-          diasSemana TEXT NOT NULL,
-          tipoDistribucion TEXT DEFAULT 'normal' NOT NULL,
-          mismasHorasDiarias INTEGER DEFAULT 1 NOT NULL,
-          activo INTEGER DEFAULT 1 NOT NULL,
-          createdAt INTEGER DEFAULT (strftime('%s', 'now')) NOT NULL,
-          updatedAt INTEGER DEFAULT (strftime('%s', 'now')) NOT NULL
-        );
-        CREATE TABLE IF NOT EXISTS sch_bloques_horario (
-          id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
-          contratoId INTEGER NOT NULL,
-          diaSemana INTEGER NOT NULL,
-          horaInicio TEXT NOT NULL,
-          horaFin TEXT NOT NULL,
-          createdAt INTEGER DEFAULT (strftime('%s', 'now')) NOT NULL
-        );
-        CREATE TABLE IF NOT EXISTS expedientes (
-          id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
-          uuid TEXT NOT NULL UNIQUE,
-          codigo TEXT UNIQUE,
-          nombre TEXT NOT NULL,
-          creadorId INTEGER NOT NULL,
-          actaId INTEGER,
-          evaluacionId INTEGER,
-          status TEXT DEFAULT 'borrador' NOT NULL,
-          createdAt INTEGER DEFAULT (strftime('%s', 'now')) NOT NULL,
-          updatedAt INTEGER DEFAULT (strftime('%s', 'now')) NOT NULL
-        );
-        CREATE TABLE IF NOT EXISTS audit_log (
-          id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
-          userId INTEGER,
-          username TEXT NOT NULL,
-          action TEXT NOT NULL,
-          entity TEXT NOT NULL,
-          entityId INTEGER,
-          expedienteUuid TEXT,
-          expedienteCodigo TEXT,
-          changes TEXT,
-          ip TEXT,
-          createdAt INTEGER DEFAULT (strftime('%s', 'now')) NOT NULL
-        );
-      `);
-      console.log("[DB] Schema applied manually (fallback)");
+      ensureAllProjectTables(sqlite);
+      console.log("[DB] Schema applied manually (fallback via schemaBootstrap)");
     } catch (fallbackError) {
       console.error("[DB] Fallback schema creation also failed:", fallbackError);
     }
   }
 
-  ensureExpedientesTableAfterMigrate();
-  ensureAuditLogTableAfterMigrate();
+  try {
+    ensureAllProjectTables(sqlite);
+    console.log("[DB] All fixed tables ensured (schemaBootstrap)");
+  } catch (e: unknown) {
+    console.warn("[DB] schemaBootstrap after migrate:", e instanceof Error ? e.message : e);
+  }
 
   // Paso 2 (post-migración): garantizar columnas nuevas en BDs existentes
   // ALTER TABLE ADD COLUMN IF NOT EXISTS no existe en SQLite, usamos try/catch

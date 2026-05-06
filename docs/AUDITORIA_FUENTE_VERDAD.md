@@ -82,6 +82,7 @@ El CRUD de estas entidades core se importa directamente desde `db.ts` en `router
 | Doc | Propósito |
 |---|---|
 | **Este archivo** (`AUDITORIA_FUENTE_VERDAD.md`) | Estado actual del sistema: qué está centralizado y qué no |
+| `DATABASE_SCHEMA.md` | Panorama de tablas SQLite, bootstrap y cómo evolucionar el esquema sin BDs incompletas |
 | `WORKFLOW_DB_TS_DATASOURCE.md` | Guía de uso: cómo agregar nuevas funciones respetando el patrón |
 
-Ambos son complementarios, no redundantes. Leer primero la auditoría para entender el estado, luego el workflow para saber cómo extenderlo.
+Son complementarios. Para cambios de BD, leer primero `DATABASE_SCHEMA.md`.
