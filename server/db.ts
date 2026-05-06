@@ -411,6 +411,32 @@ function autoMigrateUsersSchemaIfNeeded(): void {
   }
 }
 
+/**
+ * Si migrate() marcó migraciones aplicadas pero la tabla no existe (estado inconsistente),
+ * evita fallos en backfill y CRUD de expedientes. Alineado con drizzle/schema expedientes.
+ */
+function ensureExpedientesTableAfterMigrate(): void {
+  try {
+    sqlite.exec(`
+      CREATE TABLE IF NOT EXISTS expedientes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+        uuid TEXT NOT NULL UNIQUE,
+        codigo TEXT UNIQUE,
+        nombre TEXT NOT NULL,
+        creadorId INTEGER NOT NULL,
+        actaId INTEGER,
+        evaluacionId INTEGER,
+        status TEXT DEFAULT 'borrador' NOT NULL,
+        createdAt INTEGER DEFAULT (strftime('%s', 'now')) NOT NULL,
+        updatedAt INTEGER DEFAULT (strftime('%s', 'now')) NOT NULL
+      )
+    `);
+    console.log("[DB] Table expedientes ensured");
+  } catch (e: unknown) {
+    console.warn("[DB] Could not ensure expedientes table:", e instanceof Error ? e.message : e);
+  }
+}
+
 export async function runMigrations() {
   // Paso 0: Migrar schema viejo automáticamente si es necesario (idempotente)
   autoMigrateUsersSchemaIfNeeded();
@@ -565,6 +591,8 @@ export async function runMigrations() {
       console.error("[DB] Fallback schema creation also failed:", fallbackError);
     }
   }
+
+  ensureExpedientesTableAfterMigrate();
 
   // Paso 2 (post-migración): garantizar columnas nuevas en BDs existentes
   // ALTER TABLE ADD COLUMN IF NOT EXISTS no existe en SQLite, usamos try/catch

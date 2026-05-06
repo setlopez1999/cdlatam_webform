@@ -1,23 +1,29 @@
 # Auditoría de Arquitectura: Fuente de Verdad y Flujo de Peticiones
 
-> **Última actualización:** Abril 2026  
+> **Última actualización:** Mayo 2026  
 > Este documento refleja el estado **actual** del código. Las inconsistencias listadas anteriormente (catálogos dinámicos directos a `db.ts`) ya fueron corregidas.
 
 ## 1. Arquitectura General y Flujo de Peticiones
 
 El proyecto usa una arquitectura cliente-servidor basada en **React + tRPC** en el frontend y **Express + tRPC + Drizzle ORM + SQLite** en el backend.
 
-Flujo de una petición típica:
+`server/routers.ts` no delega todo en un solo módulo: según el dominio, la petición sigue **una de estas ramas** (cada una es la “fuente de verdad” de su capa):
 
 ```
 Cliente (React)
-  → hook/componente llama a trpc.<router>.<procedure>
-  → tRPC router en server/routers.ts
-  → delega a dataSource.ts (prefijo ds_)
-  → dataSource.ts decide:
-      USE_API=false → db.ts (SQLite local gestion.db)
-      USE_API=true  → fetch a API_URL externa
+  → trpc.<router>.<procedure>
+  → server/routers.ts
+      ├─ Catálogos, usuarios, roles (prefijo ds_)
+      │     → dataSource.ts → USE_API ? API_URL : db.ts
+      │
+      ├─ Cláusulas legales (prefijo ds_ en dataSource-clausulas.ts)
+      │     → db-clausulas.ts (SQLite; preparado para API futura)
+      │
+      └─ Actas, evaluaciones, expedientes, horarios, audit log, búsqueda
+            → db.ts (gestion.db, siempre local)
 ```
+
+Migraciones SQLite: una sola cadena en `drizzle/migrations` registrada en `meta/_journal.json` (incl. 0007 cláusulas, 0008 índices audit) + `runMigrations()` en `server/db.ts` con pasos idempotentes.
 
 ## 2. Centralización de la Fuente de Verdad
 
@@ -31,6 +37,8 @@ Cliente (React)
 | Roles | `ds_getRoles`, `ds_createRole`, `ds_updateRole`, etc. |
 | Credenciales | `ds_updateUserCredentials` |
 | Resumen de catálogos (allCounts) | `ds_allCounts` |
+
+| Cláusulas legales (PDFs) | `ds_*` en [`server/dataSource-clausulas.ts`](../server/dataSource-clausulas.ts) → [`server/db-clausulas.ts`](../server/db-clausulas.ts) |
 
 > **Nota:** Las operaciones DDL de tablas dinámicas (`ds_createCatalogTable`, `ds_deleteCatalogTable`) son siempre SQLite-only porque son operaciones de estructura, no de datos.
 

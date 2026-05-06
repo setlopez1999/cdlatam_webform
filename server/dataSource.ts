@@ -6,6 +6,8 @@
  * USE_API=true            → fetch a API_URL externa
  *
  * La API externa debe devolver el mismo shape que SQLite.
+ *
+ * Cláusulas legales: ver dataSource-clausulas.ts (mismo patrón ds_*, capa aparte).
  */
 
 import {
