@@ -4,7 +4,7 @@
 
 ## Estado de cada tarea
 
-- [ ] **fix-delete-transaction** — Quitar/sustituir `db.transaction(async ...)` en `deleteExpedienteCascadeByUuid` (`server/db.ts`)
+- [x] **fix-delete-transaction** — Quitar/sustituir `db.transaction(async ...)` en `deleteExpedienteCascadeByUuid` (`server/db.ts`)
 - [ ] **db-listar-admin** — `listExpedientesAdminRows` con `leftJoin(users)` + procedure `expediente.listarAdmin` con `requireRole("admin")`
 - [ ] **ui-expedientes-admin** — Permisos `/expedientes-admin` + `App.tsx` + `AppLayout` + página `ExpedientesAdmin` con tabla y acciones
 - [ ] **deps-pdf** — Instalar dependencias `pdf-lib`, `jspdf` y `jspdf-autotable`

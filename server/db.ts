@@ -842,15 +842,22 @@ export async function upsertResultadoExpediente(data: {
   return getResultadoByExpedienteUuid(data.expedienteUuid);
 }
 
-/** Elimina expediente y todos los hijos vinculados por expedienteUuid (transacción). */
+/**
+ * Elimina expediente y todos los hijos vinculados por expedienteUuid.
+ *
+ * Orden importante: hijos antes que padre, para que una interrupción no
+ * deje al expediente colgando con referencias rotas. No se usa
+ * `db.transaction(async ...)` porque el driver `better-sqlite3` exige un
+ * callback síncrono y rechaza Promises ("Transaction function cannot
+ * return a promise"). Mantener `await db.delete(...)` secuenciales hace
+ * el código portable a `mysql2`/`postgres-js`/`libsql` sin cambios.
+ */
 export async function deleteExpedienteCascadeByUuid(uuid: string) {
   const db = await getDb();
-  await db.transaction(async (tx) => {
-    await tx.delete(resultadosExpediente).where(eq(resultadosExpediente.expedienteUuid, uuid));
-    await tx.delete(evaluaciones).where(eq(evaluaciones.expedienteUuid, uuid));
-    await tx.delete(actas).where(eq(actas.expedienteUuid, uuid));
-    await tx.delete(expedientes).where(eq(expedientes.uuid, uuid));
-  });
+  await db.delete(resultadosExpediente).where(eq(resultadosExpediente.expedienteUuid, uuid));
+  await db.delete(evaluaciones).where(eq(evaluaciones.expedienteUuid, uuid));
+  await db.delete(actas).where(eq(actas.expedienteUuid, uuid));
+  await db.delete(expedientes).where(eq(expedientes.uuid, uuid));
 }
 
 export async function searchRegistros(userId: number, query: string) {
