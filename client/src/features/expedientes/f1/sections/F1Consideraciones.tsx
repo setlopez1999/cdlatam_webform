@@ -12,7 +12,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { FormSection } from "@/components/FormSection";
 import { ClipboardList, Plus, Trash2, Lock, ShieldOff, FileText, ExternalLink, Loader2 } from "lucide-react";
 import type { F1Data } from "../../types";
-import { useClausulasVigentes } from "../useClausulasVigentes";
+import type { ClausulasVigentesState } from "../useClausulasVigentes";
 
 // Consideraciones fijas — no editables desde la UI
 const CONSIDERACIONES_FIJAS = [
@@ -27,20 +27,18 @@ const CONSIDERACIONES_FIJAS = [
 interface Props {
   data: F1Data;
   onUpdate: (partial: Partial<F1Data>) => void;
+  /** Fuente única desde F1Form (mismo estado que el PDF). */
+  clausulasAuto: ClausulasVigentesState;
   /** Si true, oculta el contenido sensible y muestra un placeholder de acceso restringido */
   restricted?: boolean;
 }
 
-export function F1Consideraciones({ data, onUpdate, restricted = false }: Props) {
+export function F1Consideraciones({ data, onUpdate, clausulasAuto, restricted = false }: Props) {
   const [nuevoItem, setNuevoItem] = useState("");
 
   const personalizadas = data.consideracionesPersonalizadas ?? [];
 
-  // Cláusulas legales auto: derivadas de las unidades de negocio en
-  // serviciosContratados. Estas son las que se anexarán al PDF al exportar.
-  const { clausulas, isLoading: clausulasLoading, hasUnidades } = useClausulasVigentes(
-    data.serviciosContratados,
-  );
+  const { clausulas, isLoading: clausulasLoading, hasUnidades } = clausulasAuto;
 
   const agregarItem = () => {
     const texto = nuevoItem.trim();

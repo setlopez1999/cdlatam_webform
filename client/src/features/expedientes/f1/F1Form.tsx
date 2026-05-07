@@ -36,7 +36,8 @@ import {
   F1Consideraciones,
   F1Firmas,
 } from "./sections";
-import { reconcileFormasPagoDesdeServicios } from "./reconcileFormasPago";
+import { reconcileFormasPagoDesdeServicios, formasReconcilePatchOrNull } from "./reconcileFormasPago";
+import { createFourCuotasEmpty } from "./f1CuotasDefaults";
 
 // ─── Campos requeridos ────────────────────────────────────────────────────────
 
@@ -51,6 +52,12 @@ const REQUIRED_FIELDS = [
   { key: "moneda"      as const, label: "Moneda",          anchor: "f1-moneda" },
 ];
 
+const STATUS_BADGE_MAP = {
+  nuevo:       { label: "Nuevo",       className: "bg-slate-50 text-slate-600 border-slate-200" },
+  sin_guardar: { label: "Sin guardar", className: "bg-amber-50 text-amber-700 border-amber-200" },
+  guardado:    { label: "Guardado",    className: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+} as const;
+
 // ─── Helpers de creación de filas ─────────────────────────────────────────────
 
 function createServicio(item: number): ServicioContratado {
@@ -61,15 +68,9 @@ function createServicio(item: number): ServicioContratado {
 }
 
 function createFormaPago(item: number) {
-  const emptyCuota = { monto: 0, fecha: "" };
   return {
     id: nanoid(), item, tipoVenta: "", nCuotas: 1,
-    cuotas: [
-      { ...emptyCuota }, // Cuota 1
-      { ...emptyCuota }, // Cuota 2
-      { ...emptyCuota }, // Cuota 3
-      { ...emptyCuota }, // Cuota 4
-    ],
+    cuotas: createFourCuotasEmpty(),
   };
 }
 
@@ -85,11 +86,35 @@ export default function F1Form({ expedienteId }: Props) {
   const { canViewSensitiveFields } = useFieldVisibility(undefined);
   const { data: catalogs } = trpc.catalogs.getAll.useQuery();
 
-  // Cláusulas legales que se anexarán al PDF al exportar. Es la misma fuente
-  // que muestra F1Consideraciones — un solo hook para evitar divergencias.
-  const { clausulas: clausulasParaPdf, isLoading: clausulasLoading } = useClausulasVigentes(
-    data?.serviciosContratados,
+  const catalogsEncabezado = useMemo(
+    () => ({ sres: catalogs?.empresas as any, atencion: catalogs?.nombres as any }),
+    [catalogs],
   );
+  const catalogsEmpresa = useMemo(
+    () => ({
+      documentoIdentidad: catalogs?.documentoIdentidad as any,
+      monedas: catalogs?.monedas as any,
+      paises: catalogs?.paises as any,
+    }),
+    [catalogs],
+  );
+  const catalogsServicios = useMemo(
+    () => ({
+      unidadesNegocio: catalogs?.unidadesNegocio as any,
+      soluciones: catalogs?.soluciones as any,
+      detalleServicio: catalogs?.detalleServicio as any,
+      tipoVenta: catalogs?.tipoVenta as any,
+      plazos: catalogs?.plazos as any,
+    }),
+    [catalogs],
+  );
+  const catalogsFormasPago = useMemo(
+    () => ({ tipoVenta: catalogs?.tipoVenta as any }),
+    [catalogs],
+  );
+
+  const clausulasVigentes = useClausulasVigentes(data?.serviciosContratados, catalogs);
+  const { clausulas: clausulasParaPdf, isLoading: clausulasLoading } = clausulasVigentes;
 
   // Bloqueo de navegación cuando hay cambios sin guardar.
   // Activa beforeunload (cerrar tab/F5) y modal en navegación SPA.
@@ -127,14 +152,9 @@ export default function F1Form({ expedienteId }: Props) {
   useEffect(() => {
     const d = dataRef.current;
     if (!d) return;
-    const rec = reconcileFormasPagoDesdeServicios(d);
-    if (
-      JSON.stringify(rec.formasPagoImplementacion) === JSON.stringify(d.formasPagoImplementacion) &&
-      JSON.stringify(rec.formasPagoMantencion) === JSON.stringify(d.formasPagoMantencion)
-    ) {
-      return;
-    }
-    update({ ...rec });
+    const patch = formasReconcilePatchOrNull(d);
+    if (!patch) return;
+    update(patch);
   }, [expedienteId, serviciosSyncKey, update]);
 
   const serviciosRows = data?.serviciosContratados ?? [];
@@ -310,11 +330,7 @@ export default function F1Form({ expedienteId }: Props) {
 
   if (!data) return <div className="p-6 text-muted-foreground">Expediente no encontrado.</div>;
 
-  const statusBadge = {
-    nuevo:       { label: "Nuevo",       className: "bg-slate-50 text-slate-600 border-slate-200" },
-    sin_guardar: { label: "Sin guardar", className: "bg-amber-50 text-amber-700 border-amber-200" },
-    guardado:    { label: "Guardado",    className: "bg-emerald-50 text-emerald-700 border-emerald-200" },
-  }[status];
+  const statusBadge = STATUS_BADGE_MAP[status];
 
   // ── Render ─────────────────────────────────────────────────────────────────
 
@@ -353,16 +369,12 @@ export default function F1Form({ expedienteId }: Props) {
 
       <F1Encabezado
         data={data} onUpdate={update}
-        catalogs={{ sres: catalogs?.empresas as any, atencion: catalogs?.nombres as any }}
+        catalogs={catalogsEncabezado}
       />
 
       <F1Empresa
         data={data} onUpdate={update}
-        catalogs={{
-          documentoIdentidad: catalogs?.documentoIdentidad as any,
-          monedas: catalogs?.monedas as any,
-          paises: catalogs?.paises as any,
-        }}
+        catalogs={catalogsEmpresa}
       />
 
       <F1Contactos data={data} onUpdate={update} />
@@ -370,13 +382,7 @@ export default function F1Form({ expedienteId }: Props) {
       <F1Servicios
         servicios={data.serviciosContratados}
         moneda={data.moneda}
-        catalogs={{
-          unidadesNegocio: catalogs?.unidadesNegocio as any,
-          soluciones: catalogs?.soluciones as any,
-          detalleServicio: catalogs?.detalleServicio as any,
-          tipoVenta: catalogs?.tipoVenta as any,
-          plazos: catalogs?.plazos as any,
-        }}
+        catalogs={catalogsServicios}
         onAdd={addServicio}
         onRemove={removeServicio}
         onUpdate={updateServicio}
@@ -386,14 +392,19 @@ export default function F1Form({ expedienteId }: Props) {
       <F1FormasPago
         data={data}
         moneda={data.moneda}
-        catalogs={{ tipoVenta: catalogs?.tipoVenta as any }}
+        catalogs={catalogsFormasPago}
         onUpdate={updateFormaPago}
         onAdd={addFormaPago}
         onRemove={removeFormaPago}
         restricted={!canViewSensitiveFields}
       />
 
-      <F1Consideraciones data={data} onUpdate={update} restricted={!canViewSensitiveFields} />
+      <F1Consideraciones
+        data={data}
+        onUpdate={update}
+        clausulasAuto={clausulasVigentes}
+        restricted={!canViewSensitiveFields}
+      />
 
       <F1Firmas data={data} onUpdate={update} />
 

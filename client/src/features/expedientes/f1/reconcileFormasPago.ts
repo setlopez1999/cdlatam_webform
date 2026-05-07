@@ -5,11 +5,11 @@
  */
 import { nanoid } from "nanoid";
 import type { F1Data, FormaPago, ServicioContratado } from "../types";
+import { createFourCuotasEmpty } from "./f1CuotasDefaults";
 import { isTipoImplementacion, isTipoMantencion } from "./f1TipoVenta";
 
-function emptyCuotas(): FormaPago["cuotas"] {
-  const empty = { monto: 0, fecha: "" };
-  return [{ ...empty }, { ...empty }, { ...empty }, { ...empty }];
+export function formasPagoListsEqual(a: FormaPago[], b: FormaPago[]): boolean {
+  return JSON.stringify(a) === JSON.stringify(b);
 }
 
 /** Busca una fila enlazada en cualquiera de las dos tablas (p. ej. al cambiar Impl ↔ Mant). */
@@ -22,7 +22,7 @@ export function findLinkedFormaPago(data: F1Data, servicioId: string): FormaPago
 
 /** Primera creación de fila para un servicio Impl/Mant. */
 function seedLinkedFormaPago(servicio: ServicioContratado, item: number): FormaPago {
-  const cuotas = emptyCuotas();
+  const cuotas = createFourCuotasEmpty();
   cuotas[0] = { monto: servicio.total ?? 0, fecha: "" };
   return {
     id: nanoid(),
@@ -72,4 +72,20 @@ export function reconcileFormasPagoDesdeServicios(
     formasPagoImplementacion: [...linkedImpl, ...manualImpl],
     formasPagoMantencion: [...linkedMant, ...manualMant],
   };
+}
+
+/**
+ * Una sola reconciliación: si no hay cambios respecto al estado actual, devuelve null.
+ */
+export function formasReconcilePatchOrNull(
+  data: F1Data,
+): Pick<F1Data, "formasPagoImplementacion" | "formasPagoMantencion"> | null {
+  const rec = reconcileFormasPagoDesdeServicios(data);
+  if (
+    formasPagoListsEqual(rec.formasPagoImplementacion, data.formasPagoImplementacion) &&
+    formasPagoListsEqual(rec.formasPagoMantencion, data.formasPagoMantencion)
+  ) {
+    return null;
+  }
+  return rec;
 }

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { reconcileFormasPagoDesdeServicios } from "./reconcileFormasPago";
+import { reconcileFormasPagoDesdeServicios, formasReconcilePatchOrNull } from "./reconcileFormasPago";
 import type { F1Data, FormaPago, ServicioContratado } from "../types";
 import { F1_INITIAL } from "../types";
 
@@ -109,5 +109,21 @@ describe("reconcileFormasPagoDesdeServicios", () => {
     const row = r.formasPagoMantencion.find(p => p.id === "fp1");
     expect(row?.cuotas[0].monto).toBe(50);
     expect(row?.nCuotas).toBe(2);
+  });
+
+  it("formasReconcilePatchOrNull es null si no hay nada que cambiar", () => {
+    const base: F1Data = {
+      ...F1_INITIAL,
+      serviciosContratados: [
+        svc({
+          id: "s1",
+          tipoVenta: "implementacion",
+          total: 100,
+        }),
+      ],
+    };
+    const rec = reconcileFormasPagoDesdeServicios(base);
+    const aligned: F1Data = { ...base, ...rec };
+    expect(formasReconcilePatchOrNull(aligned)).toBeNull();
   });
 });

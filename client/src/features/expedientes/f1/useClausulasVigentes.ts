@@ -15,8 +15,8 @@
  *   4. Deduplica los resultados por `clausula.id` (una cláusula podría estar
  *      asignada a varias unidades en el futuro).
  *
- * Mantener este cálculo en un único hook evita divergencias entre lo que el
- * usuario ve en pantalla y lo que termina anexado al PDF.
+ * Si pasas `catalogs` desde el padre (p. ej. mismo resultado que `catalogs.getAll`),
+ * no se suscribe a una segunda query de catálogos en este hook.
  */
 import { useMemo } from "react";
 import { trpc } from "@/lib/trpc";
@@ -30,12 +30,33 @@ export interface ClausulaVigente {
   unidadNegocioId: number | null;
 }
 
-export function useClausulasVigentes(servicios: ServicioContratado[] | undefined) {
-  const { data: catalogs } = trpc.catalogs.getAll.useQuery();
+/** Fragmento mínimo del catálogo necesario para resolver unidades de negocio. */
+export type CatalogsUnidadesSlice = {
+  unidadesNegocio?: ReadonlyArray<{ value: string; id?: number }>;
+};
+
+/** Estado expuesto para pasar a F1Consideraciones sin duplicar el hook. */
+export interface ClausulasVigentesState {
+  clausulas: ClausulaVigente[];
+  isLoading: boolean;
+  hasUnidades: boolean;
+}
+
+export function useClausulasVigentes(
+  servicios: ServicioContratado[] | undefined,
+  /** Si viene del padre (p. ej. `useQuery` de getAll), evita otra query aquí. */
+  catalogs?: CatalogsUnidadesSlice | null,
+): ClausulasVigentesState {
+  const fallbackCatalogs = trpc.catalogs.getAll.useQuery(undefined, {
+    enabled: catalogs === undefined,
+  });
+
+  const catalogsResolved = catalogs ?? fallbackCatalogs.data;
 
   const unidadNegocioIds = useMemo<number[]>(() => {
     if (!servicios?.length) return [];
-    const unidades = (catalogs?.unidadesNegocio as Array<{ value: string; id?: number }> | undefined) ?? [];
+    const unidades =
+      (catalogsResolved?.unidadesNegocio as Array<{ value: string; id?: number }> | undefined) ?? [];
     const byValue = new Map<string, number>();
     for (const u of unidades) {
       if (typeof u.id === "number") byValue.set(u.value, u.id);
@@ -47,7 +68,7 @@ export function useClausulasVigentes(servicios: ServicioContratado[] | undefined
       if (typeof id === "number") ids.add(id);
     }
     return Array.from(ids);
-  }, [servicios, catalogs]);
+  }, [servicios, catalogsResolved]);
 
   const query = trpc.clausulas.getByUnidades.useQuery(
     { unidadNegocioIds },
