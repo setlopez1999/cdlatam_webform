@@ -11,7 +11,7 @@
  *
  * Para conectar con tRPC en el futuro, modificar solo guardar() en useF1.ts.
  */
-import { useCallback } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -25,7 +25,7 @@ import { useFieldVisibility } from "@/hooks/useFieldVisibility";
 import { useNavGuard } from "@/hooks/useNavGuard";
 import { UnsavedChangesDialog } from "@/components/UnsavedChangesDialog";
 import { F1_INITIAL } from "../types";
-import type { ServicioContratado } from "../types";
+import type { F1Data, ServicioContratado } from "../types";
 import { nanoid } from "nanoid";
 import {
   F1Encabezado,
@@ -36,6 +36,7 @@ import {
   F1Consideraciones,
   F1Firmas,
 } from "./sections";
+import { reconcileFormasPagoDesdeServicios } from "./reconcileFormasPago";
 
 // ─── Campos requeridos ────────────────────────────────────────────────────────
 
@@ -96,39 +97,75 @@ export default function F1Form({ expedienteId }: Props) {
     when: status === "sin_guardar",
   });
 
-  if (!data) return <div className="p-6 text-muted-foreground">Expediente no encontrado.</div>;
+  const dataRef = useRef(data);
+  dataRef.current = data;
 
-  // ── Badge de estado ────────────────────────────────────────────────────────
+  const applyWithReconcile = useCallback(
+    (partial: Partial<F1Data>) => {
+      const base = dataRef.current;
+      if (!base) return;
+      const merged = { ...base, ...partial } as F1Data;
+      const rec = reconcileFormasPagoDesdeServicios(merged);
+      update({ ...partial, ...rec });
+    },
+    [update],
+  );
 
-  const statusBadge = {
-    nuevo:       { label: "Nuevo",       className: "bg-slate-50 text-slate-600 border-slate-200" },
-    sin_guardar: { label: "Sin guardar", className: "bg-amber-50 text-amber-700 border-amber-200" },
-    guardado:    { label: "Guardado",    className: "bg-emerald-50 text-emerald-700 border-emerald-200" },
-  }[status];
+  const serviciosSyncKey = useMemo(
+    () =>
+      JSON.stringify(
+        (data?.serviciosContratados ?? []).map(s => ({
+          id: s.id,
+          tipoVenta: s.tipoVenta,
+          total: s.total,
+        })),
+      ),
+    [data?.serviciosContratados],
+  );
 
-  // ── Servicios ──────────────────────────────────────────────────────────────
+  /** Hidrata formas enlazadas al cargar expediente o si faltan filas respecto a servicios Impl/Mant. */
+  useEffect(() => {
+    const d = dataRef.current;
+    if (!d) return;
+    const rec = reconcileFormasPagoDesdeServicios(d);
+    if (
+      JSON.stringify(rec.formasPagoImplementacion) === JSON.stringify(d.formasPagoImplementacion) &&
+      JSON.stringify(rec.formasPagoMantencion) === JSON.stringify(d.formasPagoMantencion)
+    ) {
+      return;
+    }
+    update({ ...rec });
+  }, [expedienteId, serviciosSyncKey, update]);
+
+  const serviciosRows = data?.serviciosContratados ?? [];
 
   const addServicio = useCallback(() => {
-    const item = data.serviciosContratados.length + 1;
-    update({ serviciosContratados: [...data.serviciosContratados, createServicio(item)] });
-  }, [data.serviciosContratados, update]);
+    const item = serviciosRows.length + 1;
+    applyWithReconcile({ serviciosContratados: [...serviciosRows, createServicio(item)] });
+  }, [serviciosRows, applyWithReconcile]);
 
-  const removeServicio = useCallback((id: string) => {
-    update({ serviciosContratados: data.serviciosContratados.filter(s => s.id !== id) });
-  }, [data.serviciosContratados, update]);
+  const removeServicio = useCallback(
+    (id: string) => {
+      applyWithReconcile({ serviciosContratados: serviciosRows.filter(s => s.id !== id) });
+    },
+    [serviciosRows, applyWithReconcile],
+  );
 
-  const updateServicio = useCallback((id: string, field: keyof ServicioContratado, value: string | number) => {
-    update({
-      serviciosContratados: data.serviciosContratados.map(s => {
-        if (s.id !== id) return s;
-        const updated = { ...s, [field]: value };
-        if (field === "precioUnitario" || field === "cantidad") {
-          updated.total = updated.precioUnitario * updated.cantidad;
-        }
-        return updated;
-      }),
-    });
-  }, [data.serviciosContratados, update]);
+  const updateServicio = useCallback(
+    (id: string, field: keyof ServicioContratado, value: string | number) => {
+      applyWithReconcile({
+        serviciosContratados: serviciosRows.map(s => {
+          if (s.id !== id) return s;
+          const updated = { ...s, [field]: value };
+          if (field === "precioUnitario" || field === "cantidad") {
+            updated.total = updated.precioUnitario * updated.cantidad;
+          }
+          return updated;
+        }),
+      });
+    },
+    [serviciosRows, applyWithReconcile],
+  );
 
   // ── Formas de Pago ─────────────────────────────────────────────────────────
 
@@ -138,6 +175,7 @@ export default function F1Form({ expedienteId }: Props) {
     field: string,
     value: string | number
   ) => {
+    if (!data) return;
     const list = data[tipo];
     update({
       [tipo]: list.map(fp => {
@@ -165,11 +203,13 @@ export default function F1Form({ expedienteId }: Props) {
   }, [data, update]);
 
   const addFormaPago = useCallback((tipo: "formasPagoImplementacion" | "formasPagoMantencion") => {
+    if (!data) return;
     const list = data[tipo];
     update({ [tipo]: [...list, createFormaPago(list.length + 1)] });
   }, [data, update]);
 
   const removeFormaPago = useCallback((tipo: "formasPagoImplementacion" | "formasPagoMantencion", id: string) => {
+    if (!data) return;
     update({ [tipo]: data[tipo].filter(fp => fp.id !== id) });
   }, [data, update]);
 
@@ -180,6 +220,7 @@ export default function F1Form({ expedienteId }: Props) {
    * Devuelve true si pasa la validación.
    */
   const validate = useCallback((): boolean => {
+    if (!data) return false;
     for (const req of REQUIRED_FIELDS) {
       const val = data[req.key];
       if (!val || (typeof val === "string" && val.trim() === "")) {
@@ -266,6 +307,14 @@ export default function F1Form({ expedienteId }: Props) {
       toast.error("Error al exportar PDF", { id: "pdf-f1" });
     }
   }, [data, clausulasParaPdf]);
+
+  if (!data) return <div className="p-6 text-muted-foreground">Expediente no encontrado.</div>;
+
+  const statusBadge = {
+    nuevo:       { label: "Nuevo",       className: "bg-slate-50 text-slate-600 border-slate-200" },
+    sin_guardar: { label: "Sin guardar", className: "bg-amber-50 text-amber-700 border-amber-200" },
+    guardado:    { label: "Guardado",    className: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+  }[status];
 
   // ── Render ─────────────────────────────────────────────────────────────────
 

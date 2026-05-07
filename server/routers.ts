@@ -106,6 +106,7 @@ const CuotaPagoSchema = z.object({
 const FormaPagoSchema = z.object({
   id: z.string().optional(),   // nanoid del frontend
   item: z.number().optional(), // número de ítem (backend legacy)
+  linkedServicioId: z.string().optional(),
   tipoVenta: z.string(),
   nCuotas: z.number().min(1).max(36),
   cuotas: z.array(CuotaPagoSchema),

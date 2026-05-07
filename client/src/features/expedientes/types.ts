@@ -44,6 +44,8 @@ export interface CuotaPago {
 export interface FormaPago {
   id: string;
   item: number;
+  /** Si existe, la fila se sincroniza con el servicio del mismo id (monto / nCuotas). */
+  linkedServicioId?: string;
   tipoVenta: string;
   nCuotas: number;
   cuotas: CuotaPago[]; // Arreglo dinámico de 1 a 4 cuotas

@@ -7,13 +7,16 @@
  *         según los tipos de venta presentes en serviciosContratados.
  * Obs. 10: El campo Fecha de cada cuota tiene la opción "Contra entrega" además de fecha.
  */
+import { Fragment } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { FormSection, FieldGroup } from "@/components/FormSection";
+import { FormSection } from "@/components/FormSection";
+import { Badge } from "@/components/ui/badge";
 import { CreditCard, Plus, Trash2, ShieldOff } from "lucide-react";
 import type { F1Data, FormaPago } from "../../types";
 import { formatCurrency, getCurrencyCode, parseNumeric } from "@/lib/formatters";
+import { isTipoImplementacion, isTipoMantencion } from "../f1TipoVenta";
 
 interface CatalogItem { value: string; label: string; }
 interface Catalogs {
@@ -153,7 +156,11 @@ function PagoTable({
                 {/* Tipo Venta */}
                 <td className="border-b border-r border-border/40 px-1 py-0.5 min-w-[130px]">
                   {catalogs?.tipoVenta && catalogs.tipoVenta.length > 0 ? (
-                    <Select value={pago.tipoVenta} onValueChange={v => onUpdate(tipo, pago.id, "tipoVenta", v)}>
+                    <Select
+                      value={pago.tipoVenta}
+                      onValueChange={v => onUpdate(tipo, pago.id, "tipoVenta", v)}
+                      disabled={!!pago.linkedServicioId}
+                    >
                       <SelectTrigger className="h-7 text-xs border-0 bg-transparent focus:ring-0 max-w-full overflow-hidden">
                         <SelectValue placeholder="Tipo..." className="truncate" />
                       </SelectTrigger>
@@ -166,6 +173,7 @@ function PagoTable({
                   ) : (
                     <Input className="h-7 text-xs border-0 bg-transparent focus-visible:ring-0"
                       placeholder="Tipo venta" value={pago.tipoVenta}
+                      disabled={!!pago.linkedServicioId}
                       onChange={e => onUpdate(tipo, pago.id, "tipoVenta", e.target.value)} />
                   )}
                 </td>
@@ -175,6 +183,7 @@ function PagoTable({
                   <Input type="number" min={1} max={4}
                     className="h-7 text-xs text-center border-0 bg-transparent focus-visible:ring-0 font-medium text-blue-400"
                     value={pago.nCuotas}
+                    disabled={!!pago.linkedServicioId}
                     onChange={e => onUpdate(tipo, pago.id, "nCuotas", e.target.value)} />
                 </td>
 
@@ -184,7 +193,7 @@ function PagoTable({
                   return (
                     <Fragment key={i}>
                       <td className={`border-b border-r border-border/40 px-1 py-0.5 min-w-[90px] ${!isEnabled ? "bg-muted/30" : ""}`}>
-                        <Input type="number" min={0} disabled={!isEnabled}
+                        <Input type="number" min={0} disabled={!isEnabled || !!pago.linkedServicioId}
                           className={`h-7 text-xs text-right border-0 bg-transparent focus-visible:ring-0 min-w-[72px] ${!isEnabled ? "opacity-30" : ""}`}
                           placeholder="0" value={pago.cuotas?.[i]?.monto || ""}
                           onChange={e => onUpdate(tipo, pago.id, `cuotas.${i}.monto`, parseNumeric(e.target.value))} />
@@ -205,11 +214,13 @@ function PagoTable({
 
                 {onRemove && (
                   <td className="border-b border-l border-border/40 px-1 py-0.5 text-center">
-                    <Button type="button" variant="ghost" size="icon"
-                      className="h-6 w-6 text-destructive/60 hover:text-destructive"
-                      onClick={() => onRemove(tipo, pago.id)}>
-                      <Trash2 className="w-3 h-3" />
-                    </Button>
+                    {!pago.linkedServicioId ? (
+                      <Button type="button" variant="ghost" size="icon"
+                        className="h-6 w-6 text-destructive/60 hover:text-destructive"
+                        onClick={() => onRemove(tipo, pago.id)}>
+                        <Trash2 className="w-3 h-3" />
+                      </Button>
+                    ) : null}
                   </td>
                 )}
               </tr>
@@ -237,33 +248,18 @@ function PagoTable({
 
 // ─── Componente principal ─────────────────────────────────────────────────────
 
-// Valores de tipoVenta que activan cada tabla (case-insensitive match parcial)
-const IMPLEMENTACION_KEYWORDS = ["implementacion", "implementación", "impl"];
-const MANTENCION_KEYWORDS     = ["mantencion", "mantención", "mant", "mantención"];
-
-function matchesKeywords(value: string, keywords: string[]): boolean {
-  const v = (value || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-  return keywords.some(k => v.includes(k));
-}
-
-import { Fragment } from "react";
-import { Badge } from "@/components/ui/badge";
-
 export function F1FormasPago({ data, catalogs, moneda, onUpdate, onAdd, onRemove, restricted = false }: Props) {
   const currencyCode = getCurrencyCode(moneda ?? "");
 
-  // Detectar qué tipos de venta están presentes en serviciosContratados
-  const tiposPresentes = data.serviciosContratados.map(s => s.tipoVenta);
-  const tieneImplementacion = tiposPresentes.some(t => matchesKeywords(t, IMPLEMENTACION_KEYWORDS));
-  const tieneMantencion     = tiposPresentes.some(t => matchesKeywords(t, MANTENCION_KEYWORDS));
+  const tieneImplementacion = data.serviciosContratados.some(s => isTipoImplementacion(s.tipoVenta));
+  const tieneMantencion = data.serviciosContratados.some(s => isTipoMantencion(s.tipoVenta));
 
-  // Cálculo de montos totales de servicios para validación
   const totalReferenciaImpl = data.serviciosContratados
-    .filter(s => matchesKeywords(s.tipoVenta, IMPLEMENTACION_KEYWORDS))
+    .filter(s => isTipoImplementacion(s.tipoVenta))
     .reduce((sum, s) => sum + (s.total || 0), 0);
 
   const totalReferenciaMant = data.serviciosContratados
-    .filter(s => matchesKeywords(s.tipoVenta, MANTENCION_KEYWORDS))
+    .filter(s => isTipoMantencion(s.tipoVenta))
     .reduce((sum, s) => sum + (s.total || 0), 0);
 
   const mostrarAlguna = tieneImplementacion || tieneMantencion;
