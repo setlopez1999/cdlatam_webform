@@ -159,7 +159,6 @@ function PagoTable({
                     <Select
                       value={pago.tipoVenta}
                       onValueChange={v => onUpdate(tipo, pago.id, "tipoVenta", v)}
-                      disabled={!!pago.linkedServicioId}
                     >
                       <SelectTrigger className="h-7 text-xs border-0 bg-transparent focus:ring-0 max-w-full overflow-hidden">
                         <SelectValue placeholder="Tipo..." className="truncate" />
@@ -173,7 +172,6 @@ function PagoTable({
                   ) : (
                     <Input className="h-7 text-xs border-0 bg-transparent focus-visible:ring-0"
                       placeholder="Tipo venta" value={pago.tipoVenta}
-                      disabled={!!pago.linkedServicioId}
                       onChange={e => onUpdate(tipo, pago.id, "tipoVenta", e.target.value)} />
                   )}
                 </td>
@@ -183,7 +181,6 @@ function PagoTable({
                   <Input type="number" min={1} max={4}
                     className="h-7 text-xs text-center border-0 bg-transparent focus-visible:ring-0 font-medium text-blue-400"
                     value={pago.nCuotas}
-                    disabled={!!pago.linkedServicioId}
                     onChange={e => onUpdate(tipo, pago.id, "nCuotas", e.target.value)} />
                 </td>
 
@@ -193,7 +190,7 @@ function PagoTable({
                   return (
                     <Fragment key={i}>
                       <td className={`border-b border-r border-border/40 px-1 py-0.5 min-w-[90px] ${!isEnabled ? "bg-muted/30" : ""}`}>
-                        <Input type="number" min={0} disabled={!isEnabled || !!pago.linkedServicioId}
+                        <Input type="number" min={0} disabled={!isEnabled}
                           className={`h-7 text-xs text-right border-0 bg-transparent focus-visible:ring-0 min-w-[72px] ${!isEnabled ? "opacity-30" : ""}`}
                           placeholder="0" value={pago.cuotas?.[i]?.monto || ""}
                           onChange={e => onUpdate(tipo, pago.id, `cuotas.${i}.monto`, parseNumeric(e.target.value))} />
@@ -214,13 +211,11 @@ function PagoTable({
 
                 {onRemove && (
                   <td className="border-b border-l border-border/40 px-1 py-0.5 text-center">
-                    {!pago.linkedServicioId ? (
-                      <Button type="button" variant="ghost" size="icon"
-                        className="h-6 w-6 text-destructive/60 hover:text-destructive"
-                        onClick={() => onRemove(tipo, pago.id)}>
-                        <Trash2 className="w-3 h-3" />
-                      </Button>
-                    ) : null}
+                    <Button type="button" variant="ghost" size="icon"
+                      className="h-6 w-6 text-destructive/60 hover:text-destructive"
+                      onClick={() => onRemove(tipo, pago.id)}>
+                      <Trash2 className="w-3 h-3" />
+                    </Button>
                   </td>
                 )}
               </tr>
