@@ -47,8 +47,9 @@ import {
   catalogUnidadesNegocio, catalogSoluciones, catalogDetalleServicio,
   catalogTipoVenta, catalogPlazos, catalogDocumentos, catalogCecos,
   catalogDepartamentos, catalogAreas, catalogNombres,
+  catalogConsideracionesComerciales,
 } from "../drizzle/schema";
-import { eq, like } from "drizzle-orm";
+import { asc, eq, like } from "drizzle-orm";
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
@@ -117,7 +118,7 @@ export async function ds_getCatalogOptions() {
     rows.map(r => ({ value: r.valor, label: r.valor }));
   const [empresas, nombres, monedas, documentoIdentidad,
     unidadesNegocio, soluciones, detalleServicio, tipoVenta, plazos,
-    paises, cecos] =
+    paises, cecos, consideracionesComerciales] =
     await Promise.all([
       db.select().from(catalogEmpresas).where(eq(catalogEmpresas.activo, 1)),
       db.select().from(catalogNombres).where(eq(catalogNombres.activo, 1)),
@@ -130,6 +131,9 @@ export async function ds_getCatalogOptions() {
       db.select().from(catalogPlazos).where(eq(catalogPlazos.activo, 1)),
       db.select().from(catalogPaises).where(eq(catalogPaises.activo, 1)),
       db.select().from(catalogCecos).where(eq(catalogCecos.activo, 1)),
+      db.select().from(catalogConsideracionesComerciales)
+        .where(eq(catalogConsideracionesComerciales.activo, 1))
+        .orderBy(asc(catalogConsideracionesComerciales.orden), asc(catalogConsideracionesComerciales.id)),
     ]);
   return {
     empresas:           toOptions(empresas),
@@ -143,6 +147,12 @@ export async function ds_getCatalogOptions() {
     plazos:             toOptions(plazos),
     paises:             toOptions(paises),
     cecos:              toOptions(cecos),
+    consideracionesComerciales: consideracionesComerciales.map(r => ({
+      id: r.id,
+      value: r.valor,
+      label: r.valor,
+      orden: r.orden,
+    })),
     meses: MESES,
   };
 }
@@ -155,7 +165,8 @@ export async function ds_getCatalogSummary() {
   if (!db) throw new Error("Base de datos no disponible");
   const [
     monedas, paises, empresas, doctos, unidades, soluciones,
-    detalles, tipos, plazos, docs, cecos, deptos, areas, nombres
+    detalles, tipos, plazos, docs, cecos, deptos, areas, nombres,
+    consideracionesComerciales,
   ] = await Promise.all([
     db.select().from(catalogMonedas).where(eq(catalogMonedas.activo, 1)),
     db.select().from(catalogPaises).where(eq(catalogPaises.activo, 1)),
@@ -171,10 +182,14 @@ export async function ds_getCatalogSummary() {
     db.select().from(catalogDepartamentos).where(eq(catalogDepartamentos.activo, 1)),
     db.select().from(catalogAreas).where(eq(catalogAreas.activo, 1)),
     db.select().from(catalogNombres).where(eq(catalogNombres.activo, 1)),
+    db.select().from(catalogConsideracionesComerciales)
+      .where(eq(catalogConsideracionesComerciales.activo, 1))
+      .orderBy(asc(catalogConsideracionesComerciales.orden), asc(catalogConsideracionesComerciales.id)),
   ]);
   return {
     monedas, paises, empresas, doctos, unidades, soluciones,
-    detalles, tipos, plazos, docs, cecos, deptos, areas, nombres
+    detalles, tipos, plazos, docs, cecos, deptos, areas, nombres,
+    consideracionesComerciales,
   };
 }
 

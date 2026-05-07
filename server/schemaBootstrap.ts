@@ -11,6 +11,8 @@
  * Tablas dinámicas `catalog_custom_*` no se crean aquí (se generan en runtime).
  */
 
+import { sqlSeedConsideracionesComerciales } from "./seeds/consideracionesComercialesSeed";
+
 /** Todas las sentencias CREATE en orden seguro (FK desactivadas por defecto en SQLite). */
 export const BOOTSTRAP_ALL_PROJECT_TABLES_SQL = `
 CREATE TABLE IF NOT EXISTS roles (
@@ -274,6 +276,13 @@ CREATE TABLE IF NOT EXISTS catalog_clausulas (
   activo INTEGER DEFAULT 1 NOT NULL,
   createdAt INTEGER DEFAULT (strftime('%s', 'now')) NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS catalog_consideraciones_comerciales (
+  id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+  valor TEXT NOT NULL,
+  orden INTEGER DEFAULT 0 NOT NULL,
+  activo INTEGER DEFAULT 1 NOT NULL
+);
 `;
 
 export interface SqliteExecLike {
@@ -285,4 +294,5 @@ export interface SqliteExecLike {
  */
 export function ensureAllProjectTables(sqlite: SqliteExecLike): void {
   sqlite.exec(BOOTSTRAP_ALL_PROJECT_TABLES_SQL);
+  sqlite.exec(sqlSeedConsideracionesComerciales());
 }

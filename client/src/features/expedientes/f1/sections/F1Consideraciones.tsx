@@ -1,60 +1,119 @@
 /**
  * features/expedientes/f1/sections/F1Consideraciones.tsx
  *
- * Obs. 11: Consideraciones editables — el usuario puede agregar, editar y eliminar
- *          ítems personalizados además de los fijos.
- * Extra:   Campo de cláusulas legales (texto libre) para pegar o escribir condiciones.
+ * Consideraciones del Acta: checklist desde catálogo (BD) + líneas libres con agregar/quitar.
+ * Los textos que van al PDF son `consideracionesPersonalizadas`.
  */
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
 import { FormSection } from "@/components/FormSection";
-import { ClipboardList, Plus, Trash2, Lock, ShieldOff, FileText, ExternalLink, Loader2 } from "lucide-react";
+import {
+  ClipboardList,
+  Plus,
+  Trash2,
+  ShieldOff,
+  FileText,
+  ExternalLink,
+  Loader2,
+} from "lucide-react";
 import type { F1Data } from "../../types";
 import type { ClausulasVigentesState } from "../useClausulasVigentes";
 
-// Consideraciones fijas — no editables desde la UI
-const CONSIDERACIONES_FIJAS = [
-  "Activación nueva.",
-  "Valores expresados en dólares.",
-  "Valores NO incluyen impuestos ni comisiones bancarias o de transferencia.",
-  "El servicio no incluye hardware.",
-  "Se considera un descuento del 50% en las dos primeras cuotas de mantención.",
-  "La forma de pago de la mantención es mes vencido a partir de la entrega del servicio.",
-];
+/** Fila devuelta por `catalogs.getAll().consideracionesComerciales`. */
+export interface PlantillaConsideracionCatalogo {
+  id: number;
+  value: string;
+  label: string;
+  orden: number;
+}
 
 interface Props {
   data: F1Data;
   onUpdate: (partial: Partial<F1Data>) => void;
-  /** Fuente única desde F1Form (mismo estado que el PDF). */
+  plantillasCatalogo: PlantillaConsideracionCatalogo[];
   clausulasAuto: ClausulasVigentesState;
-  /** Si true, oculta el contenido sensible y muestra un placeholder de acceso restringido */
   restricted?: boolean;
 }
 
-export function F1Consideraciones({ data, onUpdate, clausulasAuto, restricted = false }: Props) {
+function matchesCatalogLine(texto: string, plantillas: PlantillaConsideracionCatalogo[]): boolean {
+  const t = texto.trim();
+  return plantillas.some(p => p.value.trim() === t);
+}
+
+/** Líneas que no coinciden con ningún valor del catálogo (orden conservado). */
+function lineasLibres(personalizadas: string[], plantillas: PlantillaConsideracionCatalogo[]): string[] {
+  return personalizadas.filter(s => !matchesCatalogLine(s, plantillas));
+}
+
+/** Bloque catálogo en orden de plantillas (solo valores marcados en `personalizadas`). */
+function bloqueCatalogoOrdenado(
+  plantillas: PlantillaConsideracionCatalogo[],
+  personalizadas: string[],
+): string[] {
+  const sorted = [...plantillas].sort((a, b) => a.orden - b.orden || a.id - b.id);
+  return sorted
+    .filter(p => personalizadas.some(x => x.trim() === p.value.trim()))
+    .map(p => p.value);
+}
+
+export function F1Consideraciones({
+  data,
+  onUpdate,
+  plantillasCatalogo,
+  clausulasAuto,
+  restricted = false,
+}: Props) {
   const [nuevoItem, setNuevoItem] = useState("");
 
   const personalizadas = data.consideracionesPersonalizadas ?? [];
 
   const { clausulas, isLoading: clausulasLoading, hasUnidades } = clausulasAuto;
 
-  const agregarItem = () => {
+  const plantillasOrdenadas = useMemo(
+    () => [...plantillasCatalogo].sort((a, b) => a.orden - b.orden || a.id - b.id),
+    [plantillasCatalogo],
+  );
+
+  const libres = useMemo(
+    () => lineasLibres(personalizadas, plantillasCatalogo),
+    [personalizadas, plantillasCatalogo],
+  );
+
+  const toggleCatalogo = (valorCatalogo: string, checked: boolean) => {
+    const custom = lineasLibres(personalizadas, plantillasCatalogo);
+    const selectedTrims = new Set(
+      plantillasCatalogo
+        .filter(p => personalizadas.some(x => x.trim() === p.value.trim()))
+        .map(p => p.value.trim()),
+    );
+    const vTrim = valorCatalogo.trim();
+    if (checked) selectedTrims.add(vTrim);
+    else selectedTrims.delete(vTrim);
+
+    const ordered = [...plantillasCatalogo]
+      .sort((a, b) => a.orden - b.orden || a.id - b.id)
+      .filter(p => selectedTrims.has(p.value.trim()))
+      .map(p => p.value);
+
+    onUpdate({ consideracionesPersonalizadas: [...ordered, ...custom] });
+  };
+
+  const agregarLibre = () => {
     const texto = nuevoItem.trim();
     if (!texto) return;
-    onUpdate({ consideracionesPersonalizadas: [...personalizadas, texto] });
+    const catalogo = bloqueCatalogoOrdenado(plantillasCatalogo, personalizadas);
+    const lib = lineasLibres(personalizadas, plantillasCatalogo);
+    onUpdate({ consideracionesPersonalizadas: [...catalogo, ...lib, texto] });
     setNuevoItem("");
   };
 
-  const editarItem = (idx: number, valor: string) => {
-    const copia = [...personalizadas];
-    copia[idx] = valor;
-    onUpdate({ consideracionesPersonalizadas: copia });
-  };
-
-  const eliminarItem = (idx: number) => {
-    onUpdate({ consideracionesPersonalizadas: personalizadas.filter((_, i) => i !== idx) });
+  const quitarLibre = (idx: number) => {
+    const nextLibres = libres.filter((_, j) => j !== idx);
+    const catalogo = bloqueCatalogoOrdenado(plantillasCatalogo, personalizadas);
+    onUpdate({ consideracionesPersonalizadas: [...catalogo, ...nextLibres] });
   };
 
   if (restricted) {
@@ -74,63 +133,87 @@ export function F1Consideraciones({ data, onUpdate, clausulasAuto, restricted = 
     <FormSection title="Consideraciones y Alcances Comerciales" icon={ClipboardList} accent="indigo" collapsible defaultOpen>
       <div className="space-y-6">
 
-        {/* ── Consideraciones fijas (solo lectura) ─────────────────────── */}
+        {/* ── Catálogo (BD): checklist ───────────────────────────── */}
         <div className="space-y-2">
-          <div className="flex items-center gap-1.5 mb-2">
-            <Lock className="w-3 h-3 text-muted-foreground" />
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-              Consideraciones generales (fijas)
-            </p>
-          </div>
-          <ul className="space-y-1.5">
-            {CONSIDERACIONES_FIJAS.map((item, i) => (
-              <li key={i} className="text-sm text-muted-foreground flex items-start gap-2.5">
-                <span className="text-primary font-bold mt-0.5 shrink-0">–</span>
-                <span>{item}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-
-        {/* ── Consideraciones personalizadas (editables) ────────────────── */}
-        <div className="space-y-2">
-          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
-            Consideraciones adicionales
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">
+            Del catálogo
+          </p>
+          <p className="text-xs text-muted-foreground mb-3">
+            Marca las que deben figurar en el acta. Los textos vienen de Base de datos → Consideraciones comerciales (Acta).
           </p>
 
-          {personalizadas.length > 0 && (
+          {plantillasOrdenadas.length === 0 ? (
+            <p className="text-sm text-muted-foreground italic px-1 py-2">
+              No hay ítems en el catálogo. Configúralos en Base de datos → Consideraciones comerciales (Acta).
+            </p>
+          ) : (
+            <ul className="space-y-3">
+              {plantillasOrdenadas.map(row => {
+                const marcado = personalizadas.some(p => p.trim() === row.value.trim());
+                return (
+                  <li key={row.id} className="flex items-start gap-3">
+                    <Checkbox
+                      id={`consideracion-cat-${row.id}`}
+                      checked={marcado}
+                      onCheckedChange={v => toggleCatalogo(row.value, v === true)}
+                      className="mt-0.5"
+                    />
+                    <label
+                      htmlFor={`consideracion-cat-${row.id}`}
+                      className="text-sm text-foreground/90 leading-snug cursor-pointer select-none flex-1"
+                    >
+                      {row.label}
+                    </label>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
+
+        {/* ── Líneas adicionales ───────────────────────────────────── */}
+        <div className="space-y-2">
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">
+            Líneas adicionales
+          </p>
+          <p className="text-xs text-muted-foreground mb-2">
+            Texto propio que no está en el catálogo; también se incluye en el PDF del acta.
+          </p>
+
+          {libres.length > 0 && (
             <ul className="space-y-2 mb-3">
-              {personalizadas.map((item, idx) => (
-                <li key={idx} className="flex items-center gap-2">
-                  <span className="text-primary font-bold shrink-0">–</span>
-                  <Input
-                    className="h-8 text-sm flex-1"
-                    value={item}
-                    onChange={e => editarItem(idx, e.target.value)}
-                    placeholder="Consideración adicional..."
-                  />
+              {libres.map((linea, idx) => (
+                <li key={`libre-${idx}`} className="flex items-start gap-2 rounded-md border border-border/60 bg-muted/20 px-3 py-2">
+                  <span className="text-sm text-foreground/90 flex-1 whitespace-pre-wrap break-words">{linea}</span>
                   <Button
-                    type="button" variant="ghost" size="icon"
-                    className="h-7 w-7 text-muted-foreground hover:text-destructive shrink-0"
-                    onClick={() => eliminarItem(idx)}
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive"
+                    onClick={() => quitarLibre(idx)}
+                    title="Quitar"
                   >
-                    <Trash2 className="w-3.5 h-3.5" />
+                    <Trash2 className="w-4 h-4" />
                   </Button>
                 </li>
               ))}
             </ul>
           )}
 
-          {/* Input para agregar nuevo ítem */}
           <div className="flex gap-2">
             <Input
-              className="h-8 text-sm flex-1"
-              placeholder="Agregar consideración adicional..."
+              className="h-9 text-sm flex-1"
+              placeholder="Escribe una línea y pulsa Agregar…"
               value={nuevoItem}
               onChange={e => setNuevoItem(e.target.value)}
-              onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); agregarItem(); } }}
+              onKeyDown={e => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  agregarLibre();
+                }
+              }}
             />
-            <Button type="button" variant="outline" size="sm" onClick={agregarItem} className="h-8 shrink-0">
+            <Button type="button" variant="outline" size="sm" onClick={agregarLibre} className="h-9 shrink-0">
               <Plus className="w-3.5 h-3.5 mr-1" /> Agregar
             </Button>
           </div>

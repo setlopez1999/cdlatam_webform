@@ -9,6 +9,10 @@ import { describe, it, expect } from "vitest";
 import { appRouter } from "./routers";
 import type { TrpcContext } from "./_core/context";
 import type { User } from "../drizzle/schema";
+import {
+  CATALOG_CONSIDERACIONES_COMERCIALES_SEED,
+  sqlSeedConsideracionesComerciales,
+} from "./seeds/consideracionesComercialesSeed";
 
 // ─── Mock Context ─────────────────────────────────────────────────────────────
 
@@ -49,6 +53,7 @@ describe("catalogs.getAll", () => {
     expect(catalogs).toHaveProperty("tipoVenta");
     expect(catalogs).toHaveProperty("plazos");
     expect(catalogs).toHaveProperty("cecos");
+    expect(catalogs).toHaveProperty("consideracionesComerciales");
   });
 
   it("monedas catalog contains USD and CLP", async () => {
@@ -335,6 +340,28 @@ describe("catalogs.getAll — campos para Acta actualizada", () => {
     // USD debe estar en la lista
     const values = monedas.map((m: { value: string }) => m.value);
     expect(values.some((v: string) => v.includes("USD"))).toBe(true);
+  });
+
+  it("retorna consideracionesComerciales (plantillas Acta F1) desde catálogo", async () => {
+    const ctx = createMockContext();
+    const caller = appRouter.createCaller(ctx);
+    const { consideracionesComerciales } = await caller.catalogs.getAll();
+
+    expect(Array.isArray(consideracionesComerciales)).toBe(true);
+    expect(consideracionesComerciales.length).toBeGreaterThan(0);
+    const first = consideracionesComerciales[0] as { id: number; value: string; orden: number };
+    expect(first).toHaveProperty("id");
+    expect(first).toHaveProperty("value");
+    expect(first).toHaveProperty("orden");
+  });
+});
+
+describe("consideracionesComerciales — seed centralizado", () => {
+  it("exporta 6 plantillas y SQL INSERT OR IGNORE coherente", () => {
+    expect(CATALOG_CONSIDERACIONES_COMERCIALES_SEED.length).toBe(6);
+    const sql = sqlSeedConsideracionesComerciales();
+    expect(sql.startsWith("INSERT OR IGNORE INTO catalog_consideraciones_comerciales")).toBe(true);
+    expect(sql).toContain("Activación nueva.");
   });
 });
 

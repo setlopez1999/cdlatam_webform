@@ -113,6 +113,11 @@ export default function F1Form({ expedienteId }: Props) {
     [catalogs],
   );
 
+  const plantillasConsideraciones = useMemo(
+    () => catalogs?.consideracionesComerciales ?? [],
+    [catalogs],
+  );
+
   const clausulasVigentes = useClausulasVigentes(data?.serviciosContratados, catalogs);
   const { clausulas: clausulasParaPdf, isLoading: clausulasLoading } = clausulasVigentes;
 
@@ -402,6 +407,7 @@ export default function F1Form({ expedienteId }: Props) {
       <F1Consideraciones
         data={data}
         onUpdate={update}
+        plantillasCatalogo={plantillasConsideraciones as any}
         clausulasAuto={clausulasVigentes}
         restricted={!canViewSensitiveFields}
       />

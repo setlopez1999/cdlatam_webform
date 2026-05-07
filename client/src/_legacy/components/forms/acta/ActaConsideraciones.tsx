@@ -1,6 +1,10 @@
 /**
  * ActaConsideraciones — Sección de Consideraciones y Alcances Comerciales
  *
+ * @deprecated Legacy — no enlazado desde la ruta actual del expediente (`ExpedienteActa` usa F1 +
+ *   plantillas desde BD `catalog_consideraciones_comerciales` vía `catalogs.getAll`).
+ *   La constante CONSIDERACIONES_FIJAS aquí no es fuente de verdad; solo referencia histórica.
+ *
  * "Activación nueva" es texto plano (no input), aparece como primer ítem de la lista.
  * Las consideraciones generales son ítems fijos con guión.
  */

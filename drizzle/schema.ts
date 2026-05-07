@@ -367,6 +367,14 @@ export const catalogNombres = sqliteTable("catalog_nombres", {
   activo: integer("activo").default(1).notNull(),
 });
 
+/** Plantillas para la sección Consideraciones del Acta (F1); ordenadas por `orden`. */
+export const catalogConsideracionesComerciales = sqliteTable("catalog_consideraciones_comerciales", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  valor: text("valor").notNull(),
+  orden: integer("orden").default(0).notNull(),
+  activo: integer("activo").default(1).notNull(),
+});
+
 // ─── Metadatos de catálogos (fijos + dinámicos) ─────────────────────────────
 export const catalogMeta = sqliteTable("catalog_meta", {
   id: integer("id").primaryKey({ autoIncrement: true }),
@@ -395,6 +403,7 @@ export type CatalogCeco = typeof catalogCecos.$inferSelect;
 export type CatalogDepartamento = typeof catalogDepartamentos.$inferSelect;
 export type CatalogArea = typeof catalogAreas.$inferSelect;
 export type CatalogNombre = typeof catalogNombres.$inferSelect;
+export type CatalogConsideracionComercial = typeof catalogConsideracionesComerciales.$inferSelect;
 // ─── Expedientes (contenedor de actas y evaluaciones) ────────────────────────
 /**
  * Tabla expedientes — metadata del expediente.
