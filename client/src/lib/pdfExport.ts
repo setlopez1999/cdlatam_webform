@@ -182,6 +182,9 @@ async function buildActaPdfBytes(acta: ActaData): Promise<Uint8Array> {
 
   const currencyCode = getCurrencyCode(acta.moneda ?? "");
   const fmt = (v: number) => formatCurrency(v, currencyCode);
+  /** F1 (expedientes) usa `precioUnitario`; legado ActaData usa `valorUnitario`. */
+  const precioUnitarioServicio = (s: { precioUnitario?: number; valorUnitario?: number }) =>
+    Number(s.precioUnitario ?? s.valorUnitario ?? 0);
   const totalServicios = acta.serviciosContratados.reduce((sum, s) => sum + s.total, 0);
 
   let y = margin;
@@ -281,7 +284,7 @@ async function buildActaPdfBytes(acta: ActaData): Promise<Uint8Array> {
     s.solucion || "",
     s.detalleServicio || "",
     s.tipoVenta || "",
-    fmt(s.valorUnitario),
+    fmt(precioUnitarioServicio(s)),
     String(s.cantidad),
     fmt(s.total),
     s.plazo || "",
@@ -324,7 +327,16 @@ async function buildActaPdfBytes(acta: ActaData): Promise<Uint8Array> {
   if (acta.formasPagoMantencion?.length) {
     y = ensureSpace(doc, y, 30);
     y = drawSectionTitle(doc, "Formas de Pago — Mantención", margin, y);
-    y = drawPagoTable(doc, acta.formasPagoMantencion, margin, y, fmt);
+    y = drawPagoTable(doc, acta.formasPagoMantencion, margin, y, fmt, "mantencion");
+    const ahorroMant = (acta as { total_descuento_mantencion?: number }).total_descuento_mantencion;
+    if (typeof ahorroMant === "number" && ahorroMant > 0) {
+      doc.setFontSize(7);
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(...COLOR_GRAY);
+      doc.text(`Ahorro total acumulado (cuotas de gracia): ${fmt(ahorroMant)}`, margin, y);
+      y += 5;
+      doc.setTextColor(...COLOR_TEXT);
+    }
   }
 
   // ── 8. Consideraciones (solo ítems incluidos en el acta — F1) ─────────────
@@ -526,10 +538,14 @@ function drawPagoTable(
   x: number,
   y: number,
   fmt: (v: number) => string,
+  variant: "implementacion" | "mantencion" = "implementacion",
 ): number {
   const maxCuotas = Math.min(4, Math.max(1, ...formas.map(i => i.nCuotas || 0)));
-  const head = ["#", "Tipo Venta", "N° Cuotas"];
-  for (let i = 0; i < maxCuotas; i++) head.push(`${i + 1}ª Cuota`, "Fecha");
+  const head = ["#", "Tipo Venta", variant === "mantencion" ? "N° Cuotas de Gracia" : "N° Cuotas"];
+  for (let i = 0; i < maxCuotas; i++) {
+    const cuotaLabel = variant === "mantencion" ? `Gracia ${i + 1}` : `${i + 1}ª Cuota`;
+    head.push(cuotaLabel, "Fecha");
+  }
 
   const body = formas.map((fp, i) => {
     const row: string[] = [

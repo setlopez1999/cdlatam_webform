@@ -27,13 +27,14 @@ interface Props {
   catalogs?: Catalogs;
   moneda?: string;
   onAdd: () => void;
+  onAddVenta?: () => void;
   onRemove: (id: string) => void;
   onUpdate: (id: string, field: keyof ServicioContratado, value: string | number) => void;
   /** Si true, oculta valores unitarios, totales y descuentos — muestra solo servicio y tipo */
   restricted?: boolean;
 }
 
-export function F1Servicios({ servicios, catalogs, moneda, onAdd, onRemove, onUpdate, restricted = false }: Props) {
+export function F1Servicios({ servicios, catalogs, moneda, onAdd, onAddVenta, onRemove, onUpdate, restricted = false }: Props) {
   const currencyCode = getCurrencyCode(moneda ?? "");
   const totalServicios = servicios.reduce((sum, s) => sum + s.total, 0);
 
@@ -190,9 +191,19 @@ export function F1Servicios({ servicios, catalogs, moneda, onAdd, onRemove, onUp
         {/* Footer: botón agregar + total */}
         {!restricted && (
           <div className="flex items-center justify-between pt-2">
-            <Button variant="outline" size="sm" onClick={onAdd}>
-              <Plus className="w-3.5 h-3.5 mr-1.5" /> Agregar Servicio
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" onClick={onAdd}>
+                <Plus className="w-3.5 h-3.5 mr-1.5" /> Agregar Servicio
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={onAddVenta}
+                className="border-orange-300 text-orange-700 hover:bg-orange-50 hover:text-orange-800"
+              >
+                <Plus className="w-3.5 h-3.5 mr-1.5" /> Agregar Venta
+              </Button>
+            </div>
             <div className="flex items-center gap-3">
               <span className="text-sm text-muted-foreground">Total Servicios:</span>
               <span className="text-base font-bold text-foreground font-mono">

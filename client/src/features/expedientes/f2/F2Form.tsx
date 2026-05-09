@@ -59,7 +59,7 @@ interface Props {
 }
 
 export default function F2Form({ expedienteId, onVerResultado }: Props) {
-  const { data, status, f1Suggestions, update, guardar, descartar, importarDesdeF1, isSyncing } = useF2(expedienteId);
+  const { data, status, f1Data, f1Suggestions, update, guardar, descartar, importarDesdeF1, isSyncing } = useF2(expedienteId);
   const { data: catalogs } = trpc.catalogs.getAll.useQuery();
   const [confirmRegenMes, setConfirmRegenMes] = useState<1 | 2 | 3 | null>(null);
 
@@ -181,7 +181,7 @@ export default function F2Form({ expedienteId, onVerResultado }: Props) {
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
-    <div className="p-6 max-w-6xl mx-auto space-y-6">
+    <div className="p-6 max-w-6xl mx-auto space-y-6" translate="no">
       <PageHeader
         title="Evaluación de Proyecto"
         subtitle="Formulario 2 — Desglose detallado de costos por categoría"
@@ -207,6 +207,13 @@ export default function F2Form({ expedienteId, onVerResultado }: Props) {
           </div>
         }
       />
+
+      {f1Data != null && (f1Data.total_descuento_mantencion ?? 0) > 0 && (
+        <div className="rounded-lg border border-emerald-200 bg-emerald-50/90 px-3 py-2 text-xs text-emerald-950">
+          <span className="font-medium">Desde F1 — Ahorro Mantención (cuotas de gracia): </span>
+          {fmt(f1Data.total_descuento_mantencion ?? 0)}
+        </div>
+      )}
 
       {/* Live Preview Banner */}
       <div className="bg-violet-50 border border-violet-200 rounded-xl p-3 flex items-center gap-3">
