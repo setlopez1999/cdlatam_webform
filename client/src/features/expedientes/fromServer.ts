@@ -72,6 +72,9 @@ export function mapDbActaToF1(acta: Record<string, unknown> | null): {
     formasPagoMantencion: Array.isArray(acta.formasPagoMantencion)
       ? (acta.formasPagoMantencion as F1Data["formasPagoMantencion"])
       : [],
+    formasPagoImplementacionHitos: Array.isArray(acta.formasPagoImplementacionHitos)
+      ? (acta.formasPagoImplementacionHitos as F1Data["formasPagoImplementacionHitos"])
+      : [],
   };
   const saved = acta.f1SavedAt
     ? new Date(acta.f1SavedAt as string | number).toISOString()

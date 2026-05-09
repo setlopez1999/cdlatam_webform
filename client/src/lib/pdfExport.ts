@@ -19,6 +19,9 @@ import { PDFDocument } from "pdf-lib";
 import { formatCurrency, formatDate, getCurrencyCode } from "./formatters";
 
 const CDLATAM_LOGO = "https://files.manuscdn.com/user_upload_by_module/session_file/310519663142649407/FDtlcTtkjZpRheHR.png";
+/** Pixeles del PNG del logo (relación de aspecto al escalar en mm). */
+const LOGO_NATURAL_W_PX = 1215;
+const LOGO_NATURAL_H_PX = 290;
 // Color turquesa corporativo CDLatam
 const BRAND_COLOR = "#00c2b2";
 const BRAND_DARK  = "#009e90";
@@ -138,14 +141,22 @@ async function loadImageAsDataUrl(url: string): Promise<string | null> {
   }
 }
 
-const CONSIDERACIONES_FIJAS = [
-  "Activación nueva.",
-  "Valores expresados en dólares.",
-  "Valores NO incluyen impuestos ni comisiones bancarias o de transferencia.",
-  "El servicio no incluye hardware.",
-  "Se considera un descuento del 50% en las dos primeras cuotas de mantención.",
-  "La forma de pago de la mantención es mes vencido a partir de la entrega del servicio.",
-];
+/** Escala ancho/alto en mm manteniendo proporción dentro de un rectángulo máximo. */
+function fitImagePreserveAspectMm(
+  naturalW: number,
+  naturalH: number,
+  maxW: number,
+  maxH: number,
+): { drawW: number; drawH: number } {
+  const ratio = naturalW / naturalH;
+  let drawW = maxW;
+  let drawH = maxW / ratio;
+  if (drawH > maxH) {
+    drawH = maxH;
+    drawW = maxH * ratio;
+  }
+  return { drawW, drawH };
+}
 
 /**
  * Construye los bytes del PDF base del Acta usando jsPDF + autotable.
@@ -157,7 +168,7 @@ const CONSIDERACIONES_FIJAS = [
  *   5. Servicios contratados (autoTable)
  *   6. Formas de pago — Implementación (autoTable, opcional)
  *   7. Formas de pago — Mantención (autoTable, opcional)
- *   8. Consideraciones fijas + personalizadas
+ *   8. Consideraciones del acta (lista en F1)
  *   9. Cláusulas legales texto libre (si las hay)
  *  10. Firma del Representante Legal
  *  11. Footer en cada página
@@ -171,6 +182,9 @@ async function buildActaPdfBytes(acta: ActaData): Promise<Uint8Array> {
 
   const currencyCode = getCurrencyCode(acta.moneda ?? "");
   const fmt = (v: number) => formatCurrency(v, currencyCode);
+  /** F1 (expedientes) usa `precioUnitario`; legado ActaData usa `valorUnitario`. */
+  const precioUnitarioServicio = (s: { precioUnitario?: number; valorUnitario?: number }) =>
+    Number(s.precioUnitario ?? s.valorUnitario ?? 0);
   const totalServicios = acta.serviciosContratados.reduce((sum, s) => sum + s.total, 0);
 
   let y = margin;
@@ -181,7 +195,19 @@ async function buildActaPdfBytes(acta: ActaData): Promise<Uint8Array> {
     doc.setFillColor(...COLOR_TEXT);
     doc.roundedRect(margin, y, 38, 14, 2, 2, "F");
     try {
-      doc.addImage(logo, "PNG", margin + 4, y + 2, 30, 10, undefined, "FAST");
+      const innerX = margin + 4;
+      const innerY = y + 2;
+      const boxW = 30;
+      const boxH = 10;
+      const { drawW, drawH } = fitImagePreserveAspectMm(
+        LOGO_NATURAL_W_PX,
+        LOGO_NATURAL_H_PX,
+        boxW,
+        boxH,
+      );
+      const imgX = innerX + (boxW - drawW) / 2;
+      const imgY = innerY + (boxH - drawH) / 2;
+      doc.addImage(logo, "PNG", imgX, imgY, drawW, drawH, undefined, "FAST");
     } catch {
       // Si la imagen no se puede agregar, dejamos el chip vacío.
     }
@@ -218,7 +244,7 @@ async function buildActaPdfBytes(acta: ActaData): Promise<Uint8Array> {
   y = drawIntroBox(doc, textoIntro, margin, y, contentWidth);
 
   // ── 3. Datos de la empresa ──────────────────────────────────────────────
-  y = drawSectionTitle(doc, "Datos de la Empresa", margin, y);
+  y = drawSectionTitle(doc, "Información Legal de Cliente", margin, y);
   y = drawFieldRow(doc, [
     { label: "Razón Social", value: acta.razonSocial },
     { label: "Nombre de Fantasía", value: acta.nombreFantasia },
@@ -232,7 +258,7 @@ async function buildActaPdfBytes(acta: ActaData): Promise<Uint8Array> {
   ], margin, y, contentWidth);
 
   // ── 4. Datos de contacto ────────────────────────────────────────────────
-  y = drawSectionTitle(doc, "Datos de Contacto", margin, y);
+  y = drawSectionTitle(doc, "Información de Contacto", margin, y);
   y = drawContactGroup(doc, "Representante Legal", [
     { label: "Nombre", value: acta.representanteLegal },
     { label: "DNI / Cédula", value: acta.representanteDni },
@@ -258,7 +284,7 @@ async function buildActaPdfBytes(acta: ActaData): Promise<Uint8Array> {
     s.solucion || "",
     s.detalleServicio || "",
     s.tipoVenta || "",
-    fmt(s.valorUnitario),
+    fmt(precioUnitarioServicio(s)),
     String(s.cantidad),
     fmt(s.total),
     s.plazo || "",
@@ -301,17 +327,35 @@ async function buildActaPdfBytes(acta: ActaData): Promise<Uint8Array> {
   if (acta.formasPagoMantencion?.length) {
     y = ensureSpace(doc, y, 30);
     y = drawSectionTitle(doc, "Formas de Pago — Mantención", margin, y);
-    y = drawPagoTable(doc, acta.formasPagoMantencion, margin, y, fmt);
+    y = drawPagoTable(doc, acta.formasPagoMantencion, margin, y, fmt, "mantencion");
+    const ahorroMant = (acta as { total_descuento_mantencion?: number }).total_descuento_mantencion;
+    if (typeof ahorroMant === "number" && ahorroMant > 0) {
+      doc.setFontSize(7);
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(...COLOR_GRAY);
+      doc.text(`Ahorro total acumulado (cuotas de gracia): ${fmt(ahorroMant)}`, margin, y);
+      y += 5;
+      doc.setTextColor(...COLOR_TEXT);
+    }
   }
 
-  // ── 8. Consideraciones (fijas + personalizadas) ─────────────────────────
+  // ── 8. Consideraciones (solo ítems incluidos en el acta — F1) ─────────────
   y = ensureSpace(doc, y, 30);
   y = drawSectionTitle(doc, "Consideraciones y Alcances Comerciales", margin, y);
-  y = drawBulletList(doc, CONSIDERACIONES_FIJAS, margin, y, contentWidth);
   const personalizadas = (acta as { consideracionesPersonalizadas?: string[] }).consideracionesPersonalizadas ?? [];
-  if (personalizadas.length) {
+  const consideracionesPdf = personalizadas.map(s => s.trim()).filter(Boolean);
+  if (consideracionesPdf.length) {
     y += 1;
-    y = drawBulletList(doc, personalizadas, margin, y, contentWidth);
+    y = drawBulletList(doc, consideracionesPdf, margin, y, contentWidth);
+  } else {
+    y += 2;
+    doc.setFontSize(8);
+    doc.setTextColor(...COLOR_GRAY);
+    doc.setFont("helvetica", "italic");
+    doc.text("(Sin consideraciones agregadas al acta.)", margin, y);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(...COLOR_TEXT);
+    y += 5;
   }
 
   // ── 9. Cláusulas legales texto libre ───────────────────────────────────
@@ -494,10 +538,14 @@ function drawPagoTable(
   x: number,
   y: number,
   fmt: (v: number) => string,
+  variant: "implementacion" | "mantencion" = "implementacion",
 ): number {
   const maxCuotas = Math.min(4, Math.max(1, ...formas.map(i => i.nCuotas || 0)));
-  const head = ["#", "Tipo Venta", "N° Cuotas"];
-  for (let i = 0; i < maxCuotas; i++) head.push(`${i + 1}ª Cuota`, "Fecha");
+  const head = ["#", "Tipo Venta", variant === "mantencion" ? "N° Cuotas de Gracia" : "N° Cuotas"];
+  for (let i = 0; i < maxCuotas; i++) {
+    const cuotaLabel = variant === "mantencion" ? `Gracia ${i + 1}` : `${i + 1}ª Cuota`;
+    head.push(cuotaLabel, "Fecha");
+  }
 
   const body = formas.map((fp, i) => {
     const row: string[] = [

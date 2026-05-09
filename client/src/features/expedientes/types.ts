@@ -44,9 +44,31 @@ export interface CuotaPago {
 export interface FormaPago {
   id: string;
   item: number;
+  /** Si existe, la fila se sincroniza con el servicio del mismo id (monto / nCuotas). */
+  linkedServicioId?: string;
+  /** Último total del servicio usado para auto-sincronizar cuotas enlazadas. */
+  linkedServicioTotal?: number;
+  /** Precio unitario del servicio enlazado (Mantención: detectar cambio y resetear cuotas de gracia). */
+  linkedServicioPrecioUnitario?: number;
   tipoVenta: string;
   nCuotas: number;
   cuotas: CuotaPago[]; // Arreglo dinámico de 1 a 4 cuotas
+}
+
+export interface HitoPago {
+  id: string;
+  nombreHito: string;
+  precioHito: number;
+  condicion: string;
+}
+
+export interface FormaPagoHitos {
+  id: string;
+  item: number;
+  /** Si existe, la fila se sincroniza con el servicio del mismo id. */
+  linkedServicioId?: string;
+  tipoVenta: string;
+  hitos: HitoPago[];
 }
 
 // ─── F1 — Acta ────────────────────────────────────────────────────────────────
@@ -85,6 +107,9 @@ export interface F1Data {
   serviciosContratados: ServicioContratado[];
   formasPagoImplementacion: FormaPago[];
   formasPagoMantencion: FormaPago[];
+  formasPagoImplementacionHitos: FormaPagoHitos[];
+  /** Suma de (valor unitario − monto cuota) en cuotas de gracia Mantención — persiste en expediente. */
+  total_descuento_mantencion: number;
   // Consideraciones y cláusulas
   consideracionesPersonalizadas: string[];  // ítems editables adicionales (obs. 11)
   clausulasLegales: string;                 // texto libre de cláusulas legales
@@ -102,7 +127,8 @@ export const F1_INITIAL: F1Data = {
   contactoTecnicoTelefonoFijo: "", contactoTecnicoTelefonoMovil: "",
   contactoFacturacion: "", contactoFacturacionEmail: "",
   contactoFacturacionTelefonoFijo: "", contactoFacturacionTelefonoMovil: "",
-  serviciosContratados: [], formasPagoImplementacion: [], formasPagoMantencion: [],
+  serviciosContratados: [], formasPagoImplementacion: [], formasPagoMantencion: [], formasPagoImplementacionHitos: [],
+  total_descuento_mantencion: 0,
   consideracionesPersonalizadas: [], clausulasLegales: "",
   firmaImagen: undefined,
 };

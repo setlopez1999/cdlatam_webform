@@ -71,6 +71,13 @@
       "when": 1745550000000,
       "tag": "0009_remove_manager_role",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1745553600000,
+      "tag": "0010_catalog_consideraciones_comerciales",
+      "breakpoints": true
     }
   ]
 }

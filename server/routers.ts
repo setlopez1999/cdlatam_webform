@@ -106,9 +106,26 @@ const CuotaPagoSchema = z.object({
 const FormaPagoSchema = z.object({
   id: z.string().optional(),   // nanoid del frontend
   item: z.number().optional(), // número de ítem (backend legacy)
+  linkedServicioId: z.string().optional(),
+  linkedServicioTotal: z.number().optional(),
   tipoVenta: z.string(),
   nCuotas: z.number().min(1).max(36),
   cuotas: z.array(CuotaPagoSchema),
+});
+
+const HitoPagoSchema = z.object({
+  id: z.string().optional(),
+  nombreHito: z.string(),
+  precioHito: z.number().min(0),
+  condicion: z.string(),
+});
+
+const FormaPagoHitosSchema = z.object({
+  id: z.string().optional(),
+  item: z.number().optional(),
+  linkedServicioId: z.string().optional(),
+  tipoVenta: z.string(),
+  hitos: z.array(HitoPagoSchema),
 });
 
 const FilaCostoSchema = z.object({
@@ -175,6 +192,7 @@ const ActaInputSchema = z.object({
   serviciosContratados: z.array(ServicioContratadoSchema).optional(),
   formasPagoImplementacion: z.array(FormaPagoSchema).optional(),
   formasPagoMantencion: z.array(FormaPagoSchema).optional(),
+  formasPagoImplementacionHitos: z.array(FormaPagoHitosSchema).optional(),
   status: z.enum(["borrador", "completado", "exportado"]).optional(),
   /** Snapshot completo F1Data (JSON) */
   f1Datos: z.any().optional(),

@@ -1,5 +1,5 @@
 /**
- * ExpedienteActa - Wrapper que muestra el ActaForm dentro del ExpedienteLayout.
+ * ExpedienteActa - Wrapper que muestra el formulario F1 (Acta) dentro del ExpedienteLayout.
  * Ruta: /expediente/:id/acta
  */
 

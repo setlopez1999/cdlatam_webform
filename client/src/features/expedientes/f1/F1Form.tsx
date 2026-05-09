@@ -11,7 +11,7 @@
  *
  * Para conectar con tRPC en el futuro, modificar solo guardar() en useF1.ts.
  */
-import { useCallback } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -25,7 +25,7 @@ import { useFieldVisibility } from "@/hooks/useFieldVisibility";
 import { useNavGuard } from "@/hooks/useNavGuard";
 import { UnsavedChangesDialog } from "@/components/UnsavedChangesDialog";
 import { F1_INITIAL } from "../types";
-import type { ServicioContratado } from "../types";
+import type { F1Data, HitoPago, ServicioContratado } from "../types";
 import { nanoid } from "nanoid";
 import {
   F1Encabezado,
@@ -36,6 +36,13 @@ import {
   F1Consideraciones,
   F1Firmas,
 } from "./sections";
+import {
+  computeTotalDescuentoMantencion,
+  distributeTotalAcrossCuotas,
+  reconcileFormasPagoDesdeServicios,
+  formasReconcilePatchOrNull,
+} from "./reconcileFormasPago";
+import { createFourCuotasEmpty } from "./f1CuotasDefaults";
 
 // ─── Campos requeridos ────────────────────────────────────────────────────────
 
@@ -50,6 +57,12 @@ const REQUIRED_FIELDS = [
   { key: "moneda"      as const, label: "Moneda",          anchor: "f1-moneda" },
 ];
 
+const STATUS_BADGE_MAP = {
+  nuevo:       { label: "Nuevo",       className: "bg-slate-50 text-slate-600 border-slate-200" },
+  sin_guardar: { label: "Sin guardar", className: "bg-amber-50 text-amber-700 border-amber-200" },
+  guardado:    { label: "Guardado",    className: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+} as const;
+
 // ─── Helpers de creación de filas ─────────────────────────────────────────────
 
 function createServicio(item: number): ServicioContratado {
@@ -59,16 +72,48 @@ function createServicio(item: number): ServicioContratado {
   };
 }
 
+const DUPLICATE_VENTA_COPY_FIELDS: Partial<Record<keyof ServicioContratado, boolean>> = {
+  unidadNegocio: true,
+  solucion: true,
+  detalleServicio: true,
+  tipoVenta: false,
+  moneda: false,
+  cantidad: false,
+  precioUnitario: false,
+  plazo: false,
+};
+
+function createServicioFromVentaBase(base: ServicioContratado, item: number): ServicioContratado {
+  const next = createServicio(item);
+  const copyField = <K extends keyof ServicioContratado>(field: K) => {
+    if (DUPLICATE_VENTA_COPY_FIELDS[field]) next[field] = base[field] as ServicioContratado[K];
+  };
+
+  copyField("unidadNegocio");
+  copyField("solucion");
+  copyField("detalleServicio");
+  copyField("tipoVenta");
+  copyField("moneda");
+  copyField("cantidad");
+  copyField("precioUnitario");
+  copyField("plazo");
+
+  return next;
+}
+
 function createFormaPago(item: number) {
-  const emptyCuota = { monto: 0, fecha: "" };
   return {
     id: nanoid(), item, tipoVenta: "", nCuotas: 1,
-    cuotas: [
-      { ...emptyCuota }, // Cuota 1
-      { ...emptyCuota }, // Cuota 2
-      { ...emptyCuota }, // Cuota 3
-      { ...emptyCuota }, // Cuota 4
-    ],
+    cuotas: createFourCuotasEmpty(),
+  };
+}
+
+function createHitoPago(): HitoPago {
+  return {
+    id: nanoid(),
+    nombreHito: "",
+    precioHito: 0,
+    condicion: "",
   };
 }
 
@@ -84,11 +129,40 @@ export default function F1Form({ expedienteId }: Props) {
   const { canViewSensitiveFields } = useFieldVisibility(undefined);
   const { data: catalogs } = trpc.catalogs.getAll.useQuery();
 
-  // Cláusulas legales que se anexarán al PDF al exportar. Es la misma fuente
-  // que muestra F1Consideraciones — un solo hook para evitar divergencias.
-  const { clausulas: clausulasParaPdf, isLoading: clausulasLoading } = useClausulasVigentes(
-    data?.serviciosContratados,
+  const catalogsEncabezado = useMemo(
+    () => ({ sres: catalogs?.empresas as any, atencion: catalogs?.nombres as any }),
+    [catalogs],
   );
+  const catalogsEmpresa = useMemo(
+    () => ({
+      documentoIdentidad: catalogs?.documentoIdentidad as any,
+      monedas: catalogs?.monedas as any,
+      paises: catalogs?.paises as any,
+    }),
+    [catalogs],
+  );
+  const catalogsServicios = useMemo(
+    () => ({
+      unidadesNegocio: catalogs?.unidadesNegocio as any,
+      soluciones: catalogs?.soluciones as any,
+      detalleServicio: catalogs?.detalleServicio as any,
+      tipoVenta: catalogs?.tipoVenta as any,
+      plazos: catalogs?.plazos as any,
+    }),
+    [catalogs],
+  );
+  const catalogsFormasPago = useMemo(
+    () => ({ tipoVenta: catalogs?.tipoVenta as any }),
+    [catalogs],
+  );
+
+  const plantillasConsideraciones = useMemo(
+    () => catalogs?.consideracionesComerciales ?? [],
+    [catalogs],
+  );
+
+  const clausulasVigentes = useClausulasVigentes(data?.serviciosContratados, catalogs);
+  const { clausulas: clausulasParaPdf, isLoading: clausulasLoading } = clausulasVigentes;
 
   // Bloqueo de navegación cuando hay cambios sin guardar.
   // Activa beforeunload (cerrar tab/F5) y modal en navegación SPA.
@@ -96,39 +170,91 @@ export default function F1Form({ expedienteId }: Props) {
     when: status === "sin_guardar",
   });
 
-  if (!data) return <div className="p-6 text-muted-foreground">Expediente no encontrado.</div>;
+  const dataRef = useRef(data);
+  dataRef.current = data;
 
-  // ── Badge de estado ────────────────────────────────────────────────────────
+  const applyWithReconcile = useCallback(
+    (partial: Partial<F1Data>) => {
+      const base = dataRef.current;
+      if (!base) return;
+      const merged = { ...base, ...partial } as F1Data;
+      const rec = reconcileFormasPagoDesdeServicios(merged);
+      const merged2 = { ...merged, ...rec } as F1Data;
+      update({
+        ...partial,
+        ...rec,
+        total_descuento_mantencion: computeTotalDescuentoMantencion(merged2),
+      });
+    },
+    [update],
+  );
 
-  const statusBadge = {
-    nuevo:       { label: "Nuevo",       className: "bg-slate-50 text-slate-600 border-slate-200" },
-    sin_guardar: { label: "Sin guardar", className: "bg-amber-50 text-amber-700 border-amber-200" },
-    guardado:    { label: "Guardado",    className: "bg-emerald-50 text-emerald-700 border-emerald-200" },
-  }[status];
+  const serviciosSyncKey = useMemo(
+    () =>
+      JSON.stringify(
+        (data?.serviciosContratados ?? []).map(s => ({
+          id: s.id,
+          tipoVenta: s.tipoVenta,
+          total: s.total,
+          precioUnitario: s.precioUnitario,
+        })),
+      ),
+    [data?.serviciosContratados],
+  );
 
-  // ── Servicios ──────────────────────────────────────────────────────────────
+  /** Hidrata formas enlazadas al cargar expediente o si faltan filas respecto a servicios Impl/Mant. */
+  useEffect(() => {
+    const d = dataRef.current;
+    if (!d) return;
+    const patch = formasReconcilePatchOrNull(d);
+    const merged = patch ? ({ ...d, ...patch } as F1Data) : d;
+    const td = computeTotalDescuentoMantencion(merged);
+    if (patch) {
+      update({ ...patch, total_descuento_mantencion: td });
+    } else if (td !== (d.total_descuento_mantencion ?? 0)) {
+      update({ total_descuento_mantencion: td });
+    }
+  }, [expedienteId, serviciosSyncKey, update]);
+
+  const serviciosRows = data?.serviciosContratados ?? [];
 
   const addServicio = useCallback(() => {
-    const item = data.serviciosContratados.length + 1;
-    update({ serviciosContratados: [...data.serviciosContratados, createServicio(item)] });
-  }, [data.serviciosContratados, update]);
+    const item = serviciosRows.length + 1;
+    applyWithReconcile({ serviciosContratados: [...serviciosRows, createServicio(item)] });
+  }, [serviciosRows, applyWithReconcile]);
 
-  const removeServicio = useCallback((id: string) => {
-    update({ serviciosContratados: data.serviciosContratados.filter(s => s.id !== id) });
-  }, [data.serviciosContratados, update]);
+  const addVenta = useCallback(() => {
+    if (serviciosRows.length === 0) {
+      addServicio();
+      return;
+    }
+    const item = serviciosRows.length + 1;
+    const base = serviciosRows[serviciosRows.length - 1];
+    applyWithReconcile({ serviciosContratados: [...serviciosRows, createServicioFromVentaBase(base, item)] });
+  }, [serviciosRows, applyWithReconcile, addServicio]);
 
-  const updateServicio = useCallback((id: string, field: keyof ServicioContratado, value: string | number) => {
-    update({
-      serviciosContratados: data.serviciosContratados.map(s => {
-        if (s.id !== id) return s;
-        const updated = { ...s, [field]: value };
-        if (field === "precioUnitario" || field === "cantidad") {
-          updated.total = updated.precioUnitario * updated.cantidad;
-        }
-        return updated;
-      }),
-    });
-  }, [data.serviciosContratados, update]);
+  const removeServicio = useCallback(
+    (id: string) => {
+      applyWithReconcile({ serviciosContratados: serviciosRows.filter(s => s.id !== id) });
+    },
+    [serviciosRows, applyWithReconcile],
+  );
+
+  const updateServicio = useCallback(
+    (id: string, field: keyof ServicioContratado, value: string | number) => {
+      applyWithReconcile({
+        serviciosContratados: serviciosRows.map(s => {
+          if (s.id !== id) return s;
+          const updated = { ...s, [field]: value };
+          if (field === "precioUnitario" || field === "cantidad") {
+            updated.total = updated.precioUnitario * updated.cantidad;
+          }
+          return updated;
+        }),
+      });
+    },
+    [serviciosRows, applyWithReconcile],
+  );
 
   // ── Formas de Pago ─────────────────────────────────────────────────────────
 
@@ -138,39 +264,113 @@ export default function F1Form({ expedienteId }: Props) {
     field: string,
     value: string | number
   ) => {
+    if (!data) return;
     const list = data[tipo];
-    update({
-      [tipo]: list.map(fp => {
-        if (fp.id !== id) return fp;
+    const nextList = list.map(fp => {
+      if (fp.id !== id) return fp;
 
-        // Soporte para cuotas dinámicas (ej: "cuotas.0.monto")
-        if (field.startsWith("cuotas.")) {
+      // Soporte para cuotas dinámicas (ej: "cuotas.0.monto")
+      if (field.startsWith("cuotas.")) {
+        const parts = field.split(".");
+        const index = parseInt(parts[1]);
+        const child = parts[2];
+        const newCuotas = [...fp.cuotas];
+        newCuotas[index] = { ...newCuotas[index], [child]: value };
+        return { ...fp, cuotas: newCuotas };
+      }
+
+      // Caso especial para nCuotas: limitar rango 1-4
+      if (field === "nCuotas") {
+        const val = Math.min(4, Math.max(1, typeof value === "string" ? parseInt(value) : value));
+        const nextNCuotas = val || 1;
+        // Mantención: solo cambia cuántas columnas de gracia están activas (montos manuales).
+        if (tipo === "formasPagoMantencion") {
+          return { ...fp, nCuotas: nextNCuotas };
+        }
+        if (!fp.linkedServicioId) return { ...fp, nCuotas: nextNCuotas };
+        const servicio = data.serviciosContratados.find(s => s.id === fp.linkedServicioId);
+        if (!servicio) return { ...fp, nCuotas: nextNCuotas };
+        return {
+          ...fp,
+          nCuotas: nextNCuotas,
+          linkedServicioTotal: servicio.total ?? 0,
+          cuotas: distributeTotalAcrossCuotas(servicio.total ?? 0, nextNCuotas, fp.cuotas),
+        };
+      }
+
+      return { ...fp, [field]: value };
+    });
+    const nextData = { ...data, [tipo]: nextList } as F1Data;
+    update({
+      [tipo]: nextList,
+      total_descuento_mantencion: computeTotalDescuentoMantencion(nextData),
+    });
+  }, [data, update]);
+
+  const addFormaPago = useCallback((tipo: "formasPagoImplementacion" | "formasPagoMantencion") => {
+    if (!data) return;
+    const list = data[tipo];
+    const nextList = [...list, createFormaPago(list.length + 1)];
+    const nextData = { ...data, [tipo]: nextList } as F1Data;
+    update({
+      [tipo]: nextList,
+      total_descuento_mantencion: computeTotalDescuentoMantencion(nextData),
+    });
+  }, [data, update]);
+
+  const removeFormaPago = useCallback((tipo: "formasPagoImplementacion" | "formasPagoMantencion", id: string) => {
+    if (!data) return;
+    const nextList = data[tipo].filter(fp => fp.id !== id);
+    const nextData = { ...data, [tipo]: nextList } as F1Data;
+    update({
+      [tipo]: nextList,
+      total_descuento_mantencion: computeTotalDescuentoMantencion(nextData),
+    });
+  }, [data, update]);
+
+  const updateFormaPagoHitos = useCallback((
+    id: string,
+    field: string,
+    value: string | number,
+  ) => {
+    if (!data) return;
+    const list = data.formasPagoImplementacionHitos ?? [];
+    update({
+      formasPagoImplementacionHitos: list.map(fp => {
+        if (fp.id !== id) return fp;
+        if (field.startsWith("hitos.")) {
           const parts = field.split(".");
           const index = parseInt(parts[1]);
           const child = parts[2];
-          const newCuotas = [...fp.cuotas];
-          newCuotas[index] = { ...newCuotas[index], [child]: value };
-          return { ...fp, cuotas: newCuotas };
+          const newHitos = [...fp.hitos];
+          newHitos[index] = { ...newHitos[index], [child]: value };
+          return { ...fp, hitos: newHitos };
         }
-
-        // Caso especial para nCuotas: limitar rango 1-4
-        if (field === "nCuotas") {
-          const val = Math.min(4, Math.max(1, typeof value === "string" ? parseInt(value) : value));
-          return { ...fp, nCuotas: val || 1 };
-        }
-
         return { ...fp, [field]: value };
       }),
     });
   }, [data, update]);
 
-  const addFormaPago = useCallback((tipo: "formasPagoImplementacion" | "formasPagoMantencion") => {
-    const list = data[tipo];
-    update({ [tipo]: [...list, createFormaPago(list.length + 1)] });
+  const addHito = useCallback((formaPagoId: string) => {
+    if (!data) return;
+    const list = data.formasPagoImplementacionHitos ?? [];
+    update({
+      formasPagoImplementacionHitos: list.map(fp => {
+        if (fp.id !== formaPagoId) return fp;
+        return { ...fp, hitos: [...fp.hitos, createHitoPago()] };
+      }),
+    });
   }, [data, update]);
 
-  const removeFormaPago = useCallback((tipo: "formasPagoImplementacion" | "formasPagoMantencion", id: string) => {
-    update({ [tipo]: data[tipo].filter(fp => fp.id !== id) });
+  const removeHito = useCallback((formaPagoId: string, hitoId: string) => {
+    if (!data) return;
+    const list = data.formasPagoImplementacionHitos ?? [];
+    update({
+      formasPagoImplementacionHitos: list.map(fp => {
+        if (fp.id !== formaPagoId) return fp;
+        return { ...fp, hitos: fp.hitos.filter(h => h.id !== hitoId) };
+      }),
+    });
   }, [data, update]);
 
   // ── Guardar ────────────────────────────────────────────────────────────────
@@ -180,6 +380,7 @@ export default function F1Form({ expedienteId }: Props) {
    * Devuelve true si pasa la validación.
    */
   const validate = useCallback((): boolean => {
+    if (!data) return false;
     for (const req of REQUIRED_FIELDS) {
       const val = data[req.key];
       if (!val || (typeof val === "string" && val.trim() === "")) {
@@ -267,10 +468,14 @@ export default function F1Form({ expedienteId }: Props) {
     }
   }, [data, clausulasParaPdf]);
 
+  if (!data) return <div className="p-6 text-muted-foreground">Expediente no encontrado.</div>;
+
+  const statusBadge = STATUS_BADGE_MAP[status];
+
   // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
-    <div className="p-6 max-w-5xl mx-auto space-y-6">
+    <div className="p-6 max-w-5xl mx-auto space-y-6" translate="no">
       <PageHeader
         title="Acta de Aceptación de Servicios"
         subtitle="Formulario 1 — Datos del cliente y servicios contratados"
@@ -304,16 +509,12 @@ export default function F1Form({ expedienteId }: Props) {
 
       <F1Encabezado
         data={data} onUpdate={update}
-        catalogs={{ sres: catalogs?.empresas as any, atencion: catalogs?.nombres as any }}
+        catalogs={catalogsEncabezado}
       />
 
       <F1Empresa
         data={data} onUpdate={update}
-        catalogs={{
-          documentoIdentidad: catalogs?.documentoIdentidad as any,
-          monedas: catalogs?.monedas as any,
-          paises: catalogs?.paises as any,
-        }}
+        catalogs={catalogsEmpresa}
       />
 
       <F1Contactos data={data} onUpdate={update} />
@@ -321,14 +522,9 @@ export default function F1Form({ expedienteId }: Props) {
       <F1Servicios
         servicios={data.serviciosContratados}
         moneda={data.moneda}
-        catalogs={{
-          unidadesNegocio: catalogs?.unidadesNegocio as any,
-          soluciones: catalogs?.soluciones as any,
-          detalleServicio: catalogs?.detalleServicio as any,
-          tipoVenta: catalogs?.tipoVenta as any,
-          plazos: catalogs?.plazos as any,
-        }}
+        catalogs={catalogsServicios}
         onAdd={addServicio}
+        onAddVenta={addVenta}
         onRemove={removeServicio}
         onUpdate={updateServicio}
         restricted={!canViewSensitiveFields}
@@ -337,14 +533,23 @@ export default function F1Form({ expedienteId }: Props) {
       <F1FormasPago
         data={data}
         moneda={data.moneda}
-        catalogs={{ tipoVenta: catalogs?.tipoVenta as any }}
+        catalogs={catalogsFormasPago}
         onUpdate={updateFormaPago}
+        onUpdateHitos={updateFormaPagoHitos}
+        onAddHito={addHito}
+        onRemoveHito={removeHito}
         onAdd={addFormaPago}
         onRemove={removeFormaPago}
         restricted={!canViewSensitiveFields}
       />
 
-      <F1Consideraciones data={data} onUpdate={update} restricted={!canViewSensitiveFields} />
+      <F1Consideraciones
+        data={data}
+        onUpdate={update}
+        plantillasCatalogo={plantillasConsideraciones as any}
+        clausulasAuto={clausulasVigentes}
+        restricted={!canViewSensitiveFields}
+      />
 
       <F1Firmas data={data} onUpdate={update} />
 

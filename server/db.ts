@@ -17,7 +17,7 @@ import {
   catalogMonedas, catalogPaises, catalogEmpresas, catalogDocumentoIdentidad,
   catalogUnidadesNegocio, catalogSoluciones, catalogDetalleServicio,
   catalogTipoVenta, catalogPlazos, catalogDocumentos, catalogCecos,
-  catalogDepartamentos, catalogAreas, catalogNombres,
+  catalogDepartamentos, catalogAreas, catalogNombres, catalogConsideracionesComerciales,
   // Gestor de Horarios
   schEmpleados, type SchEmpleado, type InsertSchEmpleado,
   schContratos, type SchContrato, type InsertSchContrato,
@@ -85,6 +85,11 @@ const FIXED_CATALOGS = [
   { tableName: "deptos",     realTable: "catalog_departamentos",       title: "Departamentos" },
   { tableName: "areas",      realTable: "catalog_areas",               title: "Áreas" },
   { tableName: "nombres",    realTable: "catalog_nombres",             title: "Nombres" },
+  {
+    tableName: "consideraciones",
+    realTable: "catalog_consideraciones_comerciales",
+    title: "Consideraciones comerciales (Acta)",
+  },
 ];
 
 // Seed de catalog_meta al arrancar
@@ -155,6 +160,7 @@ const catalogMap: Record<string, any> = {
   deptos: catalogDepartamentos,
   areas: catalogAreas,
   nombres: catalogNombres,
+  consideraciones: catalogConsideracionesComerciales,
 };
 
 function getCatalogTable(tableName: string) {

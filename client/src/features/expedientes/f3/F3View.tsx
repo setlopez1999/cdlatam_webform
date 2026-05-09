@@ -127,7 +127,7 @@ export default function F3View({ expedienteId, onVolverF2 }: Props) {
   };
 
   return (
-    <div className="p-6 max-w-5xl mx-auto space-y-6">
+    <div className="p-6 max-w-5xl mx-auto space-y-6" translate="no">
       <PageHeader
         title="Resultado Evaluación"
         subtitle="F3 — Ingreso desde F1 · Gastos desde F2 · Calculado en tiempo real"
@@ -142,6 +142,13 @@ export default function F3View({ expedienteId, onVolverF2 }: Props) {
           )
         }
       />
+
+      {(f1.total_descuento_mantencion ?? 0) > 0 && (
+        <div className="rounded-lg border border-emerald-200 bg-emerald-50/90 px-3 py-2 text-xs text-emerald-950">
+          <span className="font-medium">Ahorro Mantención desde F1 (cuotas de gracia): </span>
+          {formatCurrency(f1.total_descuento_mantencion ?? 0, currencyCode)}
+        </div>
+      )}
 
       {/* Sin datos */}
       {!hasData && (

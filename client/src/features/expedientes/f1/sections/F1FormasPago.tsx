@@ -7,13 +7,16 @@
  *         según los tipos de venta presentes en serviciosContratados.
  * Obs. 10: El campo Fecha de cada cuota tiene la opción "Contra entrega" además de fecha.
  */
+import { Fragment } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { FormSection, FieldGroup } from "@/components/FormSection";
+import { FormSection } from "@/components/FormSection";
+import { Badge } from "@/components/ui/badge";
 import { CreditCard, Plus, Trash2, ShieldOff } from "lucide-react";
-import type { F1Data, FormaPago } from "../../types";
+import type { F1Data, FormaPago, FormaPagoHitos } from "../../types";
 import { formatCurrency, getCurrencyCode, parseNumeric } from "@/lib/formatters";
+import { isTipoImplementacion, isTipoImplementacionHitos, isTipoMantencion } from "../f1TipoVenta";
 
 interface CatalogItem { value: string; label: string; }
 interface Catalogs {
@@ -32,6 +35,9 @@ interface Props {
   ) => void;
   onAdd?: (tipo: "formasPagoImplementacion" | "formasPagoMantencion") => void;
   onRemove?: (tipo: "formasPagoImplementacion" | "formasPagoMantencion", id: string) => void;
+  onUpdateHitos: (formaPagoId: string, field: string, value: string | number) => void;
+  onAddHito: (formaPagoId: string) => void;
+  onRemoveHito: (formaPagoId: string, hitoId: string) => void;
   /** Si true, oculta montos y detalles de pago y muestra placeholder de acceso restringido */
   restricted?: boolean;
 }
@@ -41,6 +47,127 @@ interface Props {
 interface FechaContraEntregaProps {
   value: string;
   onChange: (v: string) => void;
+}
+
+interface PagoHitosTableProps {
+  items: FormaPagoHitos[];
+  currencyCode?: string;
+  totalReferenciaByServicio: Record<string, number>;
+  onUpdateHitos: Props["onUpdateHitos"];
+  onAddHito: Props["onAddHito"];
+  onRemoveHito: Props["onRemoveHito"];
+}
+
+function PagoHitosTable({
+  items,
+  currencyCode = "USD",
+  totalReferenciaByServicio,
+  onUpdateHitos,
+  onAddHito,
+  onRemoveHito,
+}: PagoHitosTableProps) {
+  const safeItems = Array.isArray(items) ? items : [];
+  return (
+    <div className="space-y-4">
+      <h4 className="text-sm font-semibold text-foreground">Formas de Pago — Implementación Hitos</h4>
+
+      {safeItems.map((pago, idx) => {
+        const totalHitos = pago.hitos.reduce((sum, h) => sum + (h.precioHito || 0), 0);
+        const totalRef = totalReferenciaByServicio[pago.linkedServicioId ?? ""] ?? 0;
+        const hasWarning = totalRef > 0 && Math.abs(totalHitos - totalRef) > 0.1;
+        return (
+          <div key={pago.id} className="rounded-lg border border-border/60 p-3 space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <div className="text-xs text-muted-foreground">
+                <span className="font-medium text-foreground">Ítem {idx + 1}</span>
+                {" · "}
+                <span>{pago.tipoVenta || "Implementación Hitos"}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                {hasWarning && (
+                  <Badge variant="outline" className="bg-orange-500/10 text-orange-400 border-orange-500/20 text-[10px] py-0 px-2">
+                    La suma de hitos no coincide con el total del servicio ({formatCurrency(totalRef, currencyCode)})
+                  </Badge>
+                )}
+                <Button type="button" variant="outline" size="sm" className="h-7 text-xs gap-1" onClick={() => onAddHito(pago.id)}>
+                  <Plus className="w-3 h-3" /> Agregar hito
+                </Button>
+              </div>
+            </div>
+
+            <div className="overflow-x-auto rounded-lg border border-border/40">
+              <table className="w-full min-w-[720px] text-xs border-collapse">
+                <thead>
+                  <tr className="bg-muted/60">
+                    <th className="border-b border-r border-border/60 px-2 py-2 text-left font-medium w-10">#</th>
+                    <th className="border-b border-r border-border/60 px-2 py-2 text-left font-medium">Nombre hito</th>
+                    <th className="border-b border-r border-border/60 px-2 py-2 text-right font-medium w-[130px]">Precio hito</th>
+                    <th className="border-b border-r border-border/60 px-2 py-2 text-left font-medium">Condiciones</th>
+                    <th className="border-b border-border/60 px-2 py-2 w-8"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {pago.hitos.map((hito, hIdx) => (
+                    <tr key={hito.id} className="hover:bg-muted/10 transition-colors border-b border-border/20 last:border-b-0">
+                      <td className="px-2 py-1 text-center text-muted-foreground">{hIdx + 1}</td>
+                      <td className="px-1 py-1">
+                        <Input
+                          className="h-7 text-xs"
+                          placeholder="Nombre del hito"
+                          value={hito.nombreHito}
+                          onChange={e => onUpdateHitos(pago.id, `hitos.${hIdx}.nombreHito`, e.target.value)}
+                        />
+                      </td>
+                      <td className="px-1 py-1">
+                        <Input
+                          type="number"
+                          min={0}
+                          className="h-7 text-xs text-right"
+                          placeholder="0"
+                          value={hito.precioHito || ""}
+                          onChange={e => onUpdateHitos(pago.id, `hitos.${hIdx}.precioHito`, parseNumeric(e.target.value))}
+                        />
+                      </td>
+                      <td className="px-1 py-1">
+                        <Input
+                          className="h-7 text-xs"
+                          placeholder="Condición de cumplimiento"
+                          value={hito.condicion}
+                          onChange={e => onUpdateHitos(pago.id, `hitos.${hIdx}.condicion`, e.target.value)}
+                        />
+                      </td>
+                      <td className="px-1 py-1 text-center">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6 text-destructive/60 hover:text-destructive"
+                          onClick={() => onRemoveHito(pago.id, hito.id)}
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className="bg-muted/40 font-medium">
+                    <td colSpan={2} className="border-t border-r border-border/60 px-2 py-1.5 text-right">Total hitos:</td>
+                    <td className={`border-t border-r border-border/60 px-2 py-1.5 text-right font-bold ${hasWarning ? "text-orange-400" : "text-emerald-400"}`}>
+                      {formatCurrency(totalHitos, currencyCode)}
+                    </td>
+                    <td colSpan={2} className="border-t border-border/60 px-2 py-1.5 text-[10px] text-muted-foreground">
+                      {hasWarning ? "Revisar suma de hitos vs total del servicio" : "Suma de hitos validada"}
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
 }
 
 function FechaContraEntrega({ value, onChange }: FechaContraEntregaProps) {
@@ -78,18 +205,26 @@ interface PagoTableProps {
   title: string;
   items: FormaPago[];
   tipo: "formasPagoImplementacion" | "formasPagoMantencion";
+  /** Mantención: cuotas de gracia manuales vs valor unitario; sin validación de suma vs total servicio. */
+  modo?: "implementacion" | "mantencion";
   catalogs?: Catalogs;
   currencyCode?: string;
-  totalReferencia: number; // Monto total esperado según servicios
+  totalReferencia: number; // Monto total esperado según servicios (solo Implementación)
+  /** Total descuento acumulado F1 (Mantención). */
+  totalDescuentoMantencion?: number;
+  precioUnitarioByServicioId?: Record<string, number>;
   onUpdate: Props["onUpdate"];
   onAdd?: Props["onAdd"];
   onRemove?: Props["onRemove"];
 }
 
 function PagoTable({
-  title, items, tipo, catalogs, currencyCode = "USD", totalReferencia,
+  title, items, tipo, modo = "implementacion", catalogs, currencyCode = "USD", totalReferencia,
+  totalDescuentoMantencion = 0,
+  precioUnitarioByServicioId = {},
   onUpdate, onAdd, onRemove,
 }: PagoTableProps) {
+  const esMantencion = modo === "mantencion";
   // Determinar cuántas columnas de cuotas mostrar (máximo de nCuotas en esta tabla, min 1, max 4)
   const maxCuotas = Math.min(4, Math.max(1, ...items.map(i => i.nCuotas || 0)));
   
@@ -98,13 +233,18 @@ function PagoTable({
   );
 
   const diff = Math.abs(totalPagos - totalReferencia);
-  const hasWarning = diff > 0.1 && totalReferencia > 0;
+  const hasWarning = !esMantencion && diff > 0.1 && totalReferencia > 0;
 
   return (
     <div className="space-y-3">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-1">
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <h4 className="text-sm font-semibold text-foreground">{title}</h4>
+          {esMantencion && (
+            <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 border-emerald-500/25 text-[10px] py-0 px-2">
+              Ahorro total (cuotas de gracia): {formatCurrency(totalDescuentoMantencion, currencyCode)}
+            </Badge>
+          )}
           {hasWarning && (
             <Badge variant="outline" className="bg-orange-500/10 text-orange-400 border-orange-500/20 text-[10px] py-0 px-2 flex items-center gap-1 animate-pulse">
               <ShieldOff className="w-3 h-3" /> La suma no coincide con el total de servicios ({formatCurrency(totalReferencia, currencyCode)})
@@ -124,10 +264,12 @@ function PagoTable({
             <tr className="bg-muted/60">
               <th className="border-b border-r border-border/60 px-2 py-2 text-left font-medium w-10">ITEM</th>
               <th className="border-b border-r border-border/60 px-2 py-2 text-left font-medium w-[130px] min-w-[130px]">Tipo Venta</th>
-              <th className="border-b border-r border-border/60 px-2 py-2 text-center font-medium w-16">N° Cuotas</th>
+              <th className="border-b border-r border-border/60 px-2 py-2 text-center font-medium w-16">
+                {esMantencion ? "N° Cuotas de Gracia" : "N° Cuotas"}
+              </th>
               {Array.from({ length: maxCuotas }).map((_, i) => (
                 <th key={i} className="border-b border-r border-border/60 px-2 py-2 text-center font-medium" colSpan={2}>
-                  Cuota {i + 1}
+                  {esMantencion ? `Cuota de gracia ${i + 1}` : `Cuota ${i + 1}`}
                 </th>
               ))}
               {onRemove && <th className="border-b border-l border-border/60 w-8"></th>}
@@ -152,22 +294,32 @@ function PagoTable({
 
                 {/* Tipo Venta */}
                 <td className="border-b border-r border-border/40 px-1 py-0.5 min-w-[130px]">
-                  {catalogs?.tipoVenta && catalogs.tipoVenta.length > 0 ? (
-                    <Select value={pago.tipoVenta} onValueChange={v => onUpdate(tipo, pago.id, "tipoVenta", v)}>
-                      <SelectTrigger className="h-7 text-xs border-0 bg-transparent focus:ring-0 max-w-full overflow-hidden">
-                        <SelectValue placeholder="Tipo..." className="truncate" />
-                      </SelectTrigger>
-                      <SelectContent position="popper" sideOffset={4} className="z-[200]">
-                        {catalogs.tipoVenta.map(t => (
-                          <SelectItem key={t.value} value={t.value} className="text-xs">{t.label}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  ) : (
-                    <Input className="h-7 text-xs border-0 bg-transparent focus-visible:ring-0"
-                      placeholder="Tipo venta" value={pago.tipoVenta}
-                      onChange={e => onUpdate(tipo, pago.id, "tipoVenta", e.target.value)} />
-                  )}
+                  <div className="space-y-0.5">
+                    {catalogs?.tipoVenta && catalogs.tipoVenta.length > 0 ? (
+                      <Select
+                        value={pago.tipoVenta}
+                        onValueChange={v => onUpdate(tipo, pago.id, "tipoVenta", v)}
+                      >
+                        <SelectTrigger className="h-7 text-xs border-0 bg-transparent focus:ring-0 max-w-full overflow-hidden">
+                          <SelectValue placeholder="Tipo..." className="truncate" />
+                        </SelectTrigger>
+                        <SelectContent position="popper" sideOffset={4} className="z-[200]">
+                          {catalogs.tipoVenta.map(t => (
+                            <SelectItem key={t.value} value={t.value} className="text-xs">{t.label}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <Input className="h-7 text-xs border-0 bg-transparent focus-visible:ring-0"
+                        placeholder="Tipo venta" value={pago.tipoVenta}
+                        onChange={e => onUpdate(tipo, pago.id, "tipoVenta", e.target.value)} />
+                    )}
+                    {esMantencion && pago.linkedServicioId && precioUnitarioByServicioId[pago.linkedServicioId] !== undefined && (
+                      <div className="text-[10px] text-muted-foreground px-0.5">
+                        Ref. mensual (VU): {formatCurrency(precioUnitarioByServicioId[pago.linkedServicioId] ?? 0, currencyCode)}
+                      </div>
+                    )}
+                  </div>
                 </td>
 
                 {/* N° Cuotas */}
@@ -215,15 +367,23 @@ function PagoTable({
               </tr>
             ))}
           </tbody>
-          {totalPagos > 0 && (
+          {(esMantencion ? totalDescuentoMantencion > 0 || totalPagos > 0 : totalPagos > 0) && (
             <tfoot>
               <tr className="bg-muted/40 font-medium">
-                <td colSpan={3} className="border-t border-r border-border/60 px-2 py-1.5 text-right text-xs">Total:</td>
-                <td colSpan={2} className={`border-t border-r border-border/60 px-2 py-1.5 text-right text-xs font-bold ${hasWarning ? "text-orange-400" : "text-emerald-400"}`}>
+                <td colSpan={3} className="border-t border-r border-border/60 px-2 py-1.5 text-right text-xs">
+                  {esMantencion ? "Suma montos ingresados (gracia):" : "Total:"}
+                </td>
+                <td colSpan={2} className={`border-t border-r border-border/60 px-2 py-1.5 text-right text-xs font-bold ${hasWarning ? "text-orange-400" : esMantencion ? "text-foreground" : "text-emerald-400"}`}>
                   {formatCurrency(totalPagos, currencyCode)}
                 </td>
                 <td colSpan={maxCuotas * 2 - 2} className="border-t border-border/60 px-2 py-1.5">
-                   {hasWarning && <span className="text-[10px] text-orange-400/80 italic font-normal">Suma no coincide con servicios</span>}
+                  {esMantencion ? (
+                    <span className="text-[10px] text-muted-foreground font-normal">
+                      Ahorro acumulado F1: {formatCurrency(totalDescuentoMantencion, currencyCode)}
+                    </span>
+                  ) : (
+                    hasWarning && <span className="text-[10px] text-orange-400/80 italic font-normal">Suma no coincide con servicios</span>
+                  )}
                 </td>
                 {onRemove && <td className="border-t border-l border-border/60"></td>}
               </tr>
@@ -237,36 +397,46 @@ function PagoTable({
 
 // ─── Componente principal ─────────────────────────────────────────────────────
 
-// Valores de tipoVenta que activan cada tabla (case-insensitive match parcial)
-const IMPLEMENTACION_KEYWORDS = ["implementacion", "implementación", "impl"];
-const MANTENCION_KEYWORDS     = ["mantencion", "mantención", "mant", "mantención"];
-
-function matchesKeywords(value: string, keywords: string[]): boolean {
-  const v = (value || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-  return keywords.some(k => v.includes(k));
-}
-
-import { Fragment } from "react";
-import { Badge } from "@/components/ui/badge";
-
-export function F1FormasPago({ data, catalogs, moneda, onUpdate, onAdd, onRemove, restricted = false }: Props) {
+export function F1FormasPago({
+  data,
+  catalogs,
+  moneda,
+  onUpdate,
+  onAdd,
+  onRemove,
+  onUpdateHitos,
+  onAddHito,
+  onRemoveHito,
+  restricted = false,
+}: Props) {
   const currencyCode = getCurrencyCode(moneda ?? "");
+  const hitosItems = data.formasPagoImplementacionHitos ?? [];
 
-  // Detectar qué tipos de venta están presentes en serviciosContratados
-  const tiposPresentes = data.serviciosContratados.map(s => s.tipoVenta);
-  const tieneImplementacion = tiposPresentes.some(t => matchesKeywords(t, IMPLEMENTACION_KEYWORDS));
-  const tieneMantencion     = tiposPresentes.some(t => matchesKeywords(t, MANTENCION_KEYWORDS));
+  const tieneImplementacion = data.serviciosContratados.some(s => isTipoImplementacion(s.tipoVenta));
+  const tieneMantencion = data.serviciosContratados.some(s => isTipoMantencion(s.tipoVenta));
+  const tieneImplementacionHitos = data.serviciosContratados.some(s => isTipoImplementacionHitos(s.tipoVenta));
 
-  // Cálculo de montos totales de servicios para validación
   const totalReferenciaImpl = data.serviciosContratados
-    .filter(s => matchesKeywords(s.tipoVenta, IMPLEMENTACION_KEYWORDS))
+    .filter(s => isTipoImplementacion(s.tipoVenta))
     .reduce((sum, s) => sum + (s.total || 0), 0);
 
   const totalReferenciaMant = data.serviciosContratados
-    .filter(s => matchesKeywords(s.tipoVenta, MANTENCION_KEYWORDS))
+    .filter(s => isTipoMantencion(s.tipoVenta))
     .reduce((sum, s) => sum + (s.total || 0), 0);
 
-  const mostrarAlguna = tieneImplementacion || tieneMantencion;
+  const precioUnitarioByServicioId = data.serviciosContratados.reduce<Record<string, number>>((acc, s) => {
+    acc[s.id] = s.precioUnitario ?? 0;
+    return acc;
+  }, {});
+
+  const totalReferenciaHitosByServicio = data.serviciosContratados
+    .filter(s => isTipoImplementacionHitos(s.tipoVenta))
+    .reduce<Record<string, number>>((acc, s) => {
+      acc[s.id] = s.total || 0;
+      return acc;
+    }, {});
+
+  const mostrarAlguna = tieneImplementacion || tieneMantencion || tieneImplementacionHitos;
 
   if (restricted) {
     return (
@@ -285,7 +455,7 @@ export function F1FormasPago({ data, catalogs, moneda, onUpdate, onAdd, onRemove
     return (
       <FormSection title="Formas de Pago" icon={CreditCard} accent="indigo">
         <p className="text-sm text-muted-foreground italic">
-          Agrega servicios de tipo <strong>Implementación</strong> o <strong>Mantención</strong> para habilitar las formas de pago.
+          Agrega servicios de tipo <strong>Implementación</strong>, <strong>Implementación Hitos</strong> o <strong>Mantención</strong> para habilitar las formas de pago.
         </p>
       </FormSection>
     );
@@ -313,12 +483,27 @@ export function F1FormasPago({ data, catalogs, moneda, onUpdate, onAdd, onRemove
               title="Formas de Pago — Mantención"
               items={data.formasPagoMantencion}
               tipo="formasPagoMantencion"
+              modo="mantencion"
               catalogs={catalogs}
               currencyCode={currencyCode}
               totalReferencia={totalReferenciaMant}
+              totalDescuentoMantencion={data.total_descuento_mantencion ?? 0}
+              precioUnitarioByServicioId={precioUnitarioByServicioId}
               onUpdate={onUpdate}
               onAdd={onAdd}
               onRemove={onRemove}
+            />
+          </div>
+        )}
+        {tieneImplementacionHitos && (
+          <div className={tieneImplementacion || tieneMantencion ? "border-t border-border/40 pt-6" : ""}>
+            <PagoHitosTable
+              items={hitosItems}
+              currencyCode={currencyCode}
+              totalReferenciaByServicio={totalReferenciaHitosByServicio}
+              onUpdateHitos={onUpdateHitos}
+              onAddHito={onAddHito}
+              onRemoveHito={onRemoveHito}
             />
           </div>
         )}
