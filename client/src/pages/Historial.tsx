@@ -80,6 +80,9 @@ function ResultadosExpandidos({ exp }: { exp: Expediente }) {
   const tieneF2 = exp.f2.status !== "nuevo";
   if (!tieneF2) return null;
 
+  const f1Guardado = exp.f1.status === "guardado";
+  const etiquetaGim = exp.f1.data.sres?.trim() || "GIM";
+
   const r = useMemo(
     () => calcularResultadoF3(exp.f2.data, exp.f1.data),
     [exp.f2.data, exp.f1.data],
@@ -171,68 +174,81 @@ function ResultadosExpandidos({ exp }: { exp: Expediente }) {
                 <td className="px-3 py-1.5 text-center font-bold">{fmtCell(r.resultado.mes2)}</td>
                 <td className="px-3 py-1.5 text-center font-bold">{fmtCell(r.resultado.mes3)}</td>
               </tr>
-              <tr className="bg-muted/20">
-                <td colSpan={5} className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Distribución:</td>
-              </tr>
-              <tr className="border-b border-border/30">
-                <td className="px-3 py-1.5 pl-5 font-medium">GIM</td>
-                <td className="px-3 py-1.5 text-center text-muted-foreground">{(r.distribucion.gim.porcentaje * 100).toFixed(0)}%</td>
-                <td className="px-3 py-1.5 text-center">{fmtCell(r.distribucion.gim.mes1)}</td>
-                <td className="px-3 py-1.5 text-center">{fmtCell(r.distribucion.gim.mes2)}</td>
-                <td className="px-3 py-1.5 text-center">{fmtCell(r.distribucion.gim.mes3)}</td>
-              </tr>
-              <tr className="border-b border-border/30 bg-muted/10">
-                <td className="px-3 py-1.5 pl-5 font-medium">GP</td>
-                <td className="px-3 py-1.5 text-center text-muted-foreground">{(r.distribucion.gp.porcentaje * 100).toFixed(0)}%</td>
-                <td className="px-3 py-1.5 text-center">{fmtCell(r.distribucion.gp.mes1)}</td>
-                <td className="px-3 py-1.5 text-center">{fmtCell(r.distribucion.gp.mes2)}</td>
-                <td className="px-3 py-1.5 text-center">{fmtCell(r.distribucion.gp.mes3)}</td>
-              </tr>
+              {f1Guardado && (
+                <>
+                  <tr className="bg-muted/20">
+                    <td colSpan={5} className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Distribución:</td>
+                  </tr>
+                  <tr className="border-b border-border/30">
+                    <td className="px-3 py-1.5 pl-5 font-medium">{etiquetaGim}</td>
+                    <td className="px-3 py-1.5 text-center text-muted-foreground">{(r.distribucion.gim.porcentaje * 100).toFixed(0)}%</td>
+                    <td className="px-3 py-1.5 text-center">{fmtCell(r.distribucion.gim.mes1)}</td>
+                    <td className="px-3 py-1.5 text-center">{fmtCell(r.distribucion.gim.mes2)}</td>
+                    <td className="px-3 py-1.5 text-center">{fmtCell(r.distribucion.gim.mes3)}</td>
+                  </tr>
+                  <tr className="border-b border-border/30 bg-muted/10">
+                    <td className="px-3 py-1.5 pl-5 font-medium">GP</td>
+                    <td className="px-3 py-1.5 text-center text-muted-foreground">{(r.distribucion.gp.porcentaje * 100).toFixed(0)}%</td>
+                    <td className="px-3 py-1.5 text-center">{fmtCell(r.distribucion.gp.mes1)}</td>
+                    <td className="px-3 py-1.5 text-center">{fmtCell(r.distribucion.gp.mes2)}</td>
+                    <td className="px-3 py-1.5 text-center">{fmtCell(r.distribucion.gp.mes3)}</td>
+                  </tr>
+                </>
+              )}
+              {!f1Guardado && (
+                <tr className="bg-amber-500/5">
+                  <td colSpan={5} className="px-3 py-2 text-[11px] text-amber-700/90">
+                    Guarde el Acta (F1) para ver la distribución ({etiquetaGim} / GP) y la facturación inter-empresa.
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
       </div>
 
-      {/* Tabla 3: Facturación Inter-Empresa */}
-      <div className="rounded-lg border border-border overflow-hidden">
-        <div className="bg-[#1a2a3a] px-3 py-1.5 text-center">
-          <span className="text-xs font-bold text-white uppercase tracking-wide">Facturación Inter-Empresa</span>
+      {/* Tabla 3: Facturación Inter-Empresa — solo con F1 guardado */}
+      {f1Guardado && (
+        <div className="rounded-lg border border-border overflow-hidden">
+          <div className="bg-[#1a2a3a] px-3 py-1.5 text-center">
+            <span className="text-xs font-bold text-white uppercase tracking-wide">Facturación Inter-Empresa</span>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs border-collapse">
+              <thead>
+                <tr className="bg-muted/50 border-b border-border">
+                  <th className="px-3 py-1.5 text-left font-semibold" />
+                  <th className="px-3 py-1.5 text-center font-semibold w-16" />
+                  <th className="px-3 py-1.5 text-center font-semibold">MES 1</th>
+                  <th className="px-3 py-1.5 text-center font-semibold">MES 2</th>
+                  <th className="px-3 py-1.5 text-center font-semibold">MES 3</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr className="border-b border-border/30">
+                  <td className="px-3 py-1.5 font-medium">Bruto</td><td />
+                  <td className="px-3 py-1.5 text-center">{fmtCell(r.facturacion.bruto.mes1)}</td>
+                  <td className="px-3 py-1.5 text-center">{fmtCell(r.facturacion.bruto.mes2)}</td>
+                  <td className="px-3 py-1.5 text-center">{fmtCell(r.facturacion.bruto.mes3)}</td>
+                </tr>
+                <tr className="border-b border-border/30 bg-muted/10">
+                  <td className="px-3 py-1.5 font-medium">Impuesto</td>
+                  <td className="px-3 py-1.5 text-center text-muted-foreground">{r.facturacion.impuesto.tasa.toFixed(2)}</td>
+                  <td className="px-3 py-1.5 text-center">{fmtCell(r.facturacion.impuesto.mes1)}</td>
+                  <td className="px-3 py-1.5 text-center">{fmtCell(r.facturacion.impuesto.mes2)}</td>
+                  <td className="px-3 py-1.5 text-center">{fmtCell(r.facturacion.impuesto.mes3)}</td>
+                </tr>
+                <tr className="bg-[#1a2a3a]/10 border-t border-[#1a2a3a]/20">
+                  <td className="px-3 py-1.5 font-bold">Neto</td><td />
+                  <td className="px-3 py-1.5 text-center font-bold">{fmtCell(r.facturacion.neto.mes1)}</td>
+                  <td className="px-3 py-1.5 text-center font-bold">{fmtCell(r.facturacion.neto.mes2)}</td>
+                  <td className="px-3 py-1.5 text-center font-bold">{fmtCell(r.facturacion.neto.mes3)}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-xs border-collapse">
-            <thead>
-              <tr className="bg-muted/50 border-b border-border">
-                <th className="px-3 py-1.5 text-left font-semibold" />
-                <th className="px-3 py-1.5 text-center font-semibold w-16" />
-                <th className="px-3 py-1.5 text-center font-semibold">MES 1</th>
-                <th className="px-3 py-1.5 text-center font-semibold">MES 2</th>
-                <th className="px-3 py-1.5 text-center font-semibold">MES 3</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr className="border-b border-border/30">
-                <td className="px-3 py-1.5 font-medium">Bruto</td><td />
-                <td className="px-3 py-1.5 text-center">{fmtCell(r.facturacion.bruto.mes1)}</td>
-                <td className="px-3 py-1.5 text-center">{fmtCell(r.facturacion.bruto.mes2)}</td>
-                <td className="px-3 py-1.5 text-center">{fmtCell(r.facturacion.bruto.mes3)}</td>
-              </tr>
-              <tr className="border-b border-border/30 bg-muted/10">
-                <td className="px-3 py-1.5 font-medium">Impuesto</td>
-                <td className="px-3 py-1.5 text-center text-muted-foreground">{r.facturacion.impuesto.tasa.toFixed(2)}</td>
-                <td className="px-3 py-1.5 text-center">{fmtCell(r.facturacion.impuesto.mes1)}</td>
-                <td className="px-3 py-1.5 text-center">{fmtCell(r.facturacion.impuesto.mes2)}</td>
-                <td className="px-3 py-1.5 text-center">{fmtCell(r.facturacion.impuesto.mes3)}</td>
-              </tr>
-              <tr className="bg-[#1a2a3a]/10 border-t border-[#1a2a3a]/20">
-                <td className="px-3 py-1.5 font-bold">Neto</td><td />
-                <td className="px-3 py-1.5 text-center font-bold">{fmtCell(r.facturacion.neto.mes1)}</td>
-                <td className="px-3 py-1.5 text-center font-bold">{fmtCell(r.facturacion.neto.mes2)}</td>
-                <td className="px-3 py-1.5 text-center font-bold">{fmtCell(r.facturacion.neto.mes3)}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
+      )}
     </div>
   );
 }

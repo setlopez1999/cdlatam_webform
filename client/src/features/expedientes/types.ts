@@ -256,15 +256,36 @@ export type ResultadoCalculado = F3Calculado;
 
 // ─── Motor de cálculo F3 ─────────────────────────────────────────────────────
 
-const DISTRIBUCION_GIM = 0.1;   // 10%
-const DISTRIBUCION_GP  = 0.9;   // 90%
-const TASA_IMPUESTO    = 0.19;  // 19%
+/** Fracción por defecto del bloque GIM / Sres. sobre el resultado (10%). */
+export const FRACCION_GIM_DEFAULT = 0.1;
+/** Tasa de impuesto por defecto sobre la facturación bruta (19%). */
+export const TASA_IMPUESTO_DEFAULT = 0.19;
+const IMPUESTO_FRACCION_MIN = 0.005; // 0.5 %
+const IMPUESTO_FRACCION_MAX = 1;
+
+export interface CalcularResultadoF3Opciones {
+  /** Entre 0 y 1. Por defecto 0.1 (10%). GP será 1 − fraccionGIM. */
+  fraccionGIM?: number;
+  /**
+   * Fracción de impuesto sobre facturación bruta (tramo GP), ej. 0.19 = 19%.
+   * Por defecto 19%. Rango efectivo 0.5 %–100 % (0.005–1).
+   */
+  tasaImpuesto?: number;
+}
 
 /**
  * Calcula el Resultado Evaluación (F3) a partir de los datos de F2.
  * Función pura — sin efectos secundarios, fácil de testear.
  */
-export function calcularResultadoF3(f2: F2Data, f1?: F1Data): F3Calculado {
+export function calcularResultadoF3(
+  f2: F2Data,
+  f1?: F1Data,
+  opciones?: CalcularResultadoF3Opciones,
+): F3Calculado {
+  let g = opciones?.fraccionGIM ?? FRACCION_GIM_DEFAULT;
+  if (!Number.isFinite(g)) g = FRACCION_GIM_DEFAULT;
+  g = Math.min(1, Math.max(0, g));
+  const p = 1 - g;
   const hardware    = f2.hardware    ?? [];
   const materiales  = f2.materiales  ?? [];
   const rrhh        = f2.rrhh        ?? [];
@@ -292,9 +313,13 @@ export function calcularResultadoF3(f2: F2Data, f1?: F1Data): F3Calculado {
   const resMes2 = ingresoPorMes - gastosMes2;
   const resMes3 = ingresoPorMes - gastosMes3;
 
-  const gpMes1 = resMes1 * DISTRIBUCION_GP;
-  const gpMes2 = resMes2 * DISTRIBUCION_GP;
-  const gpMes3 = resMes3 * DISTRIBUCION_GP;
+  const gpMes1 = resMes1 * p;
+  const gpMes2 = resMes2 * p;
+  const gpMes3 = resMes3 * p;
+
+  let tImp = opciones?.tasaImpuesto ?? TASA_IMPUESTO_DEFAULT;
+  if (!Number.isFinite(tImp)) tImp = TASA_IMPUESTO_DEFAULT;
+  tImp = Math.min(IMPUESTO_FRACCION_MAX, Math.max(IMPUESTO_FRACCION_MIN, tImp));
 
   return {
     resumen: {
@@ -309,13 +334,13 @@ export function calcularResultadoF3(f2: F2Data, f1?: F1Data): F3Calculado {
     gastos:    { mes1: gastosMes1,    mes2: gastosMes2,    mes3: gastosMes3    },
     resultado: { mes1: resMes1,       mes2: resMes2,       mes3: resMes3       },
     distribucion: {
-      gim: { porcentaje: DISTRIBUCION_GIM, mes1: resMes1 * DISTRIBUCION_GIM, mes2: resMes2 * DISTRIBUCION_GIM, mes3: resMes3 * DISTRIBUCION_GIM },
-      gp:  { porcentaje: DISTRIBUCION_GP,  mes1: gpMes1, mes2: gpMes2, mes3: gpMes3 },
+      gim: { porcentaje: g, mes1: resMes1 * g, mes2: resMes2 * g, mes3: resMes3 * g },
+      gp:  { porcentaje: p, mes1: gpMes1, mes2: gpMes2, mes3: gpMes3 },
     },
     facturacion: {
       bruto:    { mes1: gpMes1,                          mes2: gpMes2,                          mes3: gpMes3                          },
-      impuesto: { tasa: TASA_IMPUESTO, mes1: gpMes1 * TASA_IMPUESTO, mes2: gpMes2 * TASA_IMPUESTO, mes3: gpMes3 * TASA_IMPUESTO },
-      neto:     { mes1: gpMes1 * (1 - TASA_IMPUESTO),   mes2: gpMes2 * (1 - TASA_IMPUESTO),   mes3: gpMes3 * (1 - TASA_IMPUESTO)   },
+      impuesto: { tasa: tImp, mes1: gpMes1 * tImp, mes2: gpMes2 * tImp, mes3: gpMes3 * tImp },
+      neto:     { mes1: gpMes1 * (1 - tImp),   mes2: gpMes2 * (1 - tImp),   mes3: gpMes3 * (1 - tImp)   },
     },
   };
 }

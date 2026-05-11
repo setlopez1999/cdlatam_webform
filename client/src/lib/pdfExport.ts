@@ -73,8 +73,16 @@ export async function generateActaPDF(
 /**
  * Genera y descarga el PDF del Resultado Evaluación.
  */
-export async function generateResultadoPDF(ep: EPData, resultado: ResultadoCalculado): Promise<void> {
-  const html = buildResultadoHTML(ep, resultado);
+export async function generateResultadoPDF(
+  ep: EPData,
+  resultado: ResultadoCalculado,
+  pdfOpts?: {
+    /** Si es false, omite distribución GIM/GP y facturación inter-empresa (p. ej. Acta no guardada). Por defecto true. */
+    mostrarDistribucionYFacturacion?: boolean;
+    etiquetaBloqueGim?: string;
+  },
+): Promise<void> {
+  const html = buildResultadoHTML(ep, resultado, pdfOpts);
   return printHTML(html, `Resultado_EP_${ep.propuestaNumero || "sin_numero"}_${ep.nombreCliente || "cliente"}`);
 }
 
@@ -598,8 +606,49 @@ function drawBulletList(
 
 // ─── Resultado PDF (sin cambios estructurales) ────────────────────────────────
 
-function buildResultadoHTML(ep: EPData, resultado: ResultadoCalculado): string {
+/** Devuelve entero 0–100 para mostrar en PDF/HTML; acepta fracción (0.1) o ya en puntos. */
+function porcentajeUIMostrar(val: number | undefined, fallback: number): number {
+  const v = val ?? fallback;
+  if (!Number.isFinite(v)) return fallback > 0 && fallback <= 1 ? Math.round(fallback * 100) : Math.round(fallback);
+  if (v > 0 && v <= 1) return Math.round(v * 100);
+  return Math.round(v);
+}
+
+function buildResultadoHTML(
+  ep: EPData,
+  resultado: ResultadoCalculado,
+  pdfOpts?: {
+    mostrarDistribucionYFacturacion?: boolean;
+    etiquetaBloqueGim?: string;
+  },
+): string {
   const fmt = (v: number) => formatCurrency(v, "USD");
+  const mostrarDist = pdfOpts?.mostrarDistribucionYFacturacion !== false;
+  const etiquetaGim = pdfOpts?.etiquetaBloqueGim?.trim() || "GIM";
+  const pctGim = porcentajeUIMostrar(resultado.distribucion?.gim?.porcentaje, 10);
+  const pctGp = porcentajeUIMostrar(resultado.distribucion?.gp?.porcentaje, 90);
+  const pctIva = porcentajeUIMostrar(resultado.facturacion?.impuesto?.tasa, 19);
+
+  const bloqueFacturacion = mostrarDist
+    ? `
+  <div class="section">
+    <div class="section-title">Facturación Inter-Empresa (Mes 1)</div>
+    <table>
+      <thead><tr><th>Concepto</th><th class="text-right">Monto</th></tr></thead>
+      <tbody>
+        <tr><td>Distribución ${etiquetaGim} (${pctGim}%)</td><td class="text-right">${fmt(resultado.distribucion?.gim?.mes1||0)}</td></tr>
+        <tr><td>Distribución GP (${pctGp}%)</td><td class="text-right">${fmt(resultado.distribucion?.gp?.mes1||0)}</td></tr>
+        <tr><td>Facturación Bruto</td><td class="text-right">${fmt(resultado.facturacion?.bruto?.mes1||0)}</td></tr>
+        <tr><td>IVA (${pctIva}%)</td><td class="text-right">${fmt(resultado.facturacion?.impuesto?.mes1||0)}</td></tr>
+        <tr class="total-row"><td>Facturación Neto</td><td class="text-right">${fmt(resultado.facturacion?.neto?.mes1||0)}</td></tr>
+      </tbody>
+    </table>
+  </div>`
+    : `
+  <div class="section">
+    <div class="section-title">Facturación Inter-Empresa</div>
+    <p style="font-size:9pt;color:#6b7280;">Disponible cuando el Acta de Aceptación (F1) esté guardada.</p>
+  </div>`;
 
   return `<!DOCTYPE html>
 <html lang="es">
@@ -684,19 +733,7 @@ function buildResultadoHTML(ep: EPData, resultado: ResultadoCalculado): string {
     </table>
   </div>
 
-  <div class="section">
-    <div class="section-title">Facturación Inter-Empresa (Mes 1)</div>
-    <table>
-      <thead><tr><th>Concepto</th><th class="text-right">Monto</th></tr></thead>
-      <tbody>
-        <tr><td>Distribución GIM (${resultado.distribucion?.gim?.porcentaje||10}%)</td><td class="text-right">${fmt(resultado.distribucion?.gim?.mes1||0)}</td></tr>
-        <tr><td>Distribución GP (${resultado.distribucion?.gp?.porcentaje||90}%)</td><td class="text-right">${fmt(resultado.distribucion?.gp?.mes1||0)}</td></tr>
-        <tr><td>Facturación Bruto</td><td class="text-right">${fmt(resultado.facturacion?.bruto?.mes1||0)}</td></tr>
-        <tr><td>IVA (${resultado.facturacion?.impuesto?.tasa||19}%)</td><td class="text-right">${fmt(resultado.facturacion?.impuesto?.mes1||0)}</td></tr>
-        <tr class="total-row"><td>Facturación Neto</td><td class="text-right">${fmt(resultado.facturacion?.neto?.mes1||0)}</td></tr>
-      </tbody>
-    </table>
-  </div>
+  ${bloqueFacturacion}
 
   <div class="page-footer">
     <span>CDLatam — Transformación Digital en Latinoamérica</span>
