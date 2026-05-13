@@ -111,6 +111,7 @@ const MESES = [
 
 export async function ds_getCatalogOptions() {
   if (USE_API) {
+    /** Debe alinearse con la rama SQLite (incl. `areas` para F2 hardware/materiales). */
     return apiFetch<any>(`/catalogs/options`);
   }
   const db = await getDb();
@@ -119,7 +120,7 @@ export async function ds_getCatalogOptions() {
     rows.map(r => ({ value: r.valor, label: r.valor }));
   const [empresas, nombres, monedas, documentoIdentidad,
     unidadesNegocio, soluciones, detalleServicio, tipoVenta, plazos,
-    paises, cecos, consideracionesComerciales] =
+    paises, cecos, areas, consideracionesComerciales] =
     await Promise.all([
       db.select().from(catalogEmpresas).where(eq(catalogEmpresas.activo, 1)),
       db.select().from(catalogNombres).where(eq(catalogNombres.activo, 1)),
@@ -132,6 +133,7 @@ export async function ds_getCatalogOptions() {
       db.select().from(catalogPlazos).where(eq(catalogPlazos.activo, 1)),
       db.select().from(catalogPaises).where(eq(catalogPaises.activo, 1)),
       db.select().from(catalogCecos).where(eq(catalogCecos.activo, 1)),
+      db.select().from(catalogAreas).where(eq(catalogAreas.activo, 1)),
       db.select().from(catalogConsideracionesComerciales)
         .where(eq(catalogConsideracionesComerciales.activo, 1))
         .orderBy(asc(catalogConsideracionesComerciales.orden), asc(catalogConsideracionesComerciales.id)),
@@ -148,6 +150,7 @@ export async function ds_getCatalogOptions() {
     plazos:             toOptions(plazos),
     paises:             toOptions(paises),
     cecos:              toOptions(cecos),
+    areas:              toOptions(areas),
     consideracionesComerciales: consideracionesComerciales.map(r => ({
       id: r.id,
       value: r.valor,

@@ -14,10 +14,7 @@
  *   - isSyncing: true mientras se guarda en BD
  *
  * Pre-llenado desde F1:
- *   - f1Data.razonSocial → F2.nombreCliente
- *   - f1Data.rucDniRut   → F2.rut
- *   - f1Data.pais        → F2.paisImplementacion
- *   - f1Data.moneda      → F2.tipoMoneda
+ *   Una sola tabla `F1_TO_F2_HEADER_FIELDS` define qué copiar al banner y al botón.
  */
 import { useCallback } from "react";
 import { toast } from "sonner";
@@ -25,6 +22,37 @@ import { trpc } from "@/lib/trpc";
 import { useExpedienteStore } from "../store";
 import { f2DataToEvalSyncData, mapDetalleToExpediente } from "../fromServer";
 import type { F2Data, F1Data } from "../types";
+
+/** Mapeo F1 → campos de encabezado F2 (solo escalares; mismos que antes del refactor). */
+const F1_TO_F2_HEADER_FIELDS = [
+  { f2: "nombreCliente" as const, f1: "razonSocial" as const },
+  { f2: "rut" as const, f1: "rucDniRut" as const },
+  { f2: "paisImplementacion" as const, f1: "pais" as const },
+  { f2: "tipoMoneda" as const, f1: "moneda" as const },
+] as const;
+
+function f1ToF2HeaderPatch(f1: F1Data): Partial<F2Data> {
+  const patch: Partial<F2Data> = {};
+  for (const { f1: fk, f2: tk } of F1_TO_F2_HEADER_FIELDS) {
+    (patch as Record<string, unknown>)[tk] = f1[fk] as string;
+  }
+  return patch;
+}
+
+/** Objeto para banner «Importar desde F1» (mismas claves que F2InfoGeneral espera). */
+function f1ImportSuggestions(f1: F1Data | null) {
+  if (!f1) return null;
+  const s: Record<string, string> = {};
+  for (const { f1: fk, f2: tk } of F1_TO_F2_HEADER_FIELDS) {
+    s[tk] = f1[fk] ?? "";
+  }
+  return s as {
+    nombreCliente: string;
+    rut: string;
+    paisImplementacion: string;
+    tipoMoneda: string;
+  };
+}
 
 export function useF2(expedienteId: string) {
   const store = useExpedienteStore();
@@ -47,16 +75,7 @@ export function useF2(expedienteId: string) {
   /** Datos de F1 del mismo expediente — disponibles para pre-llenado */
   const f1Data: F1Data | null = expediente?.f1.data ?? null;
 
-  /**
-   * Campos de F1 que se pueden pre-llenar en F2.
-   * Úsalos en F2Form para mostrar un botón "Importar desde F1".
-   */
-  const f1Suggestions = f1Data ? {
-    nombreCliente:     f1Data.razonSocial,
-    rut:               f1Data.rucDniRut,
-    paisImplementacion: f1Data.pais,
-    tipoMoneda:        f1Data.moneda,
-  } : null;
+  const f1Suggestions = f1ImportSuggestions(f1Data);
 
   const update = useCallback(
     (partial: Partial<F2Data>) => store.updateF2(expedienteId, partial),
@@ -106,11 +125,11 @@ export function useF2(expedienteId: string) {
     }
   }, [utils, expedienteId, store]);
 
-  /** Importa los campos sugeridos de F1 a F2 de una sola vez */
+  /** Importa al F2 los campos de encabezado definidos en F1_TO_F2_HEADER_FIELDS. */
   const importarDesdeF1 = useCallback(() => {
-    if (!f1Suggestions) return;
-    update(f1Suggestions);
-  }, [f1Suggestions, update]);
+    if (!f1Data) return;
+    update(f1ToF2HeaderPatch(f1Data));
+  }, [f1Data, update]);
 
   return {
     data,

@@ -34,6 +34,7 @@ import {
   listImplementacionesByExpedienteId,
   upsertImplementacionCheck,
   listImplementacionCatalogActivos,
+  getSqliteDbPath,
   isActiveImplementacionCatalogKey,
   findUserById,
 } from "./db";
@@ -1380,15 +1381,30 @@ export const appRouter = router({
         .input(z.object({ uuid: z.string().min(1) }))
         .query(async ({ ctx, input }) => {
           if (!ctx.user) throw new Error("No autenticado");
-          const det = mayAccessAllExpedientes(ctx.user.role)
-            ? await getExpedienteDetalleGlobal(input.uuid)
-            : await getExpedienteDetalle(input.uuid, ctx.user.id);
-          if (!det) {
-            throw new TRPCError({ code: "NOT_FOUND", message: "Expediente no encontrado" });
+          try {
+            const det = mayAccessAllExpedientes(ctx.user.role)
+              ? await getExpedienteDetalleGlobal(input.uuid)
+              : await getExpedienteDetalle(input.uuid, ctx.user.id);
+            if (!det) {
+              throw new TRPCError({ code: "NOT_FOUND", message: "Expediente no encontrado" });
+            }
+            const catalog = await listImplementacionCatalogActivos();
+            const rows = await listImplementacionesByExpedienteId(det.expediente.id);
+            return mergeImplementacionFromCatalog(catalog, rows);
+          } catch (err: unknown) {
+            if (err instanceof TRPCError) throw err;
+            const msg = err instanceof Error ? err.message : String(err);
+            if (/malformed|SQLITE_CORRUPT|database disk image/i.test(msg)) {
+              const path = getSqliteDbPath();
+              console.error("[implementacion.listar] SQLite corrupta o ilegible:", path, err);
+              throw new TRPCError({
+                code: "INTERNAL_SERVER_ERROR",
+                message:
+                  `La base de datos SQLite está dañada o ilegible. Restaurar desde un backup o ejecutar reparación (p. ej. sqlite3 .recover). Archivo: ${path}`,
+              });
+            }
+            throw err;
           }
-          const catalog = await listImplementacionCatalogActivos();
-          const rows = await listImplementacionesByExpedienteId(det.expediente.id);
-          return mergeImplementacionFromCatalog(catalog, rows);
         }),
 
       setEstado: protectedProcedure
