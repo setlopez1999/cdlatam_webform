@@ -44,7 +44,6 @@ print("  ✓ Tabla 'roles' creada")
 now = int(time.time())
 roles_seed = [
     ("admin", "Administrador", "Acceso total al sistema"),
-    ("manager", "Gerente", "Puede ver todo, no puede gestionar usuarios"),
     ("viewer", "Solo lectura", "Acceso de solo lectura"),
     ("user", "Usuario", "Acceso básico al sistema"),
 ]

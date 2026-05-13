@@ -6,6 +6,8 @@
  * USE_API=true            → fetch a API_URL externa
  *
  * La API externa debe devolver el mismo shape que SQLite.
+ *
+ * Cláusulas legales: ver dataSource-clausulas.ts (mismo patrón ds_*, capa aparte).
  */
 
 import {
@@ -21,6 +23,7 @@ import {
   findUserById,
   toggleUserStatus,
   updateUser,
+  updateUserCredentials,
   getRoles,
   getRoleById,
   createRole,
@@ -44,8 +47,10 @@ import {
   catalogUnidadesNegocio, catalogSoluciones, catalogDetalleServicio,
   catalogTipoVenta, catalogPlazos, catalogDocumentos, catalogCecos,
   catalogDepartamentos, catalogAreas, catalogNombres,
+  catalogConsideracionesComerciales,
+  catalogImplementacionItems,
 } from "../drizzle/schema";
-import { eq, like } from "drizzle-orm";
+import { asc, eq, like } from "drizzle-orm";
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
@@ -106,6 +111,7 @@ const MESES = [
 
 export async function ds_getCatalogOptions() {
   if (USE_API) {
+    /** Debe alinearse con la rama SQLite (incl. `areas` para F2 hardware/materiales). */
     return apiFetch<any>(`/catalogs/options`);
   }
   const db = await getDb();
@@ -114,7 +120,7 @@ export async function ds_getCatalogOptions() {
     rows.map(r => ({ value: r.valor, label: r.valor }));
   const [empresas, nombres, monedas, documentoIdentidad,
     unidadesNegocio, soluciones, detalleServicio, tipoVenta, plazos,
-    paises, cecos] =
+    paises, cecos, areas, consideracionesComerciales] =
     await Promise.all([
       db.select().from(catalogEmpresas).where(eq(catalogEmpresas.activo, 1)),
       db.select().from(catalogNombres).where(eq(catalogNombres.activo, 1)),
@@ -127,19 +133,30 @@ export async function ds_getCatalogOptions() {
       db.select().from(catalogPlazos).where(eq(catalogPlazos.activo, 1)),
       db.select().from(catalogPaises).where(eq(catalogPaises.activo, 1)),
       db.select().from(catalogCecos).where(eq(catalogCecos.activo, 1)),
+      db.select().from(catalogAreas).where(eq(catalogAreas.activo, 1)),
+      db.select().from(catalogConsideracionesComerciales)
+        .where(eq(catalogConsideracionesComerciales.activo, 1))
+        .orderBy(asc(catalogConsideracionesComerciales.orden), asc(catalogConsideracionesComerciales.id)),
     ]);
   return {
     empresas:           toOptions(empresas),
     nombres:            toOptions(nombres),
     monedas:            toOptions(monedas),
     documentoIdentidad: toOptions(documentoIdentidad),
-    unidadesNegocio:    toOptions(unidadesNegocio),
-    soluciones:         toOptions(soluciones),
+    unidadesNegocio:    unidadesNegocio.map(r => ({ id: r.id, value: r.valor, label: r.valor })),
+    soluciones:         soluciones.map(r => ({ id: r.id, value: r.valor, label: r.valor, unidadNegocioId: r.unidadNegocioId })),
     detalleServicio:    toOptions(detalleServicio),
     tipoVenta:          toOptions(tipoVenta),
     plazos:             toOptions(plazos),
     paises:             toOptions(paises),
     cecos:              toOptions(cecos),
+    areas:              toOptions(areas),
+    consideracionesComerciales: consideracionesComerciales.map(r => ({
+      id: r.id,
+      value: r.valor,
+      label: r.valor,
+      orden: r.orden,
+    })),
     meses: MESES,
   };
 }
@@ -152,7 +169,9 @@ export async function ds_getCatalogSummary() {
   if (!db) throw new Error("Base de datos no disponible");
   const [
     monedas, paises, empresas, doctos, unidades, soluciones,
-    detalles, tipos, plazos, docs, cecos, deptos, areas, nombres
+    detalles, tipos, plazos, docs, cecos, deptos, areas, nombres,
+    consideracionesComerciales,
+    implementacionItems,
   ] = await Promise.all([
     db.select().from(catalogMonedas).where(eq(catalogMonedas.activo, 1)),
     db.select().from(catalogPaises).where(eq(catalogPaises.activo, 1)),
@@ -168,10 +187,18 @@ export async function ds_getCatalogSummary() {
     db.select().from(catalogDepartamentos).where(eq(catalogDepartamentos.activo, 1)),
     db.select().from(catalogAreas).where(eq(catalogAreas.activo, 1)),
     db.select().from(catalogNombres).where(eq(catalogNombres.activo, 1)),
+    db.select().from(catalogConsideracionesComerciales)
+      .where(eq(catalogConsideracionesComerciales.activo, 1))
+      .orderBy(asc(catalogConsideracionesComerciales.orden), asc(catalogConsideracionesComerciales.id)),
+    db.select().from(catalogImplementacionItems)
+      .where(eq(catalogImplementacionItems.activo, 1))
+      .orderBy(asc(catalogImplementacionItems.orden), asc(catalogImplementacionItems.id)),
   ]);
   return {
     monedas, paises, empresas, doctos, unidades, soluciones,
-    detalles, tipos, plazos, docs, cecos, deptos, areas, nombres
+    detalles, tipos, plazos, docs, cecos, deptos, areas, nombres,
+    consideracionesComerciales,
+    implementacionItems,
   };
 }
 
@@ -230,6 +257,21 @@ export const ds_toggleLocalUserStatus = ds_toggleUserStatus;
 export async function ds_updateUser(id: number, data: { displayName?: string; roleId?: number | null; role?: string }) {
   if (USE_API) return apiFetch<any>(`/users/${id}`, { method: "PUT", body: JSON.stringify(data) });
   return updateUser(id, data);
+}
+
+/**
+ * Actualiza credenciales (username y/o passwordHash) de un usuario.
+ * Cuando USE_API=true apunta a PUT /users/:id/credentials.
+ */
+export async function ds_updateUserCredentials(
+  id: number,
+  data: { username?: string; passwordHash?: string },
+): Promise<void> {
+  if (USE_API) {
+    await apiFetch<void>(`/users/${id}/credentials`, { method: "PUT", body: JSON.stringify(data) });
+    return;
+  }
+  return updateUserCredentials(id, data);
 }
 
 // ─── Roles ────────────────────────────────────────────────────────────────────

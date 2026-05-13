@@ -1,10 +1,12 @@
 // server/db.ts
-import { eq, like, or, and, sql, desc, sum, count, inArray } from "drizzle-orm";
+import { eq, like, or, and, sql, desc, sum, count, inArray, lt, lte, gte, asc } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import { migrate } from "drizzle-orm/better-sqlite3/migrator";
 import * as Database from 'better-sqlite3';
 import { join, dirname } from 'path';
 import { existsSync, mkdirSync } from 'fs';
+import { buildActaCodigo, buildExpedienteCodigo } from "./documentCodes";
+import { ensureAllProjectTables } from "./schemaBootstrap";
 // Importamos los esquemas (asegúrate de que esta ruta sea correcta)
 import {
   InsertUser, users, roles, type Role, type InsertRole,
@@ -15,11 +17,19 @@ import {
   catalogMonedas, catalogPaises, catalogEmpresas, catalogDocumentoIdentidad,
   catalogUnidadesNegocio, catalogSoluciones, catalogDetalleServicio,
   catalogTipoVenta, catalogPlazos, catalogDocumentos, catalogCecos,
-  catalogDepartamentos, catalogAreas, catalogNombres,
+  catalogDepartamentos, catalogAreas, catalogNombres, catalogConsideracionesComerciales,
+  catalogImplementacionItems,
   // Gestor de Horarios
   schEmpleados, type SchEmpleado, type InsertSchEmpleado,
   schContratos, type SchContrato, type InsertSchContrato,
   schBloquesHorario, type SchBloqueHorario, type InsertSchBloqueHorario,
+  // Expedientes y Auditoría
+  expedientes, type Expediente, type InsertExpediente,
+  resultadosExpediente, type ResultadoExpediente, type InsertResultadoExpediente,
+  implementaciones,
+  auditLog, type InsertAuditLog,
+  // Catálogo de Cláusulas Legales
+  catalogClausulas, type CatalogClausula, type InsertCatalogClausula,
 } from "../drizzle/schema";
 
 // 1. Inicializar conexión al archivo local "gestion.db"
@@ -53,7 +63,13 @@ if (process.env.DATABASE_URL) {
 
 console.log(`[DB] Conectando a base de datos en: ${dbPath}`);
 const sqlite = new Database.default(dbPath);
+sqlite.pragma("foreign_keys = ON");
 const _db = drizzle(sqlite);
+
+/** Ruta efectiva del archivo SQLite (diagnóstico / integridad). */
+export function getSqliteDbPath(): string {
+  return dbPath;
+}
 
 export async function getDb() {
   return _db;
@@ -77,6 +93,16 @@ const FIXED_CATALOGS = [
   { tableName: "deptos",     realTable: "catalog_departamentos",       title: "Departamentos" },
   { tableName: "areas",      realTable: "catalog_areas",               title: "Áreas" },
   { tableName: "nombres",    realTable: "catalog_nombres",             title: "Nombres" },
+  {
+    tableName: "consideraciones",
+    realTable: "catalog_consideraciones_comerciales",
+    title: "Consideraciones comerciales (Acta)",
+  },
+  {
+    tableName: "impl_items",
+    realTable: "catalog_implementacion_items",
+    title: "Ítems implementación IPTV-OTT",
+  },
 ];
 
 // Seed de catalog_meta al arrancar
@@ -147,6 +173,8 @@ const catalogMap: Record<string, any> = {
   deptos: catalogDepartamentos,
   areas: catalogAreas,
   nombres: catalogNombres,
+  consideraciones: catalogConsideracionesComerciales,
+  impl_items: catalogImplementacionItems,
 };
 
 function getCatalogTable(tableName: string) {
@@ -161,6 +189,12 @@ export async function getCatalogListGeneric(tableName: string) {
   const table = catalogMap[tableName];
   if (table) {
     const db = await getDb();
+    if (tableName === "impl_items") {
+      return db
+        .select()
+        .from(catalogImplementacionItems)
+        .orderBy(asc(catalogImplementacionItems.orden), asc(catalogImplementacionItems.id));
+    }
     return db.select().from(table);
   }
   // Tabla dinámica
@@ -217,6 +251,12 @@ export async function getCatalogList(tableName: string) {
   const table = getCatalogTable(tableName);
   if (!table) return getCatalogListGeneric(tableName);
   const db = await getDb();
+  if (tableName === "impl_items") {
+    return db
+      .select()
+      .from(catalogImplementacionItems)
+      .orderBy(asc(catalogImplementacionItems.orden), asc(catalogImplementacionItems.id));
+  }
   return await db.select().from(table);
 }
 
@@ -238,13 +278,31 @@ export async function deleteCatalogRecord(tableName: string, id: number) {
   const table = getCatalogTable(tableName);
   if (!table) return deleteCatalogRecordGeneric(tableName, id);
   const db = await getDb();
+  if (tableName === "impl_items") {
+    const row = await db
+      .select({ key: catalogImplementacionItems.key })
+      .from(catalogImplementacionItems)
+      .where(eq(catalogImplementacionItems.id, id))
+      .limit(1);
+    if (row[0]?.key) {
+      await db.delete(implementaciones).where(eq(implementaciones.checkKey, row[0].key));
+    }
+  }
   return await db.delete(table).where(eq(table.id, id));
 }
 
 export async function bulkUpdateCatalogRecords(tableName: string, ids: number[], data: any) {
   if (!ids.length) return;
   const table = getCatalogTable(tableName);
-  if (!table) return; // tablas dinámicas no tienen bulk update por ahora
+  if (!table) {
+    // Tablas dinámicas (catalog_custom_*): usar SQL raw
+    const realTable = tableName.startsWith('catalog_custom_') ? tableName : `catalog_custom_${tableName}`;
+    const sets = Object.keys(data).map(k => `${k} = ?`).join(', ');
+    const placeholders = ids.map(() => '?').join(',');
+    const vals = [...Object.values(data), ...ids];
+    sqlite.prepare(`UPDATE "${realTable}" SET ${sets} WHERE id IN (${placeholders})`).run(...vals);
+    return;
+  }
   const db = await getDb();
   return await db.update(table).set(data).where(inArray(table.id, ids));
 }
@@ -254,6 +312,15 @@ export async function bulkDeleteCatalogRecords(tableName: string, ids: number[])
   const table = getCatalogTable(tableName);
   if (!table) return bulkDeleteCatalogRecordsGeneric(tableName, ids);
   const db = await getDb();
+  if (tableName === "impl_items") {
+    const keyRows = await db
+      .select({ key: catalogImplementacionItems.key })
+      .from(catalogImplementacionItems)
+      .where(inArray(catalogImplementacionItems.id, ids));
+    for (const kr of keyRows) {
+      if (kr.key) await db.delete(implementaciones).where(eq(implementaciones.checkKey, kr.key));
+    }
+  }
   return await db.delete(table).where(inArray(table.id, ids));
 }
 
@@ -341,10 +408,12 @@ function autoMigrateUsersSchemaIfNeeded(): void {
 
         -- Insertar roles base
         INSERT OR IGNORE INTO roles (nombre, label, descripcion, activo) VALUES
-          ('admin',   'Administrador', 'Acceso total al sistema', 1),
-          ('manager', 'Gerente',       'Puede ver todo, no puede gestionar usuarios', 1),
-          ('viewer',  'Solo lectura',  'Acceso de solo lectura', 1),
-          ('user',    'Usuario',       'Acceso basico al sistema', 1);
+          ('admin',                 'Administrador',        'Acceso total al sistema', 1),
+          ('user',                  'Usuario',              'Acceso basico al sistema', 1),
+          ('gestor_horarios',       'Gestor de Horarios',   'Acceso al modulo de gestion de horarios', 1),
+          ('perfil_full',           'Perfil Full',          'Acceso completo: F1-Acta, F2-EP, Resultados e Implementacion', 1),
+          ('perfil_ventas',         'Perfil Ventas',        'Acceso restringido unicamente al modulo F1-Acta', 1),
+          ('perfil_implementacion', 'Perfil Implementacion','Acceso restringido unicamente al modulo de Implementacion', 1);
 
         -- Crear nueva tabla users con schema v2
         CREATE TABLE users (
@@ -398,8 +467,8 @@ export async function runMigrations() {
   // Paso 0: Migrar schema viejo automáticamente si es necesario (idempotente)
   autoMigrateUsersSchemaIfNeeded();
 
+  // Paso 1: Intentar migración estándar de Drizzle
   try {
-    // Intentar migración estándar de Drizzle primero
     const db = await getDb();
     migrate(db, { migrationsFolder: join(process.cwd(), "drizzle", "migrations") });
     console.log("[DB] Migrations applied successfully");
@@ -407,118 +476,132 @@ export async function runMigrations() {
     // Si la migración falla (ej: BD parcialmente migrada), aplicar schema manualmente
     console.warn("[DB] Migration via Drizzle failed, applying schema manually:", error?.message ?? error);
     try {
-      const rawDb = sqlite;
-      rawDb.exec(`
-        CREATE TABLE IF NOT EXISTS roles (
-          id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
-          name TEXT NOT NULL UNIQUE,
-          description TEXT,
-          createdAt INTEGER DEFAULT (strftime('%s', 'now')) NOT NULL,
-          updatedAt INTEGER DEFAULT (strftime('%s', 'now')) NOT NULL
-        );
-        CREATE TABLE IF NOT EXISTS users (
-          id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
-          username TEXT NOT NULL UNIQUE,
-          passwordHash TEXT NOT NULL,
-          displayName TEXT,
-          role TEXT DEFAULT 'user' NOT NULL,
-          roleId INTEGER,
-          isActive INTEGER DEFAULT 1 NOT NULL,
-          createdAt INTEGER DEFAULT (strftime('%s', 'now')) NOT NULL,
-          updatedAt INTEGER DEFAULT (strftime('%s', 'now')) NOT NULL,
-          lastSignedIn INTEGER
-        );
-        CREATE TABLE IF NOT EXISTS catalog_meta (
-          id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
-          table_name TEXT NOT NULL UNIQUE,
-          title TEXT NOT NULL,
-          is_custom INTEGER DEFAULT 0 NOT NULL,
-          linked_field TEXT,
-          created_at INTEGER DEFAULT (strftime('%s', 'now')) NOT NULL
-        );
-        CREATE TABLE IF NOT EXISTS actas (
-          id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
-          userId INTEGER NOT NULL,
-          noActa TEXT, atencion TEXT, fecha INTEGER,
-          razonSocial TEXT, nombreFantasia TEXT, rucDniRut TEXT, direccionComercial TEXT,
-          representanteLegal TEXT, representanteDni TEXT, representanteEmail TEXT, representanteFono TEXT,
-          contactoTecnico TEXT, contactoTecnicoEmail TEXT, contactoTecnicoFono TEXT,
-          contactoFacturacion TEXT, contactoFacturacionEmail TEXT, contactoFacturacionFono TEXT,
-          serviciosContratados TEXT, formasPagoImplementacion TEXT, formasPagoMantencion TEXT,
-          status TEXT DEFAULT 'borrador' NOT NULL,
-          createdAt INTEGER DEFAULT (strftime('%s', 'now')) NOT NULL,
-          updatedAt INTEGER DEFAULT (strftime('%s', 'now')) NOT NULL
-        );
-        CREATE TABLE IF NOT EXISTS evaluaciones (
-          id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
-          userId INTEGER NOT NULL, actaId INTEGER,
-          unidadNegocios TEXT, empresa TEXT, solucion TEXT, tipoMoneda TEXT,
-          montoProyecto REAL, tipoCambio REAL, totalClp REAL,
-          descripcion TEXT, preventa TEXT, fechaEntrega INTEGER, ejecutivoComercial TEXT,
-          plazoImplementacion TEXT, propuestaNumero TEXT, paisImplementacion TEXT,
-          rut TEXT, nombreCliente TEXT,
-          hardware TEXT, materiales TEXT, rrhh TEXT, otrosGastos TEXT,
-          totalHardware REAL, totalMateriales REAL, totalRrhh REAL, totalOtros REAL, totalGastos REAL,
-          status TEXT DEFAULT 'borrador' NOT NULL,
-          createdAt INTEGER DEFAULT (strftime('%s', 'now')) NOT NULL,
-          updatedAt INTEGER DEFAULT (strftime('%s', 'now')) NOT NULL
-        );
-        CREATE TABLE IF NOT EXISTS catalog_monedas (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, valor TEXT NOT NULL UNIQUE, activo INTEGER DEFAULT 1 NOT NULL);
-        CREATE TABLE IF NOT EXISTS catalog_paises (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, valor TEXT NOT NULL UNIQUE, activo INTEGER DEFAULT 1 NOT NULL);
-        CREATE TABLE IF NOT EXISTS catalog_empresas (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, valor TEXT NOT NULL UNIQUE, activo INTEGER DEFAULT 1 NOT NULL);
-        CREATE TABLE IF NOT EXISTS catalog_documento_identidad (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, valor TEXT NOT NULL UNIQUE, activo INTEGER DEFAULT 1 NOT NULL);
-        CREATE TABLE IF NOT EXISTS catalog_unidades_negocio (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, valor TEXT NOT NULL UNIQUE, activo INTEGER DEFAULT 1 NOT NULL);
-        CREATE TABLE IF NOT EXISTS catalog_soluciones (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, valor TEXT NOT NULL UNIQUE, activo INTEGER DEFAULT 1 NOT NULL);
-        CREATE TABLE IF NOT EXISTS catalog_detalle_servicio (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, valor TEXT NOT NULL UNIQUE, activo INTEGER DEFAULT 1 NOT NULL);
-        CREATE TABLE IF NOT EXISTS catalog_tipo_venta (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, valor TEXT NOT NULL UNIQUE, activo INTEGER DEFAULT 1 NOT NULL);
-        CREATE TABLE IF NOT EXISTS catalog_plazos (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, valor TEXT NOT NULL UNIQUE, activo INTEGER DEFAULT 1 NOT NULL);
-        CREATE TABLE IF NOT EXISTS catalog_documentos (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, valor TEXT NOT NULL UNIQUE, activo INTEGER DEFAULT 1 NOT NULL);
-        CREATE TABLE IF NOT EXISTS catalog_cecos (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, valor TEXT NOT NULL UNIQUE, activo INTEGER DEFAULT 1 NOT NULL);
-        CREATE TABLE IF NOT EXISTS catalog_departamentos (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, valor TEXT NOT NULL UNIQUE, activo INTEGER DEFAULT 1 NOT NULL);
-        CREATE TABLE IF NOT EXISTS catalog_areas (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, valor TEXT NOT NULL UNIQUE, activo INTEGER DEFAULT 1 NOT NULL);
-        CREATE TABLE IF NOT EXISTS catalog_nombres (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, valor TEXT NOT NULL, activo INTEGER DEFAULT 1 NOT NULL);
-        CREATE TABLE IF NOT EXISTS user_roles (
-          id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
-          userId INTEGER NOT NULL,
-          roleId INTEGER NOT NULL,
-          assignedAt INTEGER DEFAULT (strftime('%s', 'now')) NOT NULL,
-          UNIQUE(userId, roleId)
-        );
-        CREATE TABLE IF NOT EXISTS sch_empleados (
-          id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
-          nombre TEXT NOT NULL,
-          apellido TEXT NOT NULL,
-          cargo TEXT,
-          activo INTEGER DEFAULT 1 NOT NULL,
-          createdAt INTEGER DEFAULT (strftime('%s', 'now')) NOT NULL,
-          updatedAt INTEGER DEFAULT (strftime('%s', 'now')) NOT NULL
-        );
-        CREATE TABLE IF NOT EXISTS sch_contratos (
-          id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
-          empleadoId INTEGER NOT NULL,
-          fechaInicio TEXT NOT NULL,
-          fechaFin TEXT,
-          horasDiarias REAL NOT NULL,
-          diasSemana TEXT NOT NULL,
-          tipoDistribucion TEXT DEFAULT 'normal' NOT NULL,
-          mismasHorasDiarias INTEGER DEFAULT 1 NOT NULL,
-          activo INTEGER DEFAULT 1 NOT NULL,
-          createdAt INTEGER DEFAULT (strftime('%s', 'now')) NOT NULL,
-          updatedAt INTEGER DEFAULT (strftime('%s', 'now')) NOT NULL
-        );
-        CREATE TABLE IF NOT EXISTS sch_bloques_horario (
-          id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
-          contratoId INTEGER NOT NULL,
-          diaSemana INTEGER NOT NULL,
-          horaInicio TEXT NOT NULL,
-          horaFin TEXT NOT NULL,
-          createdAt INTEGER DEFAULT (strftime('%s', 'now')) NOT NULL
-        );
-      `);
-      console.log("[DB] Schema applied manually (fallback)");
+      ensureAllProjectTables(sqlite);
+      console.log("[DB] Schema applied manually (fallback via schemaBootstrap)");
     } catch (fallbackError) {
       console.error("[DB] Fallback schema creation also failed:", fallbackError);
     }
+  }
+
+  try {
+    ensureAllProjectTables(sqlite);
+    console.log("[DB] All fixed tables ensured (schemaBootstrap)");
+  } catch (e: unknown) {
+    console.warn("[DB] schemaBootstrap after migrate:", e instanceof Error ? e.message : e);
+  }
+
+  // Paso 2 (post-migración): garantizar columnas nuevas en BDs existentes
+  // ALTER TABLE ADD COLUMN IF NOT EXISTS no existe en SQLite, usamos try/catch
+  try {
+    sqlite.exec(`ALTER TABLE actas ADD COLUMN expedienteUuid TEXT`);
+    console.log("[DB] Column expedienteUuid added to actas");
+  } catch {
+    // La columna ya existe — ignorar
+  }
+
+  const tryAlter = (sql: string, label: string) => {
+    try {
+      sqlite.exec(sql);
+      console.log(`[DB] ${label}`);
+    } catch {
+      /* ya aplicado */
+    }
+  };
+  tryAlter(`ALTER TABLE actas ADD COLUMN codigo TEXT`, "Column codigo added to actas");
+  tryAlter(`ALTER TABLE actas ADD COLUMN f1Datos TEXT`, "Column f1Datos added to actas");
+  tryAlter(`ALTER TABLE actas ADD COLUMN f1FormStatus TEXT DEFAULT 'nuevo'`, "Column f1FormStatus added to actas");
+  tryAlter(`ALTER TABLE actas ADD COLUMN f1SavedAt INTEGER`, "Column f1SavedAt added to actas");
+  tryAlter(`ALTER TABLE evaluaciones ADD COLUMN expedienteUuid TEXT`, "Column expedienteUuid added to evaluaciones");
+  tryAlter(`ALTER TABLE evaluaciones ADD COLUMN firmaImagen TEXT`, "Column firmaImagen added to evaluaciones");
+  tryAlter(`ALTER TABLE evaluaciones ADD COLUMN f2FormStatus TEXT DEFAULT 'nuevo'`, "Column f2FormStatus added to evaluaciones");
+  tryAlter(`ALTER TABLE evaluaciones ADD COLUMN f2SavedAt INTEGER`, "Column f2SavedAt added to evaluaciones");
+  tryAlter(`ALTER TABLE expedientes ADD COLUMN codigo TEXT`, "Column codigo added to expedientes");
+  // Schema drizzle/schema.ts — migraciones 0000/0001 no añadieron esta FK; necesaria para ds_getCatalogSummary / summary UI
+  tryAlter(
+    `ALTER TABLE catalog_soluciones ADD COLUMN unidadNegocioId INTEGER`,
+    "Column unidadNegocioId added to catalog_soluciones"
+  );
+  tryAlter(`
+    CREATE TABLE IF NOT EXISTS resultados_expediente (
+      id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+      expedienteUuid TEXT NOT NULL UNIQUE,
+      payload TEXT NOT NULL,
+      f3FormStatus TEXT DEFAULT 'nuevo' NOT NULL,
+      f3SavedAt INTEGER,
+      createdAt INTEGER DEFAULT (strftime('%s', 'now')) NOT NULL,
+      updatedAt INTEGER DEFAULT (strftime('%s', 'now')) NOT NULL
+    )
+  `, "Table resultados_expediente ensured");
+
+  tryAlter(`
+    CREATE TABLE IF NOT EXISTS catalog_clausulas (
+      id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+      valor TEXT NOT NULL,
+      unidadNegocioId INTEGER,
+      filePath TEXT NOT NULL,
+      fileName TEXT NOT NULL,
+      fileSize INTEGER,
+      activo INTEGER DEFAULT 1 NOT NULL,
+      createdAt INTEGER DEFAULT (strftime('%s', 'now')) NOT NULL
+    )
+  `, "Table catalog_clausulas ensured");
+
+  tryAlter(`ALTER TABLE audit_log ADD COLUMN expedienteUuid TEXT`, "Column expedienteUuid on audit_log");
+  tryAlter(`ALTER TABLE audit_log ADD COLUMN expedienteCodigo TEXT`, "Column expedienteCodigo on audit_log");
+  tryAlter(`CREATE INDEX IF NOT EXISTS idx_audit_log_created_at ON audit_log(createdAt)`, "Index audit_log createdAt");
+  tryAlter(`CREATE INDEX IF NOT EXISTS idx_audit_log_user_created ON audit_log(userId, createdAt)`, "Index audit_log userId+createdAt");
+  tryAlter(`CREATE INDEX IF NOT EXISTS idx_audit_log_expediente_uuid ON audit_log(expedienteUuid)`, "Index audit_log expedienteUuid");
+
+  try {
+    const db = await getDb();
+    const expRows = await db
+      .select({ id: expedientes.id, uuid: expedientes.uuid, codigo: expedientes.codigo })
+      .from(expedientes);
+    for (const row of expRows) {
+      if (!row.codigo) {
+        await db.update(expedientes)
+          .set({ codigo: buildExpedienteCodigo(row.uuid), updatedAt: new Date() })
+          .where(eq(expedientes.id, row.id));
+      }
+    }
+
+    const actaRows = await db
+      .select({
+        id: actas.id,
+        expedienteUuid: actas.expedienteUuid,
+        codigo: actas.codigo,
+        noActa: actas.noActa,
+      })
+      .from(actas);
+    for (const row of actaRows) {
+      if (!row.expedienteUuid) continue;
+      const codigo = buildActaCodigo(row.expedienteUuid);
+      if (!row.codigo || row.noActa !== codigo) {
+        await db.update(actas)
+          .set({ codigo, noActa: codigo, updatedAt: new Date() })
+          .where(eq(actas.id, row.id));
+      }
+    }
+    console.log("[DB] Compact code backfill completed");
+  } catch (codeBackfillErr: any) {
+    console.warn("[DB] Could not backfill compact codes:", codeBackfillErr?.message ?? codeBackfillErr);
+  }
+
+  // Paso 3 (post-migración): garantizar roles nuevos en BDs ya migradas
+  // INSERT OR IGNORE es idempotente — seguro de correr siempre al arrancar
+  try {
+    sqlite.exec(`
+      INSERT OR IGNORE INTO roles (nombre, label, descripcion, activo) VALUES
+        ('gestor_horarios',       'Gestor de Horarios',    'Acceso al modulo de gestion de horarios', 1),
+        ('perfil_full',           'Perfil Full',           'Acceso completo: F1-Acta, F2-EP, Resultados e Implementacion', 1),
+        ('perfil_ventas',         'Perfil Ventas',         'Acceso restringido unicamente al modulo F1-Acta', 1),
+        ('perfil_implementacion', 'Perfil Implementacion', 'Acceso restringido unicamente al modulo de Implementacion', 1);
+      -- Eliminar roles obsoletos (viewer y manager ya no se usan)
+      DELETE FROM roles WHERE nombre IN ('viewer', 'manager');
+    `);
+    console.log("[DB] Profile roles ensured (INSERT OR IGNORE)");
+  } catch (rolesErr: any) {
+    console.warn("[DB] Could not ensure profile roles:", rolesErr?.message ?? rolesErr);
   }
 }
 
@@ -566,11 +649,27 @@ export async function updateUser(id: number, data: { displayName?: string; roleI
   return await db.update(users).set({ ...data, updatedAt: new Date() }).where(eq(users.id, id));
 }
 
+/**
+ * Actualiza credenciales de un usuario (username y/o passwordHash).
+ * Separado de updateUser intencionalmente: no mezcla datos de perfil con credenciales.
+ */
+export async function updateUserCredentials(
+  id: number,
+  data: { username?: string; passwordHash?: string },
+): Promise<void> {
+  const db = await getDb();
+  await db.update(users).set({ ...data, updatedAt: new Date() }).where(eq(users.id, id));
+}
+
 // --- ROLES --------------------------------------------------------------------
+
+// Roles ocultos (easter egg) — no aparecen en la lista de gestión de usuarios
+const HIDDEN_ROLES = ['gestor_horarios'];
 
 export async function getRoles() {
   const db = await getDb();
-  return await db.select().from(roles).orderBy(roles.id);
+  const all = await db.select().from(roles).orderBy(roles.id);
+  return all.filter(r => !HIDDEN_ROLES.includes(r.nombre));
 }
 
 export async function getRoleById(id: number) {
@@ -668,6 +767,28 @@ export async function userHasAnyRole(userId: number, roleNames: string[]): Promi
   return result.length > 0;
 }
 
+/**
+ * Easter egg: toggle del rol gestor_horarios para el usuario actual.
+ * Si ya lo tiene → lo quita. Si no lo tiene → lo asigna.
+ * Devuelve { active: true } si quedó con el rol, { active: false } si se lo quitó.
+ */
+export async function toggleHorariosEasterEgg(userId: number): Promise<{ active: boolean }> {
+  const db = await getDb();
+  // Buscar el id del rol gestor_horarios
+  const roleRow = await db.select({ id: roles.id })
+    .from(roles).where(eq(roles.nombre, 'gestor_horarios')).limit(1);
+  if (!roleRow.length) throw new Error('Rol gestor_horarios no encontrado');
+  const roleId = roleRow[0].id;
+  const hasIt = await userHasRole(userId, 'gestor_horarios');
+  if (hasIt) {
+    await revokeRoleFromUser(userId, roleId);
+    return { active: false };
+  } else {
+    await assignRoleToUser(userId, roleId);
+    return { active: true };
+  }
+}
+
 // ─── Actas ────────────────────────────────────────────────────────────────────
 export async function getActasByUserId(userId: number) {
   const db = await getDb();
@@ -696,6 +817,13 @@ export async function deleteActa(id: number) {
   return db.delete(actas).where(eq(actas.id, id));
 }
 
+/** Busca un acta por el uuid del expediente de Zustand. */
+export async function getActaByExpedienteUuid(expedienteUuid: string) {
+  const db = await getDb();
+  const result = await db.select().from(actas).where(eq(actas.expedienteUuid, expedienteUuid)).limit(1);
+  return result[0] ?? null;
+}
+
 // --- Evaluaciones de Proyecto -------------------------------------------------
 export async function getEvaluacionesByUserId(userId: number) {
   const db = await getDb();
@@ -722,6 +850,125 @@ export async function updateEvaluacion(id: number, data: Partial<InsertEvaluacio
 export async function deleteEvaluacion(id: number) {
   const db = await getDb();
   return db.delete(evaluaciones).where(eq(evaluaciones.id, id));
+}
+
+export async function getEvaluacionByExpedienteUuid(expedienteUuid: string) {
+  const db = await getDb();
+  const r = await db.select().from(evaluaciones).where(eq(evaluaciones.expedienteUuid, expedienteUuid)).limit(1);
+  return r[0] ?? null;
+}
+
+export async function getResultadoByExpedienteUuid(expedienteUuid: string) {
+  const db = await getDb();
+  const r = await db.select().from(resultadosExpediente).where(eq(resultadosExpediente.expedienteUuid, expedienteUuid)).limit(1);
+  return r[0] ?? null;
+}
+
+export async function upsertResultadoExpediente(data: {
+  expedienteUuid: string;
+  payload: unknown;
+  f3FormStatus: string;
+}) {
+  const db = await getDb();
+  const now = new Date();
+  await db
+    .insert(resultadosExpediente)
+    .values({
+      expedienteUuid: data.expedienteUuid,
+      payload: data.payload as InsertResultadoExpediente["payload"],
+      f3FormStatus: data.f3FormStatus,
+      f3SavedAt: now,
+      createdAt: now,
+      updatedAt: now,
+    })
+    .onConflictDoUpdate({
+      target: resultadosExpediente.expedienteUuid,
+      set: {
+        payload: data.payload as InsertResultadoExpediente["payload"],
+        f3FormStatus: data.f3FormStatus,
+        f3SavedAt: now,
+        updatedAt: now,
+      },
+    });
+  return getResultadoByExpedienteUuid(data.expedienteUuid);
+}
+
+export async function listImplementacionesByExpedienteId(expedienteId: number) {
+  const db = await getDb();
+  return db
+    .select({ checkKey: implementaciones.checkKey, estado: implementaciones.estado })
+    .from(implementaciones)
+    .where(eq(implementaciones.expedienteId, expedienteId));
+}
+
+export async function upsertImplementacionCheck(expedienteId: number, checkKey: string, estado: boolean) {
+  const db = await getDb();
+  const now = new Date();
+  const val = estado ? 1 : 0;
+  const existing = await db
+    .select({ id: implementaciones.id })
+    .from(implementaciones)
+    .where(and(eq(implementaciones.expedienteId, expedienteId), eq(implementaciones.checkKey, checkKey)))
+    .limit(1);
+  if (existing[0]) {
+    await db
+      .update(implementaciones)
+      .set({ estado: val, updatedAt: now })
+      .where(eq(implementaciones.id, existing[0].id));
+  } else {
+    await db.insert(implementaciones).values({
+      expedienteId,
+      checkKey,
+      estado: val,
+      createdAt: now,
+      updatedAt: now,
+    });
+  }
+}
+
+export async function listImplementacionCatalogActivos() {
+  const db = await getDb();
+  return db
+    .select({
+      key: catalogImplementacionItems.key,
+      orden: catalogImplementacionItems.orden,
+      label: catalogImplementacionItems.label,
+    })
+    .from(catalogImplementacionItems)
+    .where(eq(catalogImplementacionItems.activo, 1))
+    .orderBy(asc(catalogImplementacionItems.orden), asc(catalogImplementacionItems.id));
+}
+
+export async function isActiveImplementacionCatalogKey(key: string) {
+  const db = await getDb();
+  const r = await db
+    .select({ id: catalogImplementacionItems.id })
+    .from(catalogImplementacionItems)
+    .where(and(eq(catalogImplementacionItems.key, key), eq(catalogImplementacionItems.activo, 1)))
+    .limit(1);
+  return !!r[0];
+}
+
+/**
+ * Elimina expediente y todos los hijos vinculados por expedienteUuid.
+ *
+ * Orden importante: hijos antes que padre, para que una interrupción no
+ * deje al expediente colgando con referencias rotas. No se usa
+ * `db.transaction(async ...)` porque el driver `better-sqlite3` exige un
+ * callback síncrono y rechaza Promises ("Transaction function cannot
+ * return a promise"). Mantener `await db.delete(...)` secuenciales hace
+ * el código portable a `mysql2`/`postgres-js`/`libsql` sin cambios.
+ */
+export async function deleteExpedienteCascadeByUuid(uuid: string) {
+  const db = await getDb();
+  const ex = await db.select({ id: expedientes.id }).from(expedientes).where(eq(expedientes.uuid, uuid)).limit(1);
+  if (ex[0]) {
+    await db.delete(implementaciones).where(eq(implementaciones.expedienteId, ex[0].id));
+  }
+  await db.delete(resultadosExpediente).where(eq(resultadosExpediente.expedienteUuid, uuid));
+  await db.delete(evaluaciones).where(eq(evaluaciones.expedienteUuid, uuid));
+  await db.delete(actas).where(eq(actas.expedienteUuid, uuid));
+  await db.delete(expedientes).where(eq(expedientes.uuid, uuid));
 }
 
 export async function searchRegistros(userId: number, query: string) {
@@ -789,6 +1036,27 @@ export async function updateEmpleado(id: number, data: Partial<InsertSchEmpleado
 export async function toggleEmpleadoStatus(id: number, activo: number): Promise<void> {
   const db = await getDb();
   await db.update(schEmpleados).set({ activo, updatedAt: new Date() }).where(eq(schEmpleados.id, id));
+}
+
+/**
+ * Elimina un empleado y todos sus datos relacionados en cascada:
+ * bloques de horario → contratos → empleado
+ */
+export async function deleteEmpleado(id: number): Promise<void> {
+  const db = await getDb();
+  // 1. Obtener todos los contratos del empleado
+  const contratos = await db.select({ id: schContratos.id })
+    .from(schContratos)
+    .where(eq(schContratos.empleadoId, id));
+  // 2. Eliminar bloques de todos sus contratos
+  if (contratos.length > 0) {
+    const contratoIds = contratos.map(c => c.id);
+    await db.delete(schBloquesHorario).where(inArray(schBloquesHorario.contratoId, contratoIds));
+  }
+  // 3. Eliminar contratos
+  await db.delete(schContratos).where(eq(schContratos.empleadoId, id));
+  // 4. Eliminar empleado
+  await db.delete(schEmpleados).where(eq(schEmpleados.id, id));
 }
 
 // Contratos
@@ -860,4 +1128,221 @@ export async function getBloquesSemanales(): Promise<Array<SchBloqueHorario & { 
     .where(and(eq(schContratos.activo, 1), eq(schEmpleados.activo, 1)))
     .orderBy(schBloquesHorario.diaSemana, schBloquesHorario.horaInicio);
   return result;
+}
+
+// ─── MÓDULO: EXPEDIENTES ──────────────────────────────────────────────────────
+
+/**
+ * Crea un expediente en BD con su metadata.
+ * Los datos de formulario (F1/F2) siguen en localStorage por ahora.
+ */
+export async function createExpediente(data: { uuid: string; nombre: string; creadorId: number; codigo?: string }) {
+  const db = await getDb();
+  const result = await db.insert(expedientes).values({
+    uuid: data.uuid,
+    codigo: data.codigo ?? buildExpedienteCodigo(data.uuid),
+    nombre: data.nombre,
+    creadorId: data.creadorId,
+    status: "borrador",
+  }).returning();
+  return result[0];
+}
+
+/** Obtiene todos los expedientes (para admin/full). */
+export async function getExpedientes() {
+  const db = await getDb();
+  return db.select().from(expedientes).orderBy(desc(expedientes.createdAt));
+}
+
+/** Obtiene solo los expedientes de un usuario específico. */
+export async function getExpedientesByUser(userId: number) {
+  const db = await getDb();
+  return db.select().from(expedientes)
+    .where(eq(expedientes.creadorId, userId))
+    .orderBy(desc(expedientes.createdAt));
+}
+
+/** Busca un expediente por su uuid (nanoid del store de Zustand). */
+export async function getExpedienteByUuid(uuid: string) {
+  const db = await getDb();
+  const result = await db.select().from(expedientes).where(eq(expedientes.uuid, uuid)).limit(1);
+  return result[0] ?? null;
+}
+
+export async function getExpedienteById(id: number) {
+  const db = await getDb();
+  const result = await db.select().from(expedientes).where(eq(expedientes.id, id)).limit(1);
+  return result[0] ?? null;
+}
+
+/** Actualiza el nombre o status de un expediente. */
+export async function updateExpediente(id: number, data: Partial<Pick<Expediente, "nombre" | "status" | "actaId" | "evaluacionId" | "codigo">>) {
+  const db = await getDb();
+  const result = await db.update(expedientes)
+    .set({ ...data, updatedAt: new Date() })
+    .where(eq(expedientes.id, id))
+    .returning();
+  return result[0] ?? null;
+}
+
+/** Elimina un expediente por id (solo la fila expedientes; preferir deleteExpedienteCascadeByUuid). */
+export async function deleteExpediente(id: number) {
+  const db = await getDb();
+  await db.delete(expedientes).where(eq(expedientes.id, id));
+}
+
+/** Lista expedientes del usuario con acta/eval/resultado (solo expedientes creados por userId; N consultas por fila). */
+export async function listExpedientesResumen(userId: number) {
+  const list = await getExpedientesByUser(userId);
+  const rows: Array<{
+    expediente: Expediente;
+    acta: typeof actas.$inferSelect | null;
+    evaluacion: typeof evaluaciones.$inferSelect | null;
+    resultado: ResultadoExpediente | null;
+  }> = [];
+  for (const e of list) {
+    const acta = await getActaByExpedienteUuid(e.uuid);
+    const evaluacion = await getEvaluacionByExpedienteUuid(e.uuid);
+    const resultado = await getResultadoByExpedienteUuid(e.uuid);
+    rows.push({ expediente: e, acta, evaluacion, resultado });
+  }
+  return rows;
+}
+
+/** Detalle solo si el expediente pertenece al usuario (creadorId). Sin listados globales. */
+export async function getExpedienteDetalle(uuid: string, userId: number) {
+  const exp = await getExpedienteByUuid(uuid);
+  if (!exp || exp.creadorId !== userId) return null;
+  const acta = await getActaByExpedienteUuid(uuid);
+  const evaluacion = await getEvaluacionByExpedienteUuid(uuid);
+  const resultado = await getResultadoByExpedienteUuid(uuid);
+  return { expediente: exp, acta, evaluacion, resultado };
+}
+
+/** Detalle sin filtrar por dueño (solo uso con autorización workspace global en routers). */
+export async function getExpedienteDetalleGlobal(uuid: string) {
+  const exp = await getExpedienteByUuid(uuid);
+  if (!exp) return null;
+  const acta = await getActaByExpedienteUuid(uuid);
+  const evaluacion = await getEvaluacionByExpedienteUuid(uuid);
+  const resultado = await getResultadoByExpedienteUuid(uuid);
+  return { expediente: exp, acta, evaluacion, resultado };
+}
+
+/** Listado resumen de todos los expedientes (solo autorización en capa HTTP/tRPC). */
+export async function listExpedientesResumenGlobal() {
+  const list = await getExpedientes();
+  const rows: Array<{
+    expediente: Expediente;
+    acta: typeof actas.$inferSelect | null;
+    evaluacion: typeof evaluaciones.$inferSelect | null;
+    resultado: ResultadoExpediente | null;
+  }> = [];
+  for (const e of list) {
+    const acta = await getActaByExpedienteUuid(e.uuid);
+    const evaluacion = await getEvaluacionByExpedienteUuid(e.uuid);
+    const resultado = await getResultadoByExpedienteUuid(e.uuid);
+    rows.push({ expediente: e, acta, evaluacion, resultado });
+  }
+  return rows;
+}
+
+// ─── MÓDULO: AUDIT LOG ────────────────────────────────────────────────────────
+
+/**
+ * Registra una entrada en el audit log.
+ * Llamar desde los procedures tRPC después de cada acción relevante.
+ */
+export async function createAuditLog(data: {
+  userId?: number;
+  username: string;
+  action: string;
+  entity: string;
+  entityId?: number;
+  expedienteUuid?: string | null;
+  expedienteCodigo?: string | null;
+  changes?: { before?: unknown; after?: unknown };
+  ip?: string;
+}) {
+  const db = await getDb();
+  await db.insert(auditLog).values({
+    userId: data.userId ?? null,
+    username: data.username,
+    action: data.action,
+    entity: data.entity,
+    entityId: data.entityId ?? null,
+    expedienteUuid: data.expedienteUuid ?? null,
+    expedienteCodigo: data.expedienteCodigo ?? null,
+    changes: data.changes ?? null,
+    ip: data.ip ?? null,
+  });
+}
+
+export type AuditLogQueryFilter = {
+  from?: Date;
+  to?: Date;
+  actions?: string[];
+  entities?: string[];
+  userId?: number;
+  usernameContains?: string;
+  expedienteUuidContains?: string;
+  limit: number;
+  cursor?: { id: number; createdAt: Date };
+};
+
+function likeFragment(raw: string): string {
+  const safe = raw.replace(/[%_\\]/g, "");
+  return `%${safe}%`;
+}
+
+/** Lista audit con filtros en SQL + paginación por cursor (createdAt desc, id desc). */
+export async function getAuditLogFiltered(f: AuditLogQueryFilter) {
+  const db = await getDb();
+  const conditions = [];
+
+  if (f.from) conditions.push(gte(auditLog.createdAt, f.from));
+  if (f.to) conditions.push(lte(auditLog.createdAt, f.to));
+  if (f.actions?.length) conditions.push(inArray(auditLog.action, f.actions));
+  if (f.entities?.length) conditions.push(inArray(auditLog.entity, f.entities));
+  if (f.userId != null) conditions.push(eq(auditLog.userId, f.userId));
+  if (f.usernameContains?.trim()) {
+    conditions.push(like(auditLog.username, likeFragment(f.usernameContains.trim())));
+  }
+  if (f.expedienteUuidContains?.trim()) {
+    conditions.push(like(auditLog.expedienteUuid, likeFragment(f.expedienteUuidContains.trim())));
+  }
+
+  if (f.cursor) {
+    const cAt = f.cursor.createdAt;
+    const cId = f.cursor.id;
+    conditions.push(
+      or(lt(auditLog.createdAt, cAt), and(eq(auditLog.createdAt, cAt), lt(auditLog.id, cId)))
+    );
+  }
+
+  const whereClause = conditions.length ? and(...conditions) : undefined;
+  const limit = Math.min(Math.max(f.limit, 1), 500);
+
+  const rows = await db
+    .select()
+    .from(auditLog)
+    .where(whereClause)
+    .orderBy(desc(auditLog.createdAt), desc(auditLog.id))
+    .limit(limit + 1);
+
+  const hasMore = rows.length > limit;
+  const items = hasMore ? rows.slice(0, limit) : rows;
+  const last = items[items.length - 1];
+  const nextCursor =
+    hasMore && last
+      ? { id: last.id, createdAt: last.createdAt instanceof Date ? last.createdAt : new Date(last.createdAt) }
+      : undefined;
+
+  return { items, nextCursor };
+}
+
+/** Obtiene el audit log completo, ordenado por más reciente (sin paginación +1). */
+export async function getAuditLog(limit = 200) {
+  const db = await getDb();
+  return db.select().from(auditLog).orderBy(desc(auditLog.createdAt), desc(auditLog.id)).limit(limit);
 }

@@ -5,7 +5,7 @@
 
 import { useParams } from "wouter";
 import ExpedienteLayout from "@/components/ExpedienteLayout";
-import EPForm from "./EPForm";
+import F2Form from "@/features/expedientes/f2/F2Form";
 
 export default function ExpedienteEP() {
   const params = useParams<{ id: string }>();
@@ -13,7 +13,7 @@ export default function ExpedienteEP() {
 
   return (
     <ExpedienteLayout expedienteId={expedienteId} activeTab="ep">
-      <EPForm />
+      <F2Form expedienteId={expedienteId} />
     </ExpedienteLayout>
   );
 }

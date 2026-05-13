@@ -1,49 +1,53 @@
 /**
  * Historial / Expedientes — Lista de todos los expedientes guardados.
  * Cada expediente agrupa F1 (Acta), F2 (EP) y sus Resultados.
+ *
+ * Usa el nuevo store (features/expedientes/store.ts) con la clave
+ * cdlatam_expedientes y el formato {f1, f2, f3}.
  */
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useLocation } from "wouter";
 import {
-  FolderOpen, FileText, ClipboardList, BarChart2,
-  ChevronDown, ChevronRight, Trash2, Plus, AlertTriangle,
-  Search,
+  FolderOpen, Trash2, Plus, AlertTriangle, Search, ChevronDown,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import {
-  useExpediente, calcularResultado, type Expediente,
-} from "@/hooks/useFormStore";
+import { useExpedienteStore } from "@/features/expedientes/store";
+import { mapResumenRowToExpediente } from "@/features/expedientes/fromServer";
+import type { Expediente } from "@/features/expedientes/types";
+import { trpc } from "@/lib/trpc";
+import { calcularResultadoF3 } from "@/features/expedientes/types";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { PageLayout } from "@/components/PageLayout";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-type EstadoDoc = "completo" | "borrador" | "ausente";
+type EstadoDoc = "guardado" | "borrador" | "ausente";
 
-function getEstadoActa(exp: Expediente): EstadoDoc {
-  if (!exp.acta) return "ausente";
-  if (exp.acta.status === "completado" || exp.acta.status === "exportado") return "completo";
-  return "borrador";
+/** Mapea el FormStatus del nuevo store a EstadoDoc para mostrar en la tarjeta */
+function getEstadoF1(exp: Expediente): EstadoDoc {
+  if (exp.f1.status === "guardado") return "guardado";
+  if (exp.f1.status === "sin_guardar") return "borrador";
+  return "ausente";
 }
 
-function getEstadoEP(exp: Expediente): EstadoDoc {
-  if (!exp.ep) return "ausente";
-  if (exp.ep.status === "completado" || exp.ep.status === "exportado") return "completo";
-  return "borrador";
+function getEstadoF2(exp: Expediente): EstadoDoc {
+  if (exp.f2.status === "guardado") return "guardado";
+  if (exp.f2.status === "sin_guardar") return "borrador";
+  return "ausente";
 }
 
 const ESTADO_STYLES: Record<EstadoDoc, string> = {
-  completo: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30",
+  guardado: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30",
   borrador: "bg-amber-500/15 text-amber-400 border-amber-500/30",
   ausente:  "bg-muted text-muted-foreground border-border",
 };
 
 const ESTADO_LABELS: Record<EstadoDoc, string> = {
-  completo: "Completo",
+  guardado: "Guardado",
   borrador: "Borrador",
   ausente:  "—",
 };
@@ -73,14 +77,22 @@ function fmtCell(value: number) {
 // ─── Tablas de resultados expandibles ────────────────────────────────────────
 
 function ResultadosExpandidos({ exp }: { exp: Expediente }) {
-  if (!exp.ep) return null;
-  const r = useMemo(() => calcularResultado(exp.ep!), [exp.ep]);
+  const tieneF2 = exp.f2.status !== "nuevo";
+  if (!tieneF2) return null;
+
+  const f1Guardado = exp.f1.status === "guardado";
+  const etiquetaGim = exp.f1.data.sres?.trim() || "GIM";
+
+  const r = useMemo(
+    () => calcularResultadoF3(exp.f2.data, exp.f1.data),
+    [exp.f2.data, exp.f1.data],
+  );
   const res = r.resumen;
 
   return (
     <div className="mt-3 space-y-4 border-t border-border/40 pt-3">
       {/* Aviso si falta el Acta */}
-      {!exp.acta && (
+      {exp.f1.status === "nuevo" && (
         <div className="flex items-center gap-2 text-xs text-amber-400 bg-amber-500/10 rounded-lg px-3 py-2">
           <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
           <span>Tablas de resultado incompletas por falta de información en Acta (F1).</span>
@@ -162,91 +174,116 @@ function ResultadosExpandidos({ exp }: { exp: Expediente }) {
                 <td className="px-3 py-1.5 text-center font-bold">{fmtCell(r.resultado.mes2)}</td>
                 <td className="px-3 py-1.5 text-center font-bold">{fmtCell(r.resultado.mes3)}</td>
               </tr>
-              <tr className="bg-muted/20">
-                <td colSpan={5} className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Distribución:</td>
-              </tr>
-              <tr className="border-b border-border/30">
-                <td className="px-3 py-1.5 pl-5 font-medium">GIM</td>
-                <td className="px-3 py-1.5 text-center text-muted-foreground">{(r.distribucion.gim.porcentaje * 100).toFixed(0)}%</td>
-                <td className="px-3 py-1.5 text-center">{fmtCell(r.distribucion.gim.mes1)}</td>
-                <td className="px-3 py-1.5 text-center">{fmtCell(r.distribucion.gim.mes2)}</td>
-                <td className="px-3 py-1.5 text-center">{fmtCell(r.distribucion.gim.mes3)}</td>
-              </tr>
-              <tr className="border-b border-border/30 bg-muted/10">
-                <td className="px-3 py-1.5 pl-5 font-medium">GP</td>
-                <td className="px-3 py-1.5 text-center text-muted-foreground">{(r.distribucion.gp.porcentaje * 100).toFixed(0)}%</td>
-                <td className="px-3 py-1.5 text-center">{fmtCell(r.distribucion.gp.mes1)}</td>
-                <td className="px-3 py-1.5 text-center">{fmtCell(r.distribucion.gp.mes2)}</td>
-                <td className="px-3 py-1.5 text-center">{fmtCell(r.distribucion.gp.mes3)}</td>
-              </tr>
+              {f1Guardado && (
+                <>
+                  <tr className="bg-muted/20">
+                    <td colSpan={5} className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Distribución:</td>
+                  </tr>
+                  <tr className="border-b border-border/30">
+                    <td className="px-3 py-1.5 pl-5 font-medium">{etiquetaGim}</td>
+                    <td className="px-3 py-1.5 text-center text-muted-foreground">{(r.distribucion.gim.porcentaje * 100).toFixed(0)}%</td>
+                    <td className="px-3 py-1.5 text-center">{fmtCell(r.distribucion.gim.mes1)}</td>
+                    <td className="px-3 py-1.5 text-center">{fmtCell(r.distribucion.gim.mes2)}</td>
+                    <td className="px-3 py-1.5 text-center">{fmtCell(r.distribucion.gim.mes3)}</td>
+                  </tr>
+                  <tr className="border-b border-border/30 bg-muted/10">
+                    <td className="px-3 py-1.5 pl-5 font-medium">GP</td>
+                    <td className="px-3 py-1.5 text-center text-muted-foreground">{(r.distribucion.gp.porcentaje * 100).toFixed(0)}%</td>
+                    <td className="px-3 py-1.5 text-center">{fmtCell(r.distribucion.gp.mes1)}</td>
+                    <td className="px-3 py-1.5 text-center">{fmtCell(r.distribucion.gp.mes2)}</td>
+                    <td className="px-3 py-1.5 text-center">{fmtCell(r.distribucion.gp.mes3)}</td>
+                  </tr>
+                </>
+              )}
+              {!f1Guardado && (
+                <tr className="bg-amber-500/5">
+                  <td colSpan={5} className="px-3 py-2 text-[11px] text-amber-700/90">
+                    Guarde el Acta (F1) para ver la distribución ({etiquetaGim} / GP) y la facturación inter-empresa.
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
       </div>
 
-      {/* Tabla 3: Facturación Inter-Empresa */}
-      <div className="rounded-lg border border-border overflow-hidden">
-        <div className="bg-[#1a2a3a] px-3 py-1.5 text-center">
-          <span className="text-xs font-bold text-white uppercase tracking-wide">Facturación Inter-Empresa</span>
+      {/* Tabla 3: Facturación Inter-Empresa — solo con F1 guardado */}
+      {f1Guardado && (
+        <div className="rounded-lg border border-border overflow-hidden">
+          <div className="bg-[#1a2a3a] px-3 py-1.5 text-center">
+            <span className="text-xs font-bold text-white uppercase tracking-wide">Facturación Inter-Empresa</span>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs border-collapse">
+              <thead>
+                <tr className="bg-muted/50 border-b border-border">
+                  <th className="px-3 py-1.5 text-left font-semibold" />
+                  <th className="px-3 py-1.5 text-center font-semibold w-16" />
+                  <th className="px-3 py-1.5 text-center font-semibold">MES 1</th>
+                  <th className="px-3 py-1.5 text-center font-semibold">MES 2</th>
+                  <th className="px-3 py-1.5 text-center font-semibold">MES 3</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr className="border-b border-border/30">
+                  <td className="px-3 py-1.5 font-medium">Bruto</td><td />
+                  <td className="px-3 py-1.5 text-center">{fmtCell(r.facturacion.bruto.mes1)}</td>
+                  <td className="px-3 py-1.5 text-center">{fmtCell(r.facturacion.bruto.mes2)}</td>
+                  <td className="px-3 py-1.5 text-center">{fmtCell(r.facturacion.bruto.mes3)}</td>
+                </tr>
+                <tr className="border-b border-border/30 bg-muted/10">
+                  <td className="px-3 py-1.5 font-medium">Impuesto</td>
+                  <td className="px-3 py-1.5 text-center text-muted-foreground">{r.facturacion.impuesto.tasa.toFixed(2)}</td>
+                  <td className="px-3 py-1.5 text-center">{fmtCell(r.facturacion.impuesto.mes1)}</td>
+                  <td className="px-3 py-1.5 text-center">{fmtCell(r.facturacion.impuesto.mes2)}</td>
+                  <td className="px-3 py-1.5 text-center">{fmtCell(r.facturacion.impuesto.mes3)}</td>
+                </tr>
+                <tr className="bg-[#1a2a3a]/10 border-t border-[#1a2a3a]/20">
+                  <td className="px-3 py-1.5 font-bold">Neto</td><td />
+                  <td className="px-3 py-1.5 text-center font-bold">{fmtCell(r.facturacion.neto.mes1)}</td>
+                  <td className="px-3 py-1.5 text-center font-bold">{fmtCell(r.facturacion.neto.mes2)}</td>
+                  <td className="px-3 py-1.5 text-center font-bold">{fmtCell(r.facturacion.neto.mes3)}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-xs border-collapse">
-            <thead>
-              <tr className="bg-muted/50 border-b border-border">
-                <th className="px-3 py-1.5 text-left font-semibold" />
-                <th className="px-3 py-1.5 text-center font-semibold w-16" />
-                <th className="px-3 py-1.5 text-center font-semibold">MES 1</th>
-                <th className="px-3 py-1.5 text-center font-semibold">MES 2</th>
-                <th className="px-3 py-1.5 text-center font-semibold">MES 3</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr className="border-b border-border/30">
-                <td className="px-3 py-1.5 font-medium">Bruto</td><td />
-                <td className="px-3 py-1.5 text-center">{fmtCell(r.facturacion.bruto.mes1)}</td>
-                <td className="px-3 py-1.5 text-center">{fmtCell(r.facturacion.bruto.mes2)}</td>
-                <td className="px-3 py-1.5 text-center">{fmtCell(r.facturacion.bruto.mes3)}</td>
-              </tr>
-              <tr className="border-b border-border/30 bg-muted/10">
-                <td className="px-3 py-1.5 font-medium">Impuesto</td>
-                <td className="px-3 py-1.5 text-center text-muted-foreground">{r.facturacion.impuesto.tasa.toFixed(2)}</td>
-                <td className="px-3 py-1.5 text-center">{fmtCell(r.facturacion.impuesto.mes1)}</td>
-                <td className="px-3 py-1.5 text-center">{fmtCell(r.facturacion.impuesto.mes2)}</td>
-                <td className="px-3 py-1.5 text-center">{fmtCell(r.facturacion.impuesto.mes3)}</td>
-              </tr>
-              <tr className="bg-[#1a2a3a]/10 border-t border-[#1a2a3a]/20">
-                <td className="px-3 py-1.5 font-bold">Neto</td><td />
-                <td className="px-3 py-1.5 text-center font-bold">{fmtCell(r.facturacion.neto.mes1)}</td>
-                <td className="px-3 py-1.5 text-center font-bold">{fmtCell(r.facturacion.neto.mes2)}</td>
-                <td className="px-3 py-1.5 text-center font-bold">{fmtCell(r.facturacion.neto.mes3)}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
+      )}
     </div>
   );
 }
 
 // ─── Tarjeta de Expediente ────────────────────────────────────────────────────
 
-function ExpedienteCard({ exp, onEliminar }: { exp: Expediente; onEliminar: (id: string) => void }) {
+export function ExpedienteCard({
+  exp,
+  onEliminar,
+  creadorDisplay,
+}: {
+  exp: Expediente;
+  onEliminar: () => void;
+  /** Solo vista workspace admin: etiqueta del usuario creador del expediente */
+  creadorDisplay?: string;
+}) {
   const [, navigate] = useLocation();
   const [expandido, setExpandido] = useState(false);
 
-  const ea = getEstadoActa(exp);
-  const ee = getEstadoEP(exp);
-  const tieneResultados = !!(exp.ep);
-  const resultadosCompletos = !!(exp.acta && exp.ep);
+  const ef1 = getEstadoF1(exp);
+  const ef2 = getEstadoF2(exp);
+  const tieneF2 = exp.f2.status !== "nuevo";
+  const resultadosCompletos = exp.f1.status !== "nuevo" && exp.f2.status !== "nuevo";
+  const tieneContenidoF1 = exp.f1.status !== "nuevo";
 
-  const fechaDisplay = new Date(exp.creadoEn).toLocaleDateString("es-CL", {
+  const fechaDisplay = new Date(exp.createdAt).toLocaleDateString("es-CL", {
     day: "2-digit", month: "short", year: "numeric",
   });
 
+  // Nombre de empresa del F1 si está disponible
+  const empresa = exp.f1.data?.razonSocial || exp.f1.data?.nombreFantasia || null;
+
   const handleEliminar = () => {
     if (!confirm(`¿Eliminar el expediente "${exp.nombre}"? Esta acción no se puede deshacer.`)) return;
-    onEliminar(exp.id);
-    toast.success("Expediente eliminado");
+    onEliminar();
   };
 
   return (
@@ -256,25 +293,31 @@ function ExpedienteCard({ exp, onEliminar }: { exp: Expediente; onEliminar: (id:
         <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
           <FolderOpen className="w-4 h-4 text-primary" />
         </div>
-
         <div className="flex-1 min-w-0">
           <p className="text-sm font-semibold truncate">{exp.nombre}</p>
-          <p className="text-xs text-muted-foreground">{fechaDisplay}</p>
+          <p className="text-xs text-muted-foreground">
+            {exp.codigo ? <span className="font-mono text-foreground/70">{exp.codigo} · </span> : null}
+            {creadorDisplay ? (
+              <span className="text-foreground/80">Creador: {creadorDisplay} · </span>
+            ) : null}
+            {empresa ? <span className="text-foreground/70">{empresa} · </span> : null}
+            {fechaDisplay}
+          </p>
         </div>
 
         {/* Estados — desktop */}
         <div className="hidden sm:flex items-center gap-4 shrink-0">
-          <EstadoBadge estado={ea} label="Acta (F1)" />
-          <EstadoBadge estado={ee} label="EP (F2)" />
+          <EstadoBadge estado={ef1} label="Acta (F1)" />
+          <EstadoBadge estado={ef2} label="EP (F2)" />
           <div className="flex flex-col items-center gap-0.5">
             <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Resultados</span>
-            <Badge variant="outline" className={cn("text-xs", tieneResultados
+            <Badge variant="outline" className={cn("text-xs", tieneF2
               ? resultadosCompletos
                 ? "bg-violet-500/15 text-violet-400 border-violet-500/30"
                 : "bg-amber-500/15 text-amber-400 border-amber-500/30"
               : "bg-muted text-muted-foreground border-border"
             )}>
-              {tieneResultados ? (resultadosCompletos ? "Disponibles" : "Incompletos") : "—"}
+              {tieneF2 ? (resultadosCompletos ? "Disponibles" : "Incompletos") : "—"}
             </Badge>
           </div>
         </div>
@@ -287,9 +330,9 @@ function ExpedienteCard({ exp, onEliminar }: { exp: Expediente; onEliminar: (id:
             className="h-7 text-xs hidden sm:flex"
             onClick={() => navigate(`/expediente/${exp.id}/acta`)}
           >
-            {exp.acta ? "Continuar" : "Iniciar"}
+            {tieneContenidoF1 ? "Continuar" : "Iniciar"}
           </Button>
-          {tieneResultados && (
+          {tieneF2 && (
             <Button
               size="icon"
               variant="ghost"
@@ -314,24 +357,27 @@ function ExpedienteCard({ exp, onEliminar }: { exp: Expediente; onEliminar: (id:
 
       {/* Estados — móvil */}
       <div className="sm:hidden flex items-center gap-3 px-4 pb-3 flex-wrap">
-        <EstadoBadge estado={ea} label="Acta (F1)" />
-        <EstadoBadge estado={ee} label="EP (F2)" />
+        <EstadoBadge estado={ef1} label="Acta (F1)" />
+        <EstadoBadge estado={ef2} label="EP (F2)" />
         <Button size="sm" variant="outline" className="h-7 text-xs ml-auto"
           onClick={() => navigate(`/expediente/${exp.id}/acta`)}>
-          {exp.acta ? "Continuar" : "Iniciar"}
+          {tieneContenidoF1 ? "Continuar" : "Iniciar"}
         </Button>
       </div>
 
       {/* Aviso resultados incompletos */}
-      {tieneResultados && !resultadosCompletos && (
+      {tieneF2 && !resultadosCompletos && (
         <div className="mx-4 mb-3 flex items-center gap-2 text-xs text-amber-400 bg-amber-500/10 rounded-lg px-3 py-2">
           <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
-          <span>Tablas de resultado incompletas por falta de información en {!exp.acta ? "Acta (F1)" : "EP (F2)"}.</span>
+          <span>
+            Tablas de resultado incompletas por falta de información en{" "}
+            {exp.f1.status === "nuevo" ? "Acta (F1)" : "EP (F2)"}.
+          </span>
         </div>
       )}
 
       {/* Resultados expandidos */}
-      {expandido && exp.ep && (
+      {expandido && tieneF2 && (
         <div className="px-4 pb-4">
           <ResultadosExpandidos exp={exp} />
         </div>
@@ -344,16 +390,37 @@ function ExpedienteCard({ exp, onEliminar }: { exp: Expediente; onEliminar: (id:
 
 export default function Historial() {
   const [, navigate] = useLocation();
-  const { expedientes, eliminar } = useExpediente();
+  const { expedientes, eliminar, mergeListaDesdeServidor } = useExpedienteStore();
   const [search, setSearch] = useState("");
+
+  // staleTime: 0 + invalidación tras guardar/renombrar/eliminar garantizan que
+  // al volver a Historial se vea la versión más reciente del server. El merge
+  // protege los locales con cambios `sin_guardar`.
+  const resumenQuery = trpc.expediente.listarResumen.useQuery(undefined, { staleTime: 0 });
+  const eliminarSrv = trpc.expediente.eliminar.useMutation({
+    onSuccess: (_data, input) => {
+      eliminar(input.uuid);
+      void resumenQuery.refetch();
+      toast.success("Expediente eliminado");
+    },
+    onError: (err) => {
+      toast.error(err.message || "No se pudo eliminar");
+    },
+  });
+
+  useEffect(() => {
+    if (resumenQuery.data) {
+      mergeListaDesdeServidor(resumenQuery.data.map(mapResumenRowToExpediente));
+    }
+  }, [resumenQuery.data, mergeListaDesdeServidor]);
 
   const filtrados = useMemo(() => {
     if (!search.trim()) return expedientes;
     const q = search.toLowerCase();
     return expedientes.filter(e =>
       e.nombre.toLowerCase().includes(q) ||
-      e.acta?.razonSocial?.toLowerCase().includes(q) ||
-      e.ep?.nombreCliente?.toLowerCase().includes(q)
+      e.f1.data?.razonSocial?.toLowerCase().includes(q) ||
+      e.f1.data?.nombreFantasia?.toLowerCase().includes(q)
     );
   }, [expedientes, search]);
 
@@ -370,7 +437,12 @@ export default function Historial() {
         <>
           <div className="relative">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-            <Input placeholder="Buscar expediente..." value={search} onChange={e => setSearch(e.target.value)} className="pl-8 h-8 text-sm w-48" />
+            <Input
+              placeholder="Buscar expediente..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              className="pl-8 h-8 text-sm w-48"
+            />
           </div>
           <Button className="gap-2 h-8 text-sm" onClick={() => navigate("/nuevo-expediente")}>
             <Plus className="w-4 h-4" />Nuevo
@@ -378,7 +450,6 @@ export default function Historial() {
         </>
       }
     >
-
       {filtrados.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 gap-4 text-center">
           <FolderOpen className="w-12 h-12 text-muted-foreground/40" />
@@ -397,7 +468,11 @@ export default function Historial() {
       ) : (
         <div className="flex flex-col gap-3">
           {filtrados.map(exp => (
-            <ExpedienteCard key={exp.id} exp={exp} onEliminar={eliminar} />
+            <ExpedienteCard
+              key={exp.id}
+              exp={exp}
+              onEliminar={() => eliminarSrv.mutate({ uuid: exp.id })}
+            />
           ))}
         </div>
       )}

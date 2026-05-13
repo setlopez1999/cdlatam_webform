@@ -12,10 +12,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { Users, Plus, Shield, User, Clock, Loader2, RefreshCw, Power, Pencil, Tag, Trash2, AlertTriangle } from "lucide-react";
+import { Users, Plus, Shield, User, Clock, Loader2, RefreshCw, Power, Pencil, Tag, Trash2, AlertTriangle, KeyRound } from "lucide-react";
 import { PageLayout } from "@/components/PageLayout";
 import { EditUserModal } from "@/components/EditUserModal";
 import { CreateUserModal } from "@/components/CreateUserModal";
+import { ChangeCredentialsModal } from "@/components/ChangeCredentialsModal";
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 type UserItem = {
@@ -44,6 +45,7 @@ export default function Usuarios() {
   // ── Estado modales usuarios ──
   const [showCreateUser, setShowCreateUser] = useState(false);
   const [editUser, setEditUser] = useState<UserItem | null>(null);
+  const [credentialsUser, setCredentialsUser] = useState<UserItem | null>(null);
 
   // ── Estado modales roles ──
   const [showCreateRole, setShowCreateRole] = useState(false);
@@ -51,6 +53,7 @@ export default function Usuarios() {
   const [roleForm, setRoleForm] = useState({ nombre: "", label: "", descripcion: "" });
   const [creatingRole, setCreatingRole] = useState(false);
   const [deleteRoleConfirm, setDeleteRoleConfirm] = useState<{ role: RoleItem; affected: UserItem[] } | null>(null);
+  const [pendingDeleteRole, setPendingDeleteRole] = useState<RoleItem | null>(null);
 
   // ── Queries ──
   const { data: users, isLoading: loadingUsers, refetch: refetchUsers } =
@@ -74,15 +77,15 @@ export default function Usuarios() {
   const deleteRoleMut = trpc.roles.delete.useMutation({
     onSuccess: async (res: any) => {
       if (res.requiresConfirm) {
-        setDeleteRoleConfirm({ role: editRole!, affected: res.affected });
+        setDeleteRoleConfirm({ role: pendingDeleteRole!, affected: res.affected });
       } else {
-        toast.success("Rol eliminado"); refetchRoles(); refetchUsers();
+        toast.success("Rol eliminado"); setPendingDeleteRole(null); refetchRoles(); refetchUsers();
       }
     },
-    onError: (e) => toast.error(e.message),
+    onError: (e) => { toast.error(e.message); setPendingDeleteRole(null); },
   });
   const deleteRoleForceMut = trpc.roles.deleteForce.useMutation({
-    onSuccess: () => { toast.success("Rol eliminado y usuarios desasignados"); setDeleteRoleConfirm(null); setEditRole(null); refetchRoles(); refetchUsers(); },
+    onSuccess: () => { toast.success("Rol eliminado y usuarios desasignados"); setDeleteRoleConfirm(null); setPendingDeleteRole(null); refetchRoles(); refetchUsers(); },
     onError: (e) => toast.error(e.message),
   });
 
@@ -120,9 +123,14 @@ export default function Usuarios() {
     await updateRoleMut.mutateAsync({ id: editRole.id, ...roleForm });
   };
 
-  const handleDeleteRole = async (r: RoleItem) => {
-    setEditRole(r);
-    await deleteRoleMut.mutateAsync({ id: r.id });
+  const handleDeleteRole = (r: RoleItem) => {
+    // Mostrar confirmación simple antes de borrar
+    setPendingDeleteRole(r);
+  };
+
+  const confirmDeleteRole = async () => {
+    if (!pendingDeleteRole) return;
+    await deleteRoleMut.mutateAsync({ id: pendingDeleteRole.id });
   };
 
   // ── Stats ──
@@ -237,6 +245,10 @@ export default function Usuarios() {
                         className="h-8 w-8 text-muted-foreground hover:text-foreground">
                         <Pencil className="w-4 h-4" />
                       </Button>
+                      <Button variant="ghost" size="icon" onClick={() => setCredentialsUser(u)} title="Cambiar contraseña o usuario"
+                        className="h-8 w-8 text-muted-foreground hover:text-sky-500 hover:bg-sky-500/10">
+                        <KeyRound className="w-4 h-4" />
+                      </Button>
                       <Button variant="ghost" size="icon" onClick={() => handleToggleStatus(u)} disabled={toggleStatusMut.isPending}
                         title={u.isActive ? "Desactivar" : "Activar"}
                         className={`h-8 w-8 ${u.isActive ? "text-orange-400 hover:text-orange-300 hover:bg-orange-500/10" : "text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10"}`}>
@@ -322,6 +334,16 @@ export default function Usuarios() {
         />
       )}
 
+      {/* ── Modal Cambiar Credenciales (contraseña / username) ── */}
+      {credentialsUser && (
+        <ChangeCredentialsModal
+          key={credentialsUser.id}
+          user={credentialsUser}
+          onClose={() => setCredentialsUser(null)}
+          onSaved={() => refetchUsers()}
+        />
+      )}
+
       {/* ── Modal Crear Rol ── */}
       <Dialog open={showCreateRole} onOpenChange={setShowCreateRole}>
         <DialogContent className="sm:max-w-md">
@@ -380,8 +402,29 @@ export default function Usuarios() {
         </DialogContent>
       </Dialog>
 
+      {/* ── Modal Confirmación simple de eliminación de rol ── */}
+      <Dialog open={!!pendingDeleteRole && !deleteRoleConfirm} onOpenChange={(o) => { if (!o) setPendingDeleteRole(null); }}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              <AlertTriangle className="w-4 h-4" />Eliminar rol
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            ¿Estás seguro de que deseas eliminar el rol <strong>{pendingDeleteRole?.label}</strong>? Esta acción no se puede deshacer.
+          </p>
+          <DialogFooter className="pt-2">
+            <Button variant="outline" onClick={() => setPendingDeleteRole(null)}>Cancelar</Button>
+            <Button variant="destructive" disabled={deleteRoleMut.isPending} onClick={confirmDeleteRole}>
+              {deleteRoleMut.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Trash2 className="w-4 h-4 mr-2" />}
+              Eliminar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* ── Modal Confirmar Eliminar Rol (con usuarios afectados) ── */}
-      <Dialog open={!!deleteRoleConfirm} onOpenChange={(o) => { if (!o) { setDeleteRoleConfirm(null); setEditRole(null); } }}>
+      <Dialog open={!!deleteRoleConfirm} onOpenChange={(o) => { if (!o) { setDeleteRoleConfirm(null); setPendingDeleteRole(null); } }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-destructive">

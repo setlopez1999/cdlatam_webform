@@ -4,6 +4,7 @@ import {
   text,
   integer,
   real,
+  uniqueIndex,
 } from "drizzle-orm/sqlite-core";
 
 // ─── Roles del sistema ───────────────────────────────────────────────────────
@@ -24,6 +25,10 @@ export type InsertRole = typeof roles.$inferInsert;
 export const actas = sqliteTable("actas", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   userId: integer("userId").notNull(),
+  // Vínculo con el expediente de Zustand (nanoid del store)
+  expedienteUuid: text("expedienteUuid"),
+  /** Codigo compacto autogenerado del documento F1 (solo backend). */
+  codigo: text("codigo").unique(),
 
   // Encabezado
   noActa: text("noActa"),
@@ -59,8 +64,14 @@ export const actas = sqliteTable("actas", {
   formasPagoImplementacion: text("formasPagoImplementacion", { mode: "json" }),
   formasPagoMantencion: text("formasPagoMantencion", { mode: "json" }),
 
-  // Estado
+  // Estado workflow (borrador / completado / exportado)
   status: text("status").default("borrador").notNull(),
+
+  /** Snapshot JSON completo de F1 (F1Data) */
+  f1Datos: text("f1Datos", { mode: "json" }),
+  /** Estado UI del slot F1: nuevo | sin_guardar | guardado */
+  f1FormStatus: text("f1FormStatus").default("nuevo").notNull(),
+  f1SavedAt: integer("f1SavedAt", { mode: "timestamp" }),
 
   createdAt: integer("createdAt", { mode: "timestamp" }).default(sql`(strftime('%s', 'now'))`).notNull(),
   updatedAt: integer("updatedAt", { mode: "timestamp" }).default(sql`(strftime('%s', 'now'))`).notNull(),
@@ -74,6 +85,8 @@ export const evaluaciones = sqliteTable("evaluaciones", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   userId: integer("userId").notNull(),
   actaId: integer("actaId"),
+  /** Mismo valor que expedientes.uuid */
+  expedienteUuid: text("expedienteUuid"),
 
   // Información General
   unidadNegocios: text("unidadNegocios"),
@@ -106,7 +119,13 @@ export const evaluaciones = sqliteTable("evaluaciones", {
   totalOtros: real("totalOtros"),
   totalGastos: real("totalGastos"),
 
-  // Estado
+  firmaImagen: text("firmaImagen"),
+
+  /** Estado UI del slot F2 */
+  f2FormStatus: text("f2FormStatus").default("nuevo").notNull(),
+  f2SavedAt: integer("f2SavedAt", { mode: "timestamp" }),
+
+  // Estado workflow EP
   status: text("status").default("borrador").notNull(),
 
   createdAt: integer("createdAt", { mode: "timestamp" }).default(sql`(strftime('%s', 'now'))`).notNull(),
@@ -297,6 +316,7 @@ export const catalogUnidadesNegocio = sqliteTable("catalog_unidades_negocio", {
 export const catalogSoluciones = sqliteTable("catalog_soluciones", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   valor: text("valor").notNull().unique(),
+  unidadNegocioId: integer("unidadNegocioId").references(() => catalogUnidadesNegocio.id),
   activo: integer("activo").default(1).notNull(),
 });
 
@@ -348,6 +368,23 @@ export const catalogNombres = sqliteTable("catalog_nombres", {
   activo: integer("activo").default(1).notNull(),
 });
 
+/** Plantillas para la sección Consideraciones del Acta (F1); ordenadas por `orden`. */
+export const catalogConsideracionesComerciales = sqliteTable("catalog_consideraciones_comerciales", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  valor: text("valor").notNull(),
+  orden: integer("orden").default(0).notNull(),
+  activo: integer("activo").default(1).notNull(),
+});
+
+/** Maestro de ítems del checklist Implementación IPTV-OTT (`implementaciones.checkKey` → `key`). */
+export const catalogImplementacionItems = sqliteTable("catalog_implementacion_items", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  key: text("key").notNull().unique(),
+  label: text("label").notNull(),
+  orden: integer("orden").default(0).notNull(),
+  activo: integer("activo").default(1).notNull(),
+});
+
 // ─── Metadatos de catálogos (fijos + dinámicos) ─────────────────────────────
 export const catalogMeta = sqliteTable("catalog_meta", {
   id: integer("id").primaryKey({ autoIncrement: true }),
@@ -376,3 +413,112 @@ export type CatalogCeco = typeof catalogCecos.$inferSelect;
 export type CatalogDepartamento = typeof catalogDepartamentos.$inferSelect;
 export type CatalogArea = typeof catalogAreas.$inferSelect;
 export type CatalogNombre = typeof catalogNombres.$inferSelect;
+export type CatalogConsideracionComercial = typeof catalogConsideracionesComerciales.$inferSelect;
+export type CatalogImplementacionItem = typeof catalogImplementacionItems.$inferSelect;
+// ─── Expedientes (contenedor de actas y evaluaciones) ────────────────────────
+/**
+ * Tabla expedientes — metadata del expediente.
+ * Los datos de formulario (F1, F2) siguen en localStorage via Zustand
+ * hasta que se complete la migración de campos (ver docs/ARQUITECTURA_EXPEDIENTES_INTEGRIDAD.md).
+ *
+ * Relaciones:
+ *   creadorId → users.id   (quién creó el expediente)
+ *   actaId    → actas.id   (FK blanda, null hasta que F1 se guarde en BD)
+ *   evaluacionId → evaluaciones.id (FK blanda, null hasta que F2 se guarde en BD)
+ */
+export const expedientes = sqliteTable("expedientes", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  uuid: text("uuid").notNull().unique(),          // nanoid del store de Zustand
+  /** Codigo compacto autogenerado del expediente (solo backend). */
+  codigo: text("codigo").unique(),
+  nombre: text("nombre").notNull(),
+  creadorId: integer("creadorId").notNull(),       // FK blanda → users.id
+  actaId: integer("actaId"),                       // FK blanda → actas.id (futuro)
+  evaluacionId: integer("evaluacionId"),           // FK blanda → evaluaciones.id (futuro)
+  status: text("status").default("borrador").notNull(), // "borrador" | "en_proceso" | "completado"
+  createdAt: integer("createdAt", { mode: "timestamp" }).default(sql`(strftime('%s', 'now'))`).notNull(),
+  updatedAt: integer("updatedAt", { mode: "timestamp" }).default(sql`(strftime('%s', 'now'))`).notNull(),
+});
+
+export type Expediente = typeof expedientes.$inferSelect;
+export type InsertExpediente = typeof expedientes.$inferInsert;
+
+/** Resultados F3 persistidos por expediente (snapshot + estado UI) */
+export const resultadosExpediente = sqliteTable("resultados_expediente", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  expedienteUuid: text("expedienteUuid").notNull().unique(),
+  /** JSON: salida de calcularResultadoF3 u objeto extendido */
+  payload: text("payload", { mode: "json" }).notNull(),
+  f3FormStatus: text("f3FormStatus").default("nuevo").notNull(),
+  f3SavedAt: integer("f3SavedAt", { mode: "timestamp" }),
+  createdAt: integer("createdAt", { mode: "timestamp" }).default(sql`(strftime('%s', 'now'))`).notNull(),
+  updatedAt: integer("updatedAt", { mode: "timestamp" }).default(sql`(strftime('%s', 'now'))`).notNull(),
+});
+
+export type ResultadoExpediente = typeof resultadosExpediente.$inferSelect;
+export type InsertResultadoExpediente = typeof resultadosExpediente.$inferInsert;
+
+/** Items del checklist de Implementación IPTV-OTT por expediente (FK expedientes.id). */
+export const implementaciones = sqliteTable(
+  "implementaciones",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    expedienteId: integer("expedienteId")
+      .notNull()
+      .references(() => expedientes.id, { onDelete: "cascade" }),
+    /** Clave estable; debe existir en `catalog_implementacion_items.key`. */
+    checkKey: text("checkKey").notNull(),
+    /** 0 = no, 1 = sí */
+    estado: integer("estado").notNull().default(0),
+    createdAt: integer("createdAt", { mode: "timestamp" }).default(sql`(strftime('%s', 'now'))`).notNull(),
+    updatedAt: integer("updatedAt", { mode: "timestamp" }).default(sql`(strftime('%s', 'now'))`).notNull(),
+  },
+  table => [
+    uniqueIndex("implementaciones_expedienteId_checkKey_unique").on(table.expedienteId, table.checkKey),
+  ],
+);
+
+export type ImplementacionRow = typeof implementaciones.$inferSelect;
+export type InsertImplementacion = typeof implementaciones.$inferInsert;
+
+// ─── Audit Log — trazabilidad de acciones ────────────────────────────────────
+/**
+ * Tabla audit_log — registra toda actividad relevante del sistema.
+ * Se graba desde el momento del despliegue. Sin retención automática por ahora.
+ *
+ * action: LOGIN, LOGOUT, LOGIN_FAILED, CREATE, UPDATE, DELETE, UPLOAD, …
+ * entity: expediente, acta, auth, catalog_clausulas, …
+ * changes: JSON { before, after } u otro resumen
+ */
+export const auditLog = sqliteTable("audit_log", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  userId: integer("userId"),                       // null si sesión expirada o intento fallido
+  username: text("username").notNull(),            // copia del username al momento de la acción
+  action: text("action").notNull(),
+  entity: text("entity").notNull(),
+  entityId: integer("entityId"),                   // null p. ej. LOGIN
+  expedienteUuid: text("expedienteUuid"),         // denormalizado para filtros / UI
+  expedienteCodigo: text("expedienteCodigo"),
+  changes: text("changes", { mode: "json" }),      // { before, after } o null
+  ip: text("ip"),
+  createdAt: integer("createdAt", { mode: "timestamp" }).default(sql`(strftime('%s', 'now'))`).notNull(),
+});
+
+export type AuditLog = typeof auditLog.$inferSelect;
+export type InsertAuditLog = typeof auditLog.$inferInsert;
+
+// ─── Catálogo de Cláusulas Legales (PDFs) ────────────────────────────────
+// Relacionado con Unidades de Negocio (catalog_unidades_negocio)
+export const catalogClausulas = sqliteTable("catalog_clausulas", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  valor: text("valor").notNull(),               // nombre de la cláusula
+  unidadNegocioId: integer("unidadNegocioId"),    // FK a catalog_unidades_negocio
+  filePath: text("filePath").notNull(),         // ruta relativa al archivo PDF
+  fileName: text("fileName").notNull(),        // nombre original del archivo
+  fileSize: integer("fileSize"),               // tamaño en bytes
+  activo: integer("activo").default(1).notNull(),
+  createdAt: integer("createdAt", { mode: "timestamp" }).default(sql`(strftime('%s', 'now'))`).notNull(),
+});
+
+export type CatalogClausula = typeof catalogClausulas.$inferSelect;
+export type InsertCatalogClausula = typeof catalogClausulas.$inferInsert;

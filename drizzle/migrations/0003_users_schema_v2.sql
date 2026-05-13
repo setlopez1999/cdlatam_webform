@@ -19,7 +19,6 @@ CREATE TABLE IF NOT EXISTS `roles` (
 -- 3. Insertar roles base si la tabla estaba vacia
 INSERT OR IGNORE INTO `roles` (`nombre`, `label`, `descripcion`, `activo`) VALUES
   ('admin',   'Administrador', 'Acceso total al sistema', 1),
-  ('manager', 'Gerente',       'Puede ver todo, no puede gestionar usuarios', 1),
   ('viewer',  'Solo lectura',  'Acceso de solo lectura', 1),
   ('user',    'Usuario',       'Acceso basico al sistema', 1);
 

@@ -4,12 +4,13 @@ import { useLocalAuth } from "@/hooks/useLocalAuth";
 import { Label } from "@/components/ui/label";
 import { Loader2, Lock, User, ArrowRight, CheckCircle2 } from "lucide-react";
 import { getAppDebug } from "@/lib/errorUtils";
+import { CDLATAM_LOGO_PATH } from "@/lib/cdlatamBrand";
 
 export default function Login() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [localError, setLocalError] = useState<string | null>(null);
-  
+
   const { login, isLoggingIn, loginError } = useLocalAuth();
   const [, navigate] = useLocation();
 
@@ -62,7 +63,7 @@ export default function Login() {
         {/* Logo */}
         <div className="relative z-10">
           <img
-            src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663142649407/FDtlcTtkjZpRheHR.png"
+            src={CDLATAM_LOGO_PATH}
             alt="CDLatam"
             className="h-10 w-auto"
           />
@@ -103,7 +104,7 @@ export default function Login() {
         {/* Footer */}
         <div className="relative z-10">
           <p className="text-white/20 text-xs">
-            Transformación Digital en Latinoamérica
+            Transformación Digital en Latinoamérica2
           </p>
         </div>
       </div>
@@ -115,7 +116,7 @@ export default function Login() {
         {/* Mobile logo */}
         <div className="lg:hidden mb-8">
           <img
-            src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663142649407/FDtlcTtkjZpRheHR.png"
+            src={CDLATAM_LOGO_PATH}
             alt="CDLatam"
             className="h-9 w-auto mx-auto"
           />

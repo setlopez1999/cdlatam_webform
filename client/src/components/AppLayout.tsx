@@ -13,6 +13,13 @@ import {
   Users,
   History,
   CalendarClock,
+  BarChart3,
+  FilePlus,
+  Table,
+  FileSearch,
+  FileText,
+  Folders,
+  type LucideIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -27,44 +34,91 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useLocalAuth } from "@/hooks/useLocalAuth";
 import { toast } from "sonner";
+import { ROUTE_PERMISSIONS, evaluatePermission, ROLE_ADMIN, ROLE_ANY } from "@/config/permissions";
+import { CDLATAM_LOGO_PATH } from "@/lib/cdlatamBrand";
 
+// ─── Resolución de iconos ─────────────────────────────────────────────────────
+/**
+ * Mapa de nombre de icono (string en permissions.ts) → componente Lucide.
+ * Cuando agregues una ruta nueva con un icono nuevo, agrégalo acá también.
+ */
+const ICON_MAP: Record<string, LucideIcon> = {
+  LayoutDashboard,
+  Database,
+  Users,
+  History,
+  CalendarClock,
+  BarChart3,
+  FilePlus,
+  Table,
+  FileSearch,
+  FileText,
+  Folders,
+};
+
+function resolveIcon(name?: string): LucideIcon {
+  if (!name) return LayoutDashboard;
+  return ICON_MAP[name] ?? LayoutDashboard;
+}
+
+// ─── Tipos internos ───────────────────────────────────────────────────────────
 interface NavItem {
   href: string;
   label: string;
-  icon: React.ElementType;
+  icon: LucideIcon;
   badge?: string;
-  adminOnly?: boolean;
-  requiredRole?: string; // rol RBAC específico (de user_roles)
 }
-
-const ADMIN_NAV_ITEMS: NavItem[] = [
-  { href: "/", label: "Dashboard", icon: LayoutDashboard, adminOnly: true },
-  { href: "/base-datos", label: "Base de Datos", icon: Database, adminOnly: true },
-  { href: "/usuarios", label: "Usuarios", icon: Users, adminOnly: true },
-  { href: "/historial", label: "Historial", icon: History, adminOnly: true },
-];
-
-// Items accesibles por rol específico (RBAC)
-const ROLE_NAV_ITEMS: NavItem[] = [
-  { href: "/gestor-horarios", label: "Gestor de Horarios", icon: CalendarClock, requiredRole: "gestor_horarios" },
-];
-
-// Items para usuario normal
-const USER_HOME_ITEMS: NavItem[] = [
-  { href: "/home", label: "Inicio", icon: LayoutDashboard },
-  { href: "/historial", label: "Historial", icon: History },
-];
 
 interface AppLayoutProps {
   children: React.ReactNode;
 }
 
+// ─── Componente ───────────────────────────────────────────────────────────────
 export default function AppLayout({ children }: AppLayoutProps) {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const [location, navigate] = useLocation();
-  const { currentUser, isAdmin, hasRole, logout } = useLocalAuth();
+  const { currentUser, isAdmin, myRoles, logout } = useLocalAuth();
+
+  // Construir roles efectivos del usuario
+  const userRoles = [...(isAdmin ? [ROLE_ADMIN] : []), ...myRoles];
+
+  /**
+   * Genera los items del sidebar dinámicamente desde ROUTE_PERMISSIONS.
+   * Solo incluye rutas con showInNav=true y accesibles para el usuario actual.
+   */
+  const buildNavItems = (): NavItem[] =>
+    Object.entries(ROUTE_PERMISSIONS)
+      .filter(([, perm]) => perm.showInNav && evaluatePermission(userRoles, perm.roles))
+      .map(([path, perm]) => ({
+        href: path,
+        label: perm.label,
+        icon: resolveIcon(perm.icon),
+      }));
+
+  // Separar items de admin vs items de usuario normal vs items por rol RBAC
+  const adminNavItems: NavItem[] = Object.entries(ROUTE_PERMISSIONS)
+    .filter(([, perm]) =>
+      perm.showInNav &&
+      perm.roles.includes(ROLE_ADMIN) &&
+      !perm.roles.includes(ROLE_ANY) &&
+      perm.roles.length === 1 // solo admin puro
+    )
+    .map(([path, perm]) => ({ href: path, label: perm.label, icon: resolveIcon(perm.icon) }));
+
+  const userNavItems: NavItem[] = Object.entries(ROUTE_PERMISSIONS)
+    .filter(([, perm]) => perm.showInNav && perm.roles.includes(ROLE_ANY))
+    .map(([path, perm]) => ({ href: path, label: perm.label, icon: resolveIcon(perm.icon) }));
+
+  const rbacNavItems: NavItem[] = Object.entries(ROUTE_PERMISSIONS)
+    .filter(([, perm]) =>
+      perm.showInNav &&
+      !perm.roles.includes(ROLE_ADMIN) &&
+      !perm.roles.includes(ROLE_ANY) &&
+      evaluatePermission(userRoles, perm.roles)
+    )
+    .map(([path, perm]) => ({ href: path, label: perm.label, icon: resolveIcon(perm.icon) }));
 
   const isActive = (href: string) => {
     if (href === "/" || href === "/home") return location === href;
@@ -77,13 +131,11 @@ export default function AppLayout({ children }: AppLayoutProps) {
     navigate("/login");
   };
 
-  const visibleAdminItems = ADMIN_NAV_ITEMS.filter(item => !item.adminOnly || isAdmin);
-  const visibleRoleItems = ROLE_NAV_ITEMS.filter(item => !item.requiredRole || hasRole(item.requiredRole));
-
   const initials = (currentUser?.displayName ?? currentUser?.username ?? "U")
     .split(" ").map((w: string) => w[0]).join("").toUpperCase().slice(0, 2);
 
-  const NavItemRow = ({ item, indent = false }: { item: NavItem; indent?: boolean }) => {
+  // ── Sub-componente: fila de item de navegación ──
+  const NavItemRow = ({ item }: { item: NavItem }) => {
     const Icon = item.icon;
     const active = isActive(item.href);
 
@@ -115,7 +167,6 @@ export default function AppLayout({ children }: AppLayoutProps) {
         <div
           className={cn(
             "flex items-center gap-2.5 px-3 py-2 rounded-lg transition-all cursor-pointer",
-            indent && "pl-6",
             active
               ? "bg-primary/10 text-primary"
               : "text-sidebar-foreground/60 hover:bg-sidebar-accent hover:text-sidebar-foreground"
@@ -137,6 +188,23 @@ export default function AppLayout({ children }: AppLayoutProps) {
     );
   };
 
+  // ── Sub-componente: sección del sidebar con título ──
+  const NavSection = ({ title, items }: { title: string; items: NavItem[] }) => {
+    if (items.length === 0) return null;
+    return (
+      <div>
+        {!collapsed && (
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-sidebar-foreground/30 px-3 mb-1">
+            {title}
+          </p>
+        )}
+        <div className="space-y-0.5">
+          {items.map(item => <NavItemRow key={item.href} item={item} />)}
+        </div>
+      </div>
+    );
+  };
+
   const SidebarContent = () => (
     <div className="flex flex-col h-full">
       {/* Logo */}
@@ -145,64 +213,24 @@ export default function AppLayout({ children }: AppLayoutProps) {
         collapsed && "justify-center px-2"
       )}>
         <img
-          src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663142649407/FDtlcTtkjZpRheHR.png"
+          src={CDLATAM_LOGO_PATH}
           alt=""
           className={cn("object-contain flex-shrink-0", collapsed ? "w-8 h-8" : "h-8 w-auto")}
         />
-
       </div>
 
-      {/* Navigation */}
+      {/* Navigation — generada dinámicamente desde permissions.ts */}
       <nav className="flex-1 px-2 py-3 overflow-y-auto space-y-4">
-
-        {/* Admin: sección General */}
-        {isAdmin && visibleAdminItems.length > 0 && (
-          <div>
-            {!collapsed && (
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-sidebar-foreground/30 px-3 mb-1">
-                General
-              </p>
-            )}
-            <div className="space-y-0.5">
-              {visibleAdminItems.map(item => (
-                <NavItemRow key={item.href} item={item} />
-              ))}
-            </div>
-          </div>
+        {isAdmin ? (
+          // Admin: sección General con sus rutas
+          <NavSection title="General" items={adminNavItems} />
+        ) : (
+          // Usuario normal: sus rutas de inicio
+          <NavSection title="Principal" items={userNavItems} />
         )}
 
-        {/* Usuario normal: Inicio e Historial */}
-        {!isAdmin && (
-          <div>
-            {!collapsed && (
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-sidebar-foreground/30 px-3 mb-1">
-                Principal
-              </p>
-            )}
-            <div className="space-y-0.5">
-              {USER_HOME_ITEMS.map(item => (
-                <NavItemRow key={item.href} item={item} />
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Secciones por rol RBAC (visibles según user_roles) */}
-        {visibleRoleItems.length > 0 && (
-          <div>
-            {!collapsed && (
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-sidebar-foreground/30 px-3 mb-1">
-                Herramientas
-              </p>
-            )}
-            <div className="space-y-0.5">
-              {visibleRoleItems.map(item => (
-                <NavItemRow key={item.href} item={item} />
-              ))}
-            </div>
-          </div>
-        )}
-
+        {/* Herramientas por rol RBAC — visibles solo si el usuario tiene el rol */}
+        <NavSection title="Herramientas" items={rbacNavItems} />
       </nav>
 
       {/* User footer */}
@@ -221,7 +249,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
                 </Avatar>
                 <div className="flex-1 min-w-0 text-left">
                   <p className="text-xs font-medium text-sidebar-foreground truncate">
-                    {currentUser?.displayName ?? currentUser?.username ?? currentUser.username}
+                    {currentUser?.displayName ?? currentUser?.username}
                   </p>
                   <div className="flex items-center gap-1">
                     {isAdmin
@@ -237,7 +265,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
             </DropdownMenuTrigger>
             <DropdownMenuContent side="top" align="start" className="w-48">
               <DropdownMenuLabel className="font-normal">
-                <p className="text-sm font-medium">{currentUser?.displayName ?? currentUser?.username ?? currentUser.username}</p>
+                <p className="text-sm font-medium">{currentUser?.displayName ?? currentUser?.username}</p>
                 <p className="text-xs text-muted-foreground">@{currentUser.username}</p>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
@@ -267,7 +295,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
               </button>
             </TooltipTrigger>
             <TooltipContent side="right">
-              <p>{currentUser?.displayName ?? currentUser?.username ?? currentUser.username}</p>
+              <p>{currentUser?.displayName ?? currentUser?.username}</p>
               <p className="text-xs text-muted-foreground">Cerrar sesión</p>
             </TooltipContent>
           </Tooltip>
@@ -317,8 +345,8 @@ export default function AppLayout({ children }: AppLayoutProps) {
             <Menu className="w-4 h-4" />
           </Button>
           <img
-            src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663142649407/FDtlcTtkjZpRheHR.png"
-            alt="CDLatadsadasm"
+            src={CDLATAM_LOGO_PATH}
+            alt="CDLatam"
             className="h-6 w-auto"
           />
           {currentUser && (

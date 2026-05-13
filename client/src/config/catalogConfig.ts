@@ -6,7 +6,11 @@ export interface CatalogField {
   type: FieldType;
   required?: boolean;
   options?: { value: string; label: string }[]; // Para selects
-  hiddenInTable?: boolean; // Si true, no se muestra en la grilla principal
+  hiddenInTable?: boolean;
+  /** Alta: no mostrar (se genera en cliente). */
+  hideOnCreate?: boolean;
+  /** Edición: solo lectura (clave enlazada a expedientes). */
+  readOnlyInForm?: boolean;
 }
 
 export interface CatalogConfig {
@@ -78,7 +82,8 @@ export const catalogConfigs: Record<string, CatalogConfig> = {
     bgColor: "bg-emerald-500/10",
     fields: [
       { key: "valor", label: "Valor", type: "text", required: true },
-      { key: "activo", label: "Activo", type: "boolean",  },
+      { key: "unidadNegocioId", label: "Unidad de Negocio", type: "select", required: true, options: [] }, // Opciones se inyectarán dinámicamente
+      { key: "activo", label: "Activo", type: "boolean" },
     ],
   },
   detalle: {
@@ -150,6 +155,27 @@ export const catalogConfigs: Record<string, CatalogConfig> = {
     fields: [
       { key: "valor", label: "Valor", type: "text", required: true },
       { key: "activo", label: "Activo", type: "boolean",  },
+    ],
+  },
+  impl_items: {
+    tableName: "impl_items",
+    title: "Ítems implementación IPTV-OTT",
+    description: "Checklist del expediente (pestaña Implementación)",
+    color: "text-sky-400",
+    bgColor: "bg-sky-500/10",
+    fields: [
+      {
+        key: "key",
+        label: "Clave interna",
+        type: "text",
+        required: false,
+        hiddenInTable: true,
+        hideOnCreate: true,
+        readOnlyInForm: true,
+      },
+      { key: "label", label: "Descripción visible", type: "text", required: true },
+      { key: "orden", label: "Orden", type: "number", required: true },
+      { key: "activo", label: "Activo", type: "boolean" },
     ],
   },
 };

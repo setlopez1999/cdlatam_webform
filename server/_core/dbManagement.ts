@@ -1,5 +1,5 @@
 import express, { type Express, type Request, type Response } from "express";
-import { join } from "path";
+import { join, isAbsolute } from "path";
 import { existsSync, writeFileSync } from "fs";
 
 /**
@@ -7,11 +7,19 @@ import { existsSync, writeFileSync } from "fs";
  * Útil para copias de seguridad rápidas y restauración manual.
  */
 export function registerDbManagementRoutes(app: Express) {
-  const dbPath = process.env.DATABASE_URL
-    ? process.env.DATABASE_URL.replace(/^file:/, "")
-    : join(process.cwd(), "data", "gestion.db");
+  // Misma lógica que db.ts: si DATABASE_URL es un path Docker/Linux (/app/...)
+  // y estamos en Windows, lo ignoramos para evitar el ENOENT en C:\app\data\...
+  const LOCAL_DB_PATH = join(process.cwd(), "gestion.db");
+  let dbPath = LOCAL_DB_PATH;
+  if (process.env.DATABASE_URL) {
+    const envPath = process.env.DATABASE_URL.replace(/^file:/, "");
+    const isLinuxPathOnWindows = process.platform === "win32" && envPath.startsWith("/app/");
+    if (!isLinuxPathOnWindows) {
+      dbPath = envPath;
+    }
+  }
 
-  // Exportar (Descargar) la base de datos
+  // Exportar (Descargar) la base de dato
   app.get("/api/db/export", (_req: Request, res: Response) => {
     if (!existsSync(dbPath)) {
       return res.status(404).json({ error: "Archivo de base de datos no encontrado." });
@@ -33,7 +41,7 @@ export function registerDbManagementRoutes(app: Express) {
   app.post("/api/db/import", express.raw({ type: "application/octet-stream", limit: "100mb" }), (req: Request, res: Response) => {
     try {
       console.log("[DB Mgmt] Receiving database import...");
-      
+
       if (!req.body || req.body.length === 0) {
         return res.status(400).json({ error: "No se recibieron datos." });
       }

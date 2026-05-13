@@ -2,6 +2,8 @@
 
 Este documento describe el proceso seguro y estructurado para renombrar una tabla existente en el proyecto, asegurando que no se rompan referencias en el backend ni en el frontend.
 
+> Nota de vigencia: el orden de modificacion por capas de esta guia sigue vigente. Para la parte de migracion fisica, priorizar el flujo actual con Drizzle documentado en [`DATABASE_SCHEMA.md`](./DATABASE_SCHEMA.md). El ejemplo con script Python se conserva como referencia legacy.
+
 ## 1. Orden de Modificación
 
 Para evitar errores de compilación o inconsistencias en tiempo de ejecución, los archivos deben modificarse estrictamente en este orden:

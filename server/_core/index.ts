@@ -9,8 +9,10 @@ import { serveStatic, setupVite } from "./vite";
 import { seedDefaultUsers, seedDefaultRoles, registerLocalAuthRoutes } from "../localAuth";
 import { runMigrations, seedCatalogMeta } from "../db";
 import { registerDbManagementRoutes } from "./dbManagement";
+import { registerClausulasUpload } from "../routes/clausulas-upload";
 import { ENV } from "./env";
 import type { Request, Response, NextFunction } from "express";
+import { join } from "path";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -44,7 +46,7 @@ async function startServer() {
   // Seed catalog_meta (tablas fijas del sistema)
   seedCatalogMeta();
 
-  // Seed default roles (admin, manager, viewer, user, gestor_horarios)
+  // Seed default roles (admin, viewer, user, gestor_horarios)
   await seedDefaultRoles().catch(err => console.error("[Seed] Roles failed:", err));
   // Seed default users (admin/1234 and usuario/5678)
   await seedDefaultUsers().catch(err => console.error("[Seed] Users failed:", err));
@@ -54,6 +56,9 @@ async function startServer() {
 
   // DB Management Routes (Export/Import)
   registerDbManagementRoutes(app);
+
+  // Clausulas Upload Route
+  registerClausulasUpload(app);
 
   // ─── Runtime config endpoint ──────────────────────────────────────────────
   // Expone variables de entorno al cliente SIN necesidad de rebuild.
@@ -72,6 +77,9 @@ async function startServer() {
       createContext,
     })
   );
+  // Serve static files for clause PDFs
+  app.use('/clauses', express.static(join(process.cwd(), 'data', 'clauses')));
+
   // development mode uses Vite, production mode uses static files
   if (process.env.NODE_ENV === "development") {
     await setupVite(app, server);
