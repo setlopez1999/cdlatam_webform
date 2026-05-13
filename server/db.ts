@@ -25,6 +25,7 @@ import {
   // Expedientes y Auditoría
   expedientes, type Expediente, type InsertExpediente,
   resultadosExpediente, type ResultadoExpediente, type InsertResultadoExpediente,
+  implementaciones,
   auditLog, type InsertAuditLog,
   // Catálogo de Cláusulas Legales
   catalogClausulas, type CatalogClausula, type InsertCatalogClausula,
@@ -848,6 +849,39 @@ export async function upsertResultadoExpediente(data: {
   return getResultadoByExpedienteUuid(data.expedienteUuid);
 }
 
+export async function listImplementacionesByExpedienteId(expedienteId: number) {
+  const db = await getDb();
+  return db
+    .select({ checkKey: implementaciones.checkKey, estado: implementaciones.estado })
+    .from(implementaciones)
+    .where(eq(implementaciones.expedienteId, expedienteId));
+}
+
+export async function upsertImplementacionCheck(expedienteId: number, checkKey: string, estado: boolean) {
+  const db = await getDb();
+  const now = new Date();
+  const val = estado ? 1 : 0;
+  const existing = await db
+    .select({ id: implementaciones.id })
+    .from(implementaciones)
+    .where(and(eq(implementaciones.expedienteId, expedienteId), eq(implementaciones.checkKey, checkKey)))
+    .limit(1);
+  if (existing[0]) {
+    await db
+      .update(implementaciones)
+      .set({ estado: val, updatedAt: now })
+      .where(eq(implementaciones.id, existing[0].id));
+  } else {
+    await db.insert(implementaciones).values({
+      expedienteId,
+      checkKey,
+      estado: val,
+      createdAt: now,
+      updatedAt: now,
+    });
+  }
+}
+
 /**
  * Elimina expediente y todos los hijos vinculados por expedienteUuid.
  *
@@ -860,6 +894,10 @@ export async function upsertResultadoExpediente(data: {
  */
 export async function deleteExpedienteCascadeByUuid(uuid: string) {
   const db = await getDb();
+  const ex = await db.select({ id: expedientes.id }).from(expedientes).where(eq(expedientes.uuid, uuid)).limit(1);
+  if (ex[0]) {
+    await db.delete(implementaciones).where(eq(implementaciones.expedienteId, ex[0].id));
+  }
   await db.delete(resultadosExpediente).where(eq(resultadosExpediente.expedienteUuid, uuid));
   await db.delete(evaluaciones).where(eq(evaluaciones.expedienteUuid, uuid));
   await db.delete(actas).where(eq(actas.expedienteUuid, uuid));

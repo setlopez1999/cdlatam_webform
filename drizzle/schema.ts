@@ -4,6 +4,7 @@ import {
   text,
   integer,
   real,
+  uniqueIndex,
 } from "drizzle-orm/sqlite-core";
 
 // ─── Roles del sistema ───────────────────────────────────────────────────────
@@ -446,6 +447,29 @@ export const resultadosExpediente = sqliteTable("resultados_expediente", {
 
 export type ResultadoExpediente = typeof resultadosExpediente.$inferSelect;
 export type InsertResultadoExpediente = typeof resultadosExpediente.$inferInsert;
+
+/** Items del checklist de Implementación IPTV-OTT por expediente (FK expedientes.id). */
+export const implementaciones = sqliteTable(
+  "implementaciones",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    expedienteId: integer("expedienteId")
+      .notNull()
+      .references(() => expedientes.id, { onDelete: "cascade" }),
+    /** Clave estable (ver shared/implementacionChecklist.ts). */
+    checkKey: text("checkKey").notNull(),
+    /** 0 = no, 1 = sí */
+    estado: integer("estado").notNull().default(0),
+    createdAt: integer("createdAt", { mode: "timestamp" }).default(sql`(strftime('%s', 'now'))`).notNull(),
+    updatedAt: integer("updatedAt", { mode: "timestamp" }).default(sql`(strftime('%s', 'now'))`).notNull(),
+  },
+  table => [
+    uniqueIndex("implementaciones_expedienteId_checkKey_unique").on(table.expedienteId, table.checkKey),
+  ],
+);
+
+export type ImplementacionRow = typeof implementaciones.$inferSelect;
+export type InsertImplementacion = typeof implementaciones.$inferInsert;
 
 // ─── Audit Log — trazabilidad de acciones ────────────────────────────────────
 /**

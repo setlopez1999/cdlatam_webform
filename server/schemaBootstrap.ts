@@ -252,6 +252,16 @@ CREATE TABLE IF NOT EXISTS resultados_expediente (
   updatedAt INTEGER DEFAULT (strftime('%s', 'now')) NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS implementaciones (
+  id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+  expedienteId INTEGER NOT NULL REFERENCES expedientes(id) ON DELETE CASCADE,
+  checkKey TEXT NOT NULL,
+  estado INTEGER DEFAULT 0 NOT NULL,
+  createdAt INTEGER DEFAULT (strftime('%s', 'now')) NOT NULL,
+  updatedAt INTEGER DEFAULT (strftime('%s', 'now')) NOT NULL,
+  UNIQUE(expedienteId, checkKey)
+);
+
 CREATE TABLE IF NOT EXISTS audit_log (
   id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
   userId INTEGER,
