@@ -11,14 +11,15 @@
  *
  * Para conectar con tRPC en el futuro, modificar solo guardar() en useF1.ts.
  */
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/FormSection";
 import { FileText, Save, RefreshCw, Download } from "lucide-react";
 import { trpc } from "@/lib/trpc";
-import { generateActaPDF } from "@/lib/pdfExport";
+import { createActaPdfBlob } from "@/lib/pdfExport";
+import { ActaPdfPreviewDialog } from "@/components/ActaPdfPreviewDialog";
 import { useF1 } from "./useF1";
 import { useClausulasVigentes } from "./useClausulasVigentes";
 import { useFieldVisibility } from "@/hooks/useFieldVisibility";
@@ -163,6 +164,8 @@ export default function F1Form({ expedienteId }: Props) {
 
   const clausulasVigentes = useClausulasVigentes(data?.serviciosContratados, catalogs);
   const { clausulas: clausulasParaPdf, isLoading: clausulasLoading } = clausulasVigentes;
+
+  const [actaPdfPreview, setActaPdfPreview] = useState<{ blob: Blob; filename: string } | null>(null);
 
   // Bloqueo de navegación cuando hay cambios sin guardar.
   // Activa beforeunload (cerrar tab/F5) y modal en navegación SPA.
@@ -439,11 +442,8 @@ export default function F1Form({ expedienteId }: Props) {
     if (!data) return;
     try {
       toast.loading("Generando PDF...", { id: "pdf-f1" });
-      // Pasamos las cláusulas vigentes para que se anexen al final del PDF.
-      // Si una cláusula falla al cargar (PDF corrupto / 404), el callback
-      // muestra un warning y el resto del flujo sigue.
       const failed: string[] = [];
-      await generateActaPDF(
+      const { blob, filename } = await createActaPdfBlob(
         data as any,
         clausulasParaPdf.map(c => ({
           id: c.id,
@@ -452,21 +452,23 @@ export default function F1Form({ expedienteId }: Props) {
           fileName: c.fileName,
         })),
         {
+          expedienteUuid: expedienteId,
           onClausulaError: (c) => failed.push(c.fileName),
         },
       );
+      setActaPdfPreview({ blob, filename });
       if (failed.length > 0) {
-        toast.warning(`PDF exportado, pero ${failed.length} cláusula(s) no se pudieron anexar`, {
+        toast.warning(`Vista previa lista; ${failed.length} cláusula(s) no se anexaron`, {
           id: "pdf-f1",
           description: failed.join(", "),
         });
       } else {
-        toast.success("PDF exportado", { id: "pdf-f1" });
+        toast.success("Vista previa lista — revisa el documento y descarga si corresponde", { id: "pdf-f1" });
       }
     } catch {
-      toast.error("Error al exportar PDF", { id: "pdf-f1" });
+      toast.error("Error al generar PDF", { id: "pdf-f1" });
     }
-  }, [data, clausulasParaPdf]);
+  }, [data, clausulasParaPdf, expedienteId]);
 
   if (!data) return <div className="p-6 text-muted-foreground">Expediente no encontrado.</div>;
 
@@ -571,6 +573,15 @@ export default function F1Form({ expedienteId }: Props) {
         onSave={handleNavSave}
         onDiscard={handleNavDiscard}
         onCancel={cancelNav}
+      />
+
+      <ActaPdfPreviewDialog
+        open={actaPdfPreview !== null}
+        onOpenChange={open => {
+          if (!open) setActaPdfPreview(null);
+        }}
+        blob={actaPdfPreview?.blob ?? null}
+        filename={actaPdfPreview?.filename ?? ""}
       />
     </div>
   );

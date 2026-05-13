@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { COOKIE_NAME } from "@shared/const";
-import { mergeImplementacionList, isValidImplementacionCheckKey } from "@shared/implementacionChecklist";
+import { mergeImplementacionFromCatalog } from "@shared/implementacionChecklist";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
@@ -33,6 +33,8 @@ import {
   getExpedienteDetalleGlobal,
   listImplementacionesByExpedienteId,
   upsertImplementacionCheck,
+  listImplementacionCatalogActivos,
+  isActiveImplementacionCatalogKey,
   findUserById,
 } from "./db";
 
@@ -1384,8 +1386,9 @@ export const appRouter = router({
           if (!det) {
             throw new TRPCError({ code: "NOT_FOUND", message: "Expediente no encontrado" });
           }
+          const catalog = await listImplementacionCatalogActivos();
           const rows = await listImplementacionesByExpedienteId(det.expediente.id);
-          return mergeImplementacionList(rows);
+          return mergeImplementacionFromCatalog(catalog, rows);
         }),
 
       setEstado: protectedProcedure
@@ -1398,8 +1401,8 @@ export const appRouter = router({
         )
         .mutation(async ({ ctx, input }) => {
           if (!ctx.user) throw new Error("No autenticado");
-          if (!isValidImplementacionCheckKey(input.checkKey)) {
-            throw new TRPCError({ code: "BAD_REQUEST", message: "checkKey inválido" });
+          if (!(await isActiveImplementacionCatalogKey(input.checkKey))) {
+            throw new TRPCError({ code: "BAD_REQUEST", message: "checkKey inválido o inactivo" });
           }
           const det = mayAccessAllExpedientes(ctx.user.role)
             ? await getExpedienteDetalleGlobal(input.uuid)

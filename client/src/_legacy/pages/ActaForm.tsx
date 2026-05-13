@@ -13,7 +13,7 @@
  *   ActaConsideraciones → Activación nueva (checkbox) + lista de consideraciones
  *   ActaFirmas         → Bloques de firma Cliente y CDLatam
  */
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -25,7 +25,8 @@ import {
 } from "@/hooks/useFormStore";
 import { trpc } from "@/lib/trpc";
 import { getStatusColor, getStatusLabel } from "@/lib/formatters";
-import { generateActaPDF } from "@/lib/pdfExport";
+import { createActaPdfBlob } from "@/lib/pdfExport";
+import { ActaPdfPreviewDialog } from "@/components/ActaPdfPreviewDialog";
 import {
   ActaEncabezado,
   ActaEmpresa,
@@ -50,6 +51,7 @@ const REQUIRED_FIELDS: Array<{ key: keyof import("@/hooks/useFormStore").ActaDat
 export default function ActaForm() {
   const { acta, updateActa, resetActa, saveActa, isDirty } = useActaForm();
   const { data: catalogs } = trpc.catalogs.getAll.useQuery();
+  const [actaPdfPreview, setActaPdfPreview] = useState<{ blob: Blob; filename: string } | null>(null);
 
   // ── Servicios Contratados ────────────────────────────────────────────────────
   const addServicio = useCallback(() => {
@@ -147,9 +149,10 @@ export default function ActaForm() {
   const handleExportPDF = useCallback(async () => {
     try {
       toast.loading("Generando PDF...", { id: "pdf-export" });
-      await generateActaPDF(acta);
+      const { blob, filename } = await createActaPdfBlob(acta as any, []);
+      setActaPdfPreview({ blob, filename });
       updateActa({ status: "exportado" });
-      toast.success("PDF exportado correctamente", { id: "pdf-export" });
+      toast.success("Vista previa lista", { id: "pdf-export" });
     } catch {
       toast.error("Error al exportar PDF", { id: "pdf-export" });
     }
@@ -255,6 +258,15 @@ export default function ActaForm() {
           <Save className="w-4 h-4 mr-2" /> Guardar Acta
         </Button>
       </div>
+
+      <ActaPdfPreviewDialog
+        open={actaPdfPreview !== null}
+        onOpenChange={open => {
+          if (!open) setActaPdfPreview(null);
+        }}
+        blob={actaPdfPreview?.blob ?? null}
+        filename={actaPdfPreview?.filename ?? ""}
+      />
     </div>
   );
 }

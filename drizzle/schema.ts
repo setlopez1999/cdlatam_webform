@@ -376,6 +376,15 @@ export const catalogConsideracionesComerciales = sqliteTable("catalog_considerac
   activo: integer("activo").default(1).notNull(),
 });
 
+/** Maestro de ítems del checklist Implementación IPTV-OTT (`implementaciones.checkKey` → `key`). */
+export const catalogImplementacionItems = sqliteTable("catalog_implementacion_items", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  key: text("key").notNull().unique(),
+  label: text("label").notNull(),
+  orden: integer("orden").default(0).notNull(),
+  activo: integer("activo").default(1).notNull(),
+});
+
 // ─── Metadatos de catálogos (fijos + dinámicos) ─────────────────────────────
 export const catalogMeta = sqliteTable("catalog_meta", {
   id: integer("id").primaryKey({ autoIncrement: true }),
@@ -405,6 +414,7 @@ export type CatalogDepartamento = typeof catalogDepartamentos.$inferSelect;
 export type CatalogArea = typeof catalogAreas.$inferSelect;
 export type CatalogNombre = typeof catalogNombres.$inferSelect;
 export type CatalogConsideracionComercial = typeof catalogConsideracionesComerciales.$inferSelect;
+export type CatalogImplementacionItem = typeof catalogImplementacionItems.$inferSelect;
 // ─── Expedientes (contenedor de actas y evaluaciones) ────────────────────────
 /**
  * Tabla expedientes — metadata del expediente.
@@ -456,7 +466,7 @@ export const implementaciones = sqliteTable(
     expedienteId: integer("expedienteId")
       .notNull()
       .references(() => expedientes.id, { onDelete: "cascade" }),
-    /** Clave estable (ver shared/implementacionChecklist.ts). */
+    /** Clave estable; debe existir en `catalog_implementacion_items.key`. */
     checkKey: text("checkKey").notNull(),
     /** 0 = no, 1 = sí */
     estado: integer("estado").notNull().default(0),

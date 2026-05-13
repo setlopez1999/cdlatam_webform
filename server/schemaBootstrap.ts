@@ -12,6 +12,7 @@
  */
 
 import { sqlSeedConsideracionesComerciales } from "./seeds/consideracionesComercialesSeed";
+import { sqlSeedImplementacionItems } from "./seeds/implementacionItemsSeed";
 
 /** Todas las sentencias CREATE en orden seguro (FK desactivadas por defecto en SQLite). */
 export const BOOTSTRAP_ALL_PROJECT_TABLES_SQL = `
@@ -293,6 +294,14 @@ CREATE TABLE IF NOT EXISTS catalog_consideraciones_comerciales (
   orden INTEGER DEFAULT 0 NOT NULL,
   activo INTEGER DEFAULT 1 NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS catalog_implementacion_items (
+  id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+  key TEXT NOT NULL UNIQUE,
+  label TEXT NOT NULL,
+  orden INTEGER DEFAULT 0 NOT NULL,
+  activo INTEGER DEFAULT 1 NOT NULL
+);
 `;
 
 export interface SqliteExecLike {
@@ -305,4 +314,5 @@ export interface SqliteExecLike {
 export function ensureAllProjectTables(sqlite: SqliteExecLike): void {
   sqlite.exec(BOOTSTRAP_ALL_PROJECT_TABLES_SQL);
   sqlite.exec(sqlSeedConsideracionesComerciales());
+  sqlite.exec(sqlSeedImplementacionItems());
 }
