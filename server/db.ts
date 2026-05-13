@@ -66,6 +66,11 @@ const sqlite = new Database.default(dbPath);
 sqlite.pragma("foreign_keys = ON");
 const _db = drizzle(sqlite);
 
+/** Ruta efectiva del archivo SQLite (diagnóstico / integridad). */
+export function getSqliteDbPath(): string {
+  return dbPath;
+}
+
 export async function getDb() {
   return _db;
 }
