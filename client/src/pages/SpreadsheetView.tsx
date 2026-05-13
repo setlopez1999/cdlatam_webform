@@ -8,21 +8,33 @@ import { Plus, Trash2, RefreshCw, ArrowLeft, Table2, Hash, CheckSquare, Sigma, P
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
 
+import { catalogConfigs } from "@/config/catalogConfig";
+
 ModuleRegistry.registerModules([AllCommunityModule]);
 
-// ─── Colores predefinidos ─────────────────────────────────────────────────────
 const PRESET_COLORS = [
-  { label: "Blanco",   value: "#e2e8f0" },
-  { label: "Negro",    value: "#0f172a" },
-  { label: "Gris",     value: "#94a3b8" },
-  { label: "Azul",     value: "#60a5fa" },
-  { label: "Verde",    value: "#4ade80" },
+  { label: "Blanco", value: "#e2e8f0" },
+  { label: "Negro", value: "#0f172a" },
+  { label: "Gris", value: "#94a3b8" },
+  { label: "Azul", value: "#60a5fa" },
+  { label: "Verde", value: "#4ade80" },
   { label: "Amarillo", value: "#facc15" },
-  { label: "Naranja",  value: "#fb923c" },
-  { label: "Rojo",     value: "#f87171" },
+  { label: "Naranja", value: "#fb923c" },
+  { label: "Rojo", value: "#f87171" },
 ];
 
-import { catalogConfigs } from "@/config/catalogConfig";
+function defaultNewRowPayload(tableName: string, rows: any[]): Record<string, any> {
+  if (tableName === "impl_items") {
+    const maxOrden = rows.reduce((m, r) => Math.max(m, Number(r.orden) || 0), 0);
+    return {
+      key: `nuevo_item_${Date.now()}`,
+      label: "Nuevo ítem",
+      orden: maxOrden + 1,
+      activo: 1,
+    };
+  }
+  return { valor: "Nuevo", activo: 1 };
+}
 
 // ─── Componente de grilla por tabla ──────────────────────────────────────────
 function CatalogSheet({ tableName, textColor, allCatalogs }: { tableName: string; textColor: string; allCatalogs?: any }) {
@@ -52,15 +64,17 @@ function CatalogSheet({ tableName, textColor, allCatalogs }: { tableName: string
       { field: "id", headerName: "ID", width: 80, editable: false, pinned: "left" as const, cellStyle: { color: "#64748b", fontWeight: 600 } },
     ];
 
-    // 3. Mapear campos del config
-    config.fields.forEach(f => {
+    const visible = config.fields.filter(f => !f.hiddenInTable);
+
+    visible.forEach(f => {
+      const isMainText = f.key === "valor" || f.key === "label";
       const col: ColDef = {
         field: f.key,
         headerName: f.label,
-        flex: f.key === "valor" ? 1 : 0,
+        flex: isMainText ? 1 : 0,
         width: f.key === "activo" ? 110 : 150,
-        editable: true,
-        cellStyle: { color: f.key === "valor" ? textColor : undefined },
+        editable: !f.readOnlyInForm,
+        cellStyle: isMainText ? { color: textColor } : undefined,
       };
 
       if (f.type === "boolean") {
@@ -120,14 +134,14 @@ function CatalogSheet({ tableName, textColor, allCatalogs }: { tableName: string
 
   const handleAddRow = useCallback(async () => {
     try {
-      await createMutation.mutateAsync({ tableName, data: { valor: "Nuevo", activo: 1 } });
+      await createMutation.mutateAsync({ tableName, data: defaultNewRowPayload(tableName, rows) });
       toast.success("Fila agregada");
       await refetch();
       setTimeout(() => gridRef.current?.api?.ensureIndexVisible(rows.length ?? 0, "bottom"), 200);
     } catch (err: any) {
       toast.error("Error al agregar: " + err.message);
     }
-  }, [tableName, createMutation, refetch, rows.length]);
+  }, [tableName, createMutation, refetch, rows]);
 
   const handleDeleteSelected = useCallback(async () => {
     if (!selectedRows.length) return toast.warning("Selecciona al menos una fila");

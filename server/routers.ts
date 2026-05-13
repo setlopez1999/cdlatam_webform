@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { COOKIE_NAME } from "@shared/const";
+import { mergeImplementacionFromCatalog } from "@shared/implementacionChecklist";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
@@ -30,6 +31,10 @@ import {
   listExpedientesResumenGlobal,
   getExpedienteDetalle,
   getExpedienteDetalleGlobal,
+  listImplementacionesByExpedienteId,
+  upsertImplementacionCheck,
+  listImplementacionCatalogActivos,
+  isActiveImplementacionCatalogKey,
   findUserById,
 } from "./db";
 
@@ -1369,6 +1374,54 @@ export const appRouter = router({
           ? getExpedienteDetalleGlobal(input.uuid)
           : getExpedienteDetalle(input.uuid, ctx.user.id);
       }),
+
+    implementacion: router({
+      listar: protectedProcedure
+        .input(z.object({ uuid: z.string().min(1) }))
+        .query(async ({ ctx, input }) => {
+          if (!ctx.user) throw new Error("No autenticado");
+          const det = mayAccessAllExpedientes(ctx.user.role)
+            ? await getExpedienteDetalleGlobal(input.uuid)
+            : await getExpedienteDetalle(input.uuid, ctx.user.id);
+          if (!det) {
+            throw new TRPCError({ code: "NOT_FOUND", message: "Expediente no encontrado" });
+          }
+          const catalog = await listImplementacionCatalogActivos();
+          const rows = await listImplementacionesByExpedienteId(det.expediente.id);
+          return mergeImplementacionFromCatalog(catalog, rows);
+        }),
+
+      setEstado: protectedProcedure
+        .input(
+          z.object({
+            uuid: z.string().min(1),
+            checkKey: z.string().min(1),
+            estado: z.boolean(),
+          }),
+        )
+        .mutation(async ({ ctx, input }) => {
+          if (!ctx.user) throw new Error("No autenticado");
+          if (!(await isActiveImplementacionCatalogKey(input.checkKey))) {
+            throw new TRPCError({ code: "BAD_REQUEST", message: "checkKey inválido o inactivo" });
+          }
+          const det = mayAccessAllExpedientes(ctx.user.role)
+            ? await getExpedienteDetalleGlobal(input.uuid)
+            : await getExpedienteDetalle(input.uuid, ctx.user.id);
+          if (!det) {
+            throw new TRPCError({ code: "NOT_FOUND", message: "Expediente no encontrado" });
+          }
+          await upsertImplementacionCheck(det.expediente.id, input.checkKey, input.estado);
+          await recordAuditFromTrpc(ctx, {
+            action: "UPDATE",
+            entity: "implementacion",
+            entityId: det.expediente.id,
+            expedienteUuid: input.uuid,
+            expedienteCodigo: det.expediente.codigo ?? null,
+            changes: { after: { checkKey: input.checkKey, estado: input.estado } },
+          });
+          return { success: true as const };
+        }),
+    }),
 
     /** Persiste snapshot de resultados F3. */
     syncResultado: protectedProcedure

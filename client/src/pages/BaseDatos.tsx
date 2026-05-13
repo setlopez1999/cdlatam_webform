@@ -3,7 +3,8 @@ import type {
   CatalogCeco, CatalogSolucion, CatalogPais, CatalogMoneda,
   CatalogUnidadNegocio, CatalogDetalleServicio, CatalogTipoVenta,
   CatalogPlazo, CatalogDocumento,
-  CatalogEmpresa, CatalogDocumentoIdentidad, CatalogDepartamento, CatalogArea, CatalogNombre
+  CatalogEmpresa, CatalogDocumentoIdentidad, CatalogDepartamento, CatalogArea, CatalogNombre,
+  CatalogImplementacionItem,
 } from "../../../drizzle/schema";
 import { trpc } from "@/lib/trpc";
 import {
@@ -13,7 +14,7 @@ import {
   BarChart3, TrendingUp,
   ChevronDown, ChevronUp, X, FileText as FileTextIcon,
   RefreshCw, Filter, Eye, Trash2,
-  Download, Upload, Settings2
+  Download, Upload, Settings2, ListChecks
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -85,6 +86,7 @@ type SummaryData = {
   deptos: CatalogDepartamento[];
   areas: CatalogArea[];
   nombres: CatalogNombre[];
+  implementacionItems: CatalogImplementacionItem[];
 };
 
 // ─── Helpers UI ─────────────────────────────────────────────────────────────────
@@ -204,6 +206,22 @@ function ResumenView({ data, catalogMeta, onSelectTab }: {
         <div className="flex flex-wrap gap-2">
           {data.soluciones.map((s: CatalogSolucion) => (
             <span key={s.id} className="text-xs px-2.5 py-1 bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 rounded-full">{s.valor}</span>
+          ))}
+        </div>
+      </div>
+
+      {/* Ítems implementación IPTV-OTT */}
+      <div className="bg-[#1a1f2e] border border-white/5 rounded-xl p-5">
+        <div className="flex items-center gap-2 mb-4">
+          <ListChecks className="w-4 h-4 text-sky-400" />
+          <h3 className="text-sm font-semibold text-white">Ítems implementación (IPTV-OTT)</h3>
+          <Badge className="ml-auto text-xs bg-sky-500/10 text-sky-400 border-sky-500/20">{(data.implementacionItems ?? []).length} activos</Badge>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {(data.implementacionItems ?? []).map((it: CatalogImplementacionItem) => (
+            <span key={it.id} className="text-xs px-2.5 py-1 bg-sky-500/10 text-sky-200 border border-sky-500/20 rounded-full truncate max-w-full" title={it.label}>
+              {it.label}
+            </span>
           ))}
         </div>
       </div>

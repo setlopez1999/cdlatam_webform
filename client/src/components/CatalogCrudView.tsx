@@ -11,6 +11,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { CatalogConfig } from "@/config/catalogConfig";
 import { toast } from "sonner";
 import { parseErrorMessage } from "@/lib/errorUtils";
+import { slugifyForKey, uniqueKeyFromBase } from "@/lib/slugifyKey";
 
 export function CatalogCrudView({ config }: { config: CatalogConfig }) {
   const [search, setSearch] = useState("");
@@ -61,8 +62,9 @@ export function CatalogCrudView({ config }: { config: CatalogConfig }) {
 
   // ─── Actions CRUD ──────────────────────────────────────
   const handleSave = async () => {
-    // Validar requeridos
+    const isCreate = !editingId;
     for (const field of config.fields) {
+      if (field.hideOnCreate && isCreate) continue;
       if (field.required && !formData[field.key] && field.type !== "boolean") {
         return toast.error(`El campo "${field.label}" es obligatorio`);
       }
@@ -81,9 +83,19 @@ export function CatalogCrudView({ config }: { config: CatalogConfig }) {
         } else if (field.type === "number" && payload[field.key] === "") {
           delete payload[field.key];
         } else if (field.type === "select" && field.key.endsWith("Id") && typeof payload[field.key] === "string") {
-          // Convertir IDs de string a number para SQLite
           payload[field.key] = parseInt(payload[field.key], 10);
         }
+      }
+
+      if (isCreate && config.tableName === "impl_items") {
+        const label = String(payload.label ?? "").trim();
+        const existing = new Set(
+          (records as { key?: string }[]).map(r => String(r.key ?? "")).filter(Boolean),
+        );
+        payload.key = uniqueKeyFromBase(slugifyForKey(label), existing);
+      }
+      if (editingId && config.tableName === "impl_items") {
+        delete payload.key;
       }
 
       if (editingId) {
@@ -170,7 +182,23 @@ export function CatalogCrudView({ config }: { config: CatalogConfig }) {
 
   // ─── Componentes del Formulario ────────────────────────
   const renderInput = (field: any) => {
+    if (field.hideOnCreate && !editingId) return null;
     const value = formData[field.key] ?? "";
+
+    if (field.readOnlyInForm && editingId) {
+      return (
+        <div key={field.key} className="space-y-1.5">
+          <Label className="text-sm font-medium text-slate-300">{field.label}</Label>
+          <Input
+            type="text"
+            value={String(value)}
+            readOnly
+            disabled
+            className="w-full bg-[#1a1f2e]/80 border-white/10 text-slate-400"
+          />
+        </div>
+      );
+    }
 
     if (field.type === "boolean") {
       return (

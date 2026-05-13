@@ -48,6 +48,7 @@ import {
   catalogTipoVenta, catalogPlazos, catalogDocumentos, catalogCecos,
   catalogDepartamentos, catalogAreas, catalogNombres,
   catalogConsideracionesComerciales,
+  catalogImplementacionItems,
 } from "../drizzle/schema";
 import { asc, eq, like } from "drizzle-orm";
 
@@ -167,6 +168,7 @@ export async function ds_getCatalogSummary() {
     monedas, paises, empresas, doctos, unidades, soluciones,
     detalles, tipos, plazos, docs, cecos, deptos, areas, nombres,
     consideracionesComerciales,
+    implementacionItems,
   ] = await Promise.all([
     db.select().from(catalogMonedas).where(eq(catalogMonedas.activo, 1)),
     db.select().from(catalogPaises).where(eq(catalogPaises.activo, 1)),
@@ -185,11 +187,15 @@ export async function ds_getCatalogSummary() {
     db.select().from(catalogConsideracionesComerciales)
       .where(eq(catalogConsideracionesComerciales.activo, 1))
       .orderBy(asc(catalogConsideracionesComerciales.orden), asc(catalogConsideracionesComerciales.id)),
+    db.select().from(catalogImplementacionItems)
+      .where(eq(catalogImplementacionItems.activo, 1))
+      .orderBy(asc(catalogImplementacionItems.orden), asc(catalogImplementacionItems.id)),
   ]);
   return {
     monedas, paises, empresas, doctos, unidades, soluciones,
     detalles, tipos, plazos, docs, cecos, deptos, areas, nombres,
     consideracionesComerciales,
+    implementacionItems,
   };
 }
 

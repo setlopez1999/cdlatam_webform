@@ -1,5 +1,5 @@
 // server/db.ts
-import { eq, like, or, and, sql, desc, sum, count, inArray, lt, lte, gte } from "drizzle-orm";
+import { eq, like, or, and, sql, desc, sum, count, inArray, lt, lte, gte, asc } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import { migrate } from "drizzle-orm/better-sqlite3/migrator";
 import * as Database from 'better-sqlite3';
@@ -18,6 +18,7 @@ import {
   catalogUnidadesNegocio, catalogSoluciones, catalogDetalleServicio,
   catalogTipoVenta, catalogPlazos, catalogDocumentos, catalogCecos,
   catalogDepartamentos, catalogAreas, catalogNombres, catalogConsideracionesComerciales,
+  catalogImplementacionItems,
   // Gestor de Horarios
   schEmpleados, type SchEmpleado, type InsertSchEmpleado,
   schContratos, type SchContrato, type InsertSchContrato,
@@ -25,6 +26,7 @@ import {
   // Expedientes y Auditoría
   expedientes, type Expediente, type InsertExpediente,
   resultadosExpediente, type ResultadoExpediente, type InsertResultadoExpediente,
+  implementaciones,
   auditLog, type InsertAuditLog,
   // Catálogo de Cláusulas Legales
   catalogClausulas, type CatalogClausula, type InsertCatalogClausula,
@@ -61,6 +63,7 @@ if (process.env.DATABASE_URL) {
 
 console.log(`[DB] Conectando a base de datos en: ${dbPath}`);
 const sqlite = new Database.default(dbPath);
+sqlite.pragma("foreign_keys = ON");
 const _db = drizzle(sqlite);
 
 export async function getDb() {
@@ -89,6 +92,11 @@ const FIXED_CATALOGS = [
     tableName: "consideraciones",
     realTable: "catalog_consideraciones_comerciales",
     title: "Consideraciones comerciales (Acta)",
+  },
+  {
+    tableName: "impl_items",
+    realTable: "catalog_implementacion_items",
+    title: "Ítems implementación IPTV-OTT",
   },
 ];
 
@@ -161,6 +169,7 @@ const catalogMap: Record<string, any> = {
   areas: catalogAreas,
   nombres: catalogNombres,
   consideraciones: catalogConsideracionesComerciales,
+  impl_items: catalogImplementacionItems,
 };
 
 function getCatalogTable(tableName: string) {
@@ -175,6 +184,12 @@ export async function getCatalogListGeneric(tableName: string) {
   const table = catalogMap[tableName];
   if (table) {
     const db = await getDb();
+    if (tableName === "impl_items") {
+      return db
+        .select()
+        .from(catalogImplementacionItems)
+        .orderBy(asc(catalogImplementacionItems.orden), asc(catalogImplementacionItems.id));
+    }
     return db.select().from(table);
   }
   // Tabla dinámica
@@ -231,6 +246,12 @@ export async function getCatalogList(tableName: string) {
   const table = getCatalogTable(tableName);
   if (!table) return getCatalogListGeneric(tableName);
   const db = await getDb();
+  if (tableName === "impl_items") {
+    return db
+      .select()
+      .from(catalogImplementacionItems)
+      .orderBy(asc(catalogImplementacionItems.orden), asc(catalogImplementacionItems.id));
+  }
   return await db.select().from(table);
 }
 
@@ -252,6 +273,16 @@ export async function deleteCatalogRecord(tableName: string, id: number) {
   const table = getCatalogTable(tableName);
   if (!table) return deleteCatalogRecordGeneric(tableName, id);
   const db = await getDb();
+  if (tableName === "impl_items") {
+    const row = await db
+      .select({ key: catalogImplementacionItems.key })
+      .from(catalogImplementacionItems)
+      .where(eq(catalogImplementacionItems.id, id))
+      .limit(1);
+    if (row[0]?.key) {
+      await db.delete(implementaciones).where(eq(implementaciones.checkKey, row[0].key));
+    }
+  }
   return await db.delete(table).where(eq(table.id, id));
 }
 
@@ -276,6 +307,15 @@ export async function bulkDeleteCatalogRecords(tableName: string, ids: number[])
   const table = getCatalogTable(tableName);
   if (!table) return bulkDeleteCatalogRecordsGeneric(tableName, ids);
   const db = await getDb();
+  if (tableName === "impl_items") {
+    const keyRows = await db
+      .select({ key: catalogImplementacionItems.key })
+      .from(catalogImplementacionItems)
+      .where(inArray(catalogImplementacionItems.id, ids));
+    for (const kr of keyRows) {
+      if (kr.key) await db.delete(implementaciones).where(eq(implementaciones.checkKey, kr.key));
+    }
+  }
   return await db.delete(table).where(inArray(table.id, ids));
 }
 
@@ -848,6 +888,62 @@ export async function upsertResultadoExpediente(data: {
   return getResultadoByExpedienteUuid(data.expedienteUuid);
 }
 
+export async function listImplementacionesByExpedienteId(expedienteId: number) {
+  const db = await getDb();
+  return db
+    .select({ checkKey: implementaciones.checkKey, estado: implementaciones.estado })
+    .from(implementaciones)
+    .where(eq(implementaciones.expedienteId, expedienteId));
+}
+
+export async function upsertImplementacionCheck(expedienteId: number, checkKey: string, estado: boolean) {
+  const db = await getDb();
+  const now = new Date();
+  const val = estado ? 1 : 0;
+  const existing = await db
+    .select({ id: implementaciones.id })
+    .from(implementaciones)
+    .where(and(eq(implementaciones.expedienteId, expedienteId), eq(implementaciones.checkKey, checkKey)))
+    .limit(1);
+  if (existing[0]) {
+    await db
+      .update(implementaciones)
+      .set({ estado: val, updatedAt: now })
+      .where(eq(implementaciones.id, existing[0].id));
+  } else {
+    await db.insert(implementaciones).values({
+      expedienteId,
+      checkKey,
+      estado: val,
+      createdAt: now,
+      updatedAt: now,
+    });
+  }
+}
+
+export async function listImplementacionCatalogActivos() {
+  const db = await getDb();
+  return db
+    .select({
+      key: catalogImplementacionItems.key,
+      orden: catalogImplementacionItems.orden,
+      label: catalogImplementacionItems.label,
+    })
+    .from(catalogImplementacionItems)
+    .where(eq(catalogImplementacionItems.activo, 1))
+    .orderBy(asc(catalogImplementacionItems.orden), asc(catalogImplementacionItems.id));
+}
+
+export async function isActiveImplementacionCatalogKey(key: string) {
+  const db = await getDb();
+  const r = await db
+    .select({ id: catalogImplementacionItems.id })
+    .from(catalogImplementacionItems)
+    .where(and(eq(catalogImplementacionItems.key, key), eq(catalogImplementacionItems.activo, 1)))
+    .limit(1);
+  return !!r[0];
+}
+
 /**
  * Elimina expediente y todos los hijos vinculados por expedienteUuid.
  *
@@ -860,6 +956,10 @@ export async function upsertResultadoExpediente(data: {
  */
 export async function deleteExpedienteCascadeByUuid(uuid: string) {
   const db = await getDb();
+  const ex = await db.select({ id: expedientes.id }).from(expedientes).where(eq(expedientes.uuid, uuid)).limit(1);
+  if (ex[0]) {
+    await db.delete(implementaciones).where(eq(implementaciones.expedienteId, ex[0].id));
+  }
   await db.delete(resultadosExpediente).where(eq(resultadosExpediente.expedienteUuid, uuid));
   await db.delete(evaluaciones).where(eq(evaluaciones.expedienteUuid, uuid));
   await db.delete(actas).where(eq(actas.expedienteUuid, uuid));

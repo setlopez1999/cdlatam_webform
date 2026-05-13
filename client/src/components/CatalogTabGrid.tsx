@@ -5,7 +5,7 @@ import {
   Briefcase, Layers, Wrench, Tag, Clock, Package, Hash,
   MapPin, Users, Boxes, ShieldCheck, Landmark, Truck,
   Cpu, BookOpen, Star, Zap, Settings, Flag,
-  LayoutGrid, AlignJustify
+  LayoutGrid, AlignJustify, ListChecks
 } from "lucide-react";
 
 interface CatalogMeta {
@@ -39,6 +39,7 @@ const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
   deptos:     MapPin,
   areas:      Boxes,
   nombres:    Users,
+  impl_items: ListChecks,
 };
 
 const FALLBACK_ICONS = [ShieldCheck, Landmark, Truck, Cpu, BookOpen, Star, Zap, Settings, Flag, Globe];

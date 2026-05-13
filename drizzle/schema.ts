@@ -4,6 +4,7 @@ import {
   text,
   integer,
   real,
+  uniqueIndex,
 } from "drizzle-orm/sqlite-core";
 
 // ─── Roles del sistema ───────────────────────────────────────────────────────
@@ -375,6 +376,15 @@ export const catalogConsideracionesComerciales = sqliteTable("catalog_considerac
   activo: integer("activo").default(1).notNull(),
 });
 
+/** Maestro de ítems del checklist Implementación IPTV-OTT (`implementaciones.checkKey` → `key`). */
+export const catalogImplementacionItems = sqliteTable("catalog_implementacion_items", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  key: text("key").notNull().unique(),
+  label: text("label").notNull(),
+  orden: integer("orden").default(0).notNull(),
+  activo: integer("activo").default(1).notNull(),
+});
+
 // ─── Metadatos de catálogos (fijos + dinámicos) ─────────────────────────────
 export const catalogMeta = sqliteTable("catalog_meta", {
   id: integer("id").primaryKey({ autoIncrement: true }),
@@ -404,6 +414,7 @@ export type CatalogDepartamento = typeof catalogDepartamentos.$inferSelect;
 export type CatalogArea = typeof catalogAreas.$inferSelect;
 export type CatalogNombre = typeof catalogNombres.$inferSelect;
 export type CatalogConsideracionComercial = typeof catalogConsideracionesComerciales.$inferSelect;
+export type CatalogImplementacionItem = typeof catalogImplementacionItems.$inferSelect;
 // ─── Expedientes (contenedor de actas y evaluaciones) ────────────────────────
 /**
  * Tabla expedientes — metadata del expediente.
@@ -446,6 +457,29 @@ export const resultadosExpediente = sqliteTable("resultados_expediente", {
 
 export type ResultadoExpediente = typeof resultadosExpediente.$inferSelect;
 export type InsertResultadoExpediente = typeof resultadosExpediente.$inferInsert;
+
+/** Items del checklist de Implementación IPTV-OTT por expediente (FK expedientes.id). */
+export const implementaciones = sqliteTable(
+  "implementaciones",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    expedienteId: integer("expedienteId")
+      .notNull()
+      .references(() => expedientes.id, { onDelete: "cascade" }),
+    /** Clave estable; debe existir en `catalog_implementacion_items.key`. */
+    checkKey: text("checkKey").notNull(),
+    /** 0 = no, 1 = sí */
+    estado: integer("estado").notNull().default(0),
+    createdAt: integer("createdAt", { mode: "timestamp" }).default(sql`(strftime('%s', 'now'))`).notNull(),
+    updatedAt: integer("updatedAt", { mode: "timestamp" }).default(sql`(strftime('%s', 'now'))`).notNull(),
+  },
+  table => [
+    uniqueIndex("implementaciones_expedienteId_checkKey_unique").on(table.expedienteId, table.checkKey),
+  ],
+);
+
+export type ImplementacionRow = typeof implementaciones.$inferSelect;
+export type InsertImplementacion = typeof implementaciones.$inferInsert;
 
 // ─── Audit Log — trazabilidad de acciones ────────────────────────────────────
 /**

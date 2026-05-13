@@ -2,10 +2,10 @@
  * Módulo de exportación PDF para Acta de Aceptación y Resultado Evaluación.
  *
  * Acta (F1):
- *   - Genera PDF real con jsPDF + jspdf-autotable.
- *   - Fusiona los PDFs de cláusulas legales (vinculadas a las unidades de
- *     negocio en serviciosContratados) al final usando pdf-lib.
- *   - Descarga un único archivo.
+ *   - Genera PDF con jsPDF + jspdf-autotable.
+ *   - Fusiona PDFs de cláusulas con `pdf-lib`.
+ *   - Vista previa en UI con `createActaPdfBlob` + `ActaPdfPreviewDialog`;
+ *     `generateActaPDF` descarga al momento (compat).
  *
  * Resultado EP (F2):
  *   - Sigue usando window.print() del HTML estilizado (no se ha pedido cambio).
@@ -13,12 +13,13 @@
 
 import type { ActaData } from "@/hooks/useFormStore";
 import type { EPData, ResultadoCalculado } from "@/hooks/useFormStore";
+import { buildActaCodigo } from "@shared/documentCodes";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import { PDFDocument } from "pdf-lib";
 import { formatCurrency, formatDate, getCurrencyCode } from "./formatters";
+import { cdlatamLogoAbsoluteUrl } from "./cdlatamBrand";
 
-const CDLATAM_LOGO = "https://files.manuscdn.com/user_upload_by_module/session_file/310519663142649407/FDtlcTtkjZpRheHR.png";
 /** Pixeles del PNG del logo (relación de aspecto al escalar en mm). */
 const LOGO_NATURAL_W_PX = 1215;
 const LOGO_NATURAL_H_PX = 290;
@@ -35,20 +36,31 @@ export interface ClausulaParaPdf {
   fileName: string;
 }
 
+/** Opciones de export del Acta (PDF). */
+export type ActaPdfExportOpts = {
+  onClausulaError?: (c: ClausulaParaPdf, err: unknown) => void;
+  /** UUID del expediente: si `noActa` está vacío, se usa el mismo código que el servidor (`F1-…`). */
+  expedienteUuid?: string;
+};
+
+function effectiveNoActaForPdf(acta: ActaData, expedienteUuid?: string): string {
+  const t = acta.noActa?.trim();
+  if (t) return t;
+  const ex = expedienteUuid?.trim();
+  if (ex) return buildActaCodigo(ex);
+  return "";
+}
 /**
- * Genera y descarga el PDF del Acta de Aceptación de Servicios.
- * Si se pasan `clausulas`, sus PDFs se anexan al final en un solo archivo.
- *
- * Si una cláusula falla al cargar (PDF inválido, encriptado, 404), se omite y
- * se sigue con el resto. El acta siempre se descarga; los errores parciales
- * se pueden propagar al caller via la callback `onClausulaError`.
+ * Genera el PDF del Acta (con anexos de cláusulas) como Blob, sin descargar.
  */
-export async function generateActaPDF(
+export async function createActaPdfBlob(
   acta: ActaData,
   clausulas: ClausulaParaPdf[] = [],
-  opts: { onClausulaError?: (c: ClausulaParaPdf, err: unknown) => void } = {},
-): Promise<void> {
-  const baseBytes = await buildActaPdfBytes(acta);
+  opts: ActaPdfExportOpts = {},
+): Promise<{ blob: Blob; filename: string }> {
+  const noActa = effectiveNoActaForPdf(acta, opts.expedienteUuid);
+  const actaForPdf: ActaData = { ...acta, noActa };
+  const baseBytes = await buildActaPdfBytes(actaForPdf);
   const merged = await PDFDocument.load(baseBytes);
 
   for (const c of clausulas) {
@@ -66,8 +78,39 @@ export async function generateActaPDF(
   }
 
   const out = await merged.save();
-  const filename = `Acta_${acta.noActa || "sin_numero"}_${slug(acta.razonSocial)}.pdf`;
-  triggerDownload(out, filename);
+  const filename = `Acta_${noActa || "sin_numero"}_${slug(acta.razonSocial)}.pdf`;
+  const buf = new ArrayBuffer(out.byteLength);
+  new Uint8Array(buf).set(out);
+  return { blob: new Blob([buf], { type: "application/pdf" }), filename };
+}
+
+/** Dispara la descarga de un PDF ya generado (p. ej. desde la vista previa). */
+export function downloadPdfBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+/**
+ * Genera y descarga el PDF del Acta de Aceptación de Servicios.
+ * Si se pasan `clausulas`, sus PDFs se anexan al final en un solo archivo.
+ *
+ * Si una cláusula falla al cargar (PDF inválido, encriptado, 404), se omite y
+ * se sigue con el resto. El acta siempre se descarga; los errores parciales
+ * se pueden propagar al caller via la callback `onClausulaError`.
+ */
+export async function generateActaPDF(
+  acta: ActaData,
+  clausulas: ClausulaParaPdf[] = [],
+  opts: ActaPdfExportOpts = {},
+): Promise<void> {
+  const { blob, filename } = await createActaPdfBlob(acta, clausulas, opts);
+  downloadPdfBlob(blob, filename);
 }
 
 /**
@@ -90,23 +133,6 @@ export async function generateResultadoPDF(
 
 function slug(s: string | undefined): string {
   return (s || "cliente").trim().replace(/\s+/g, "_").replace(/[^\w\-]/g, "").slice(0, 40) || "cliente";
-}
-
-function triggerDownload(bytes: Uint8Array, filename: string) {
-  // Construimos un ArrayBuffer fresco. Pasar `bytes.buffer` directo al Blob
-  // dispara TS2322 porque el tipo de `.buffer` es `ArrayBuffer | SharedArrayBuffer`
-  // y SharedArrayBuffer no es BlobPart. Copiar la región cubre ambos casos.
-  const buf = new ArrayBuffer(bytes.byteLength);
-  new Uint8Array(buf).set(bytes);
-  const blob = new Blob([buf], { type: "application/pdf" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 // ─── Builders del Acta (jsPDF) ───────────────────────────────────────────────
@@ -198,7 +224,7 @@ async function buildActaPdfBytes(acta: ActaData): Promise<Uint8Array> {
   let y = margin;
 
   // ── 1. Header ───────────────────────────────────────────────────────────
-  const logo = await loadImageAsDataUrl(CDLATAM_LOGO);
+  const logo = await loadImageAsDataUrl(cdlatamLogoAbsoluteUrl());
   if (logo) {
     doc.setFillColor(...COLOR_TEXT);
     doc.roundedRect(margin, y, 38, 14, 2, 2, "F");
@@ -622,6 +648,7 @@ function buildResultadoHTML(
     etiquetaBloqueGim?: string;
   },
 ): string {
+  const logoUrl = cdlatamLogoAbsoluteUrl();
   const fmt = (v: number) => formatCurrency(v, "USD");
   const mostrarDist = pdfOpts?.mostrarDistribucionYFacturacion !== false;
   const etiquetaGim = pdfOpts?.etiquetaBloqueGim?.trim() || "GIM";
@@ -689,7 +716,7 @@ function buildResultadoHTML(
 <body>
 <div class="page">
   <div class="header">
-    <div><img src="${CDLATAM_LOGO}" alt="CDLatam" style="height:38px;object-fit:contain;" /></div>
+    <div><img src="${logoUrl}" alt="CDLatam" style="height:38px;object-fit:contain;" /></div>
     <div style="text-align:right;">
       <div class="doc-title">Resultado Evaluación de Proyecto</div>
       <div class="doc-num">EP N° ${ep.propuestaNumero || "S/N"}</div>
