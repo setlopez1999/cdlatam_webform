@@ -274,10 +274,11 @@ async function buildActaPdfBytes(acta: ActaData): Promise<Uint8Array> {
 
   const textoIntro =
     (acta as { textoIntroductorio?: string }).textoIntroductorio ||
-    "Tengo el agrado de comunicar nuestra aceptación a la propuesta comercial número en las condiciones y términos de la misma.";
+    "Por medio de la presente, confirmo la recepción y aprobación de la propuesta comercial, en los términos y condiciones aquí expresados (indicado en mail que precede).";
   y = drawIntroBox(doc, textoIntro, margin, y, contentWidth);
 
   // ── 3. Datos de la empresa ──────────────────────────────────────────────
+  y += 3; // espacio extra entre glosa legal e Información Legal
   y = drawSectionTitle(doc, "Información Legal de Cliente", margin, y);
   y = drawFieldRow(doc, [
     { label: "Razón Social", value: acta.razonSocial },
@@ -292,6 +293,7 @@ async function buildActaPdfBytes(acta: ActaData): Promise<Uint8Array> {
   ], margin, y, contentWidth);
 
   // ── 4. Datos de contacto ────────────────────────────────────────────────
+  y += 4; // espacio entre Información Legal e Información de Contacto
   y = drawSectionTitle(doc, "Información de Contacto", margin, y);
   y = drawContactGroup(doc, "Representante Legal", [
     { label: "Nombre", value: acta.representanteLegal },

@@ -146,6 +146,7 @@ export interface FilaCosto {
   total: number;
   descripcionGasto: string;
   observacion: string;
+  cuota?: 1 | 2 | 3; // Cuota a la que se imputa el gasto
 }
 
 export interface FilaRRHH {
@@ -161,6 +162,7 @@ export interface FilaRRHH {
   total: number;
   descripcionGasto: string;
   observacion: string;
+  cuota?: 1 | 2 | 3; // Cuota a la que se imputa el gasto
 }
 
 export interface FilaOtros {
@@ -184,7 +186,8 @@ export interface FilaOtros {
 export interface F2Data {
   // Encabezado (puede pre-llenarse desde F1)
   unidadNegocios: string;
-  empresa: string;
+  empresa: string; // Razón Social (se muestra como "Razón Social" en UI)
+  centroCostoHeader: string; // Centro de Costo del encabezado (catálogo CECOs)
   solucion: string;
   tipoMoneda: string;
   montoProyecto: number;
@@ -209,7 +212,7 @@ export interface F2Data {
 }
 
 export const F2_INITIAL: F2Data = {
-  unidadNegocios: "", empresa: "", solucion: "", tipoMoneda: "",
+  unidadNegocios: "", empresa: "", centroCostoHeader: "", solucion: "", tipoMoneda: "",
   montoProyecto: 0, tipoCambio: 1, totalClp: 0,
   descripcion: "", preventa: "", fechaEntrega: "",
   ejecutivoComercial: "", plazoImplementacion: "", propuestaNumero: "",

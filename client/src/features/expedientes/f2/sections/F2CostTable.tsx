@@ -32,6 +32,29 @@ export function TotalRow({ label, total, inline, fmt }: {
   );
 }
 
+// ─── Selector de Cuota ────────────────────────────────────────────────────────
+
+const CUOTAS = [
+  { value: "1", label: "Cuota 1" },
+  { value: "2", label: "Cuota 2" },
+  { value: "3", label: "Cuota 3" },
+];
+
+function CuotaSelect({ value, onChange }: { value?: 1 | 2 | 3; onChange: (v: 1 | 2 | 3) => void }) {
+  return (
+    <Select value={value ? String(value) : ""} onValueChange={v => onChange(Number(v) as 1 | 2 | 3)}>
+      <SelectTrigger className="h-8 text-xs">
+        <SelectValue placeholder="Cuota..." />
+      </SelectTrigger>
+      <SelectContent position="popper" sideOffset={4} className="z-[200]">
+        {CUOTAS.map(c => (
+          <SelectItem key={c.value} value={c.value} className="text-xs">{c.label}</SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
+
 // ─── Hardware / Materiales Table ──────────────────────────────────────────────
 
 export function F2CostTable({
@@ -52,11 +75,12 @@ export function F2CostTable({
 }) {
   return (
     <div className="overflow-x-auto rounded-lg border border-border/40">
-      <table className="w-full min-w-[760px] border-collapse text-xs">
+      <table className="w-full min-w-[860px] border-collapse text-xs">
         <thead>
           <tr className="bg-muted/60 text-muted-foreground">
-            <th className="px-2 py-2 text-left font-medium w-[160px] border-b border-border/40">Área</th>
-            <th className="px-2 py-2 text-left font-medium w-[200px] border-b border-border/40">Descripción</th>
+            <th className="px-2 py-2 text-left font-medium w-[140px] border-b border-border/40">Centro Costo</th>
+            <th className="px-2 py-2 text-left font-medium w-[90px] border-b border-border/40">Cuota</th>
+            <th className="px-2 py-2 text-left font-medium w-[180px] border-b border-border/40">Descripción</th>
             <th className="px-2 py-2 text-right font-medium w-[90px] border-b border-border/40">{valueLabel}</th>
             <th className="px-2 py-2 text-right font-medium w-[60px] border-b border-border/40">Cant.</th>
             <th className="px-2 py-2 text-right font-medium w-[90px] border-b border-border/40">Total Neto</th>
@@ -71,14 +95,20 @@ export function F2CostTable({
               <td className="px-1 py-1">
                 <Select value={row.centroCosto} onValueChange={v => onUpdate(row.id, "centroCosto", v)}>
                   <SelectTrigger className="h-8 text-xs">
-                    <SelectValue placeholder="Área..." className="truncate" />
+                    <SelectValue placeholder="CECO..." className="truncate" />
                   </SelectTrigger>
                   <SelectContent position="popper" sideOffset={4} className="z-[200]">
-                    {catalogs?.areas?.map((a: any) => (
+                    {catalogs?.cecos?.map((a: any) => (
                       <SelectItem key={a.value} value={a.value} className="text-xs">{a.label}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
+              </td>
+              <td className="px-1 py-1">
+                <CuotaSelect
+                  value={row.cuota}
+                  onChange={v => onUpdate(row.id, "cuota", v)}
+                />
               </td>
               <td className="px-1 py-1">
                 <Input className="h-8 text-xs" placeholder="Descripción..."
@@ -137,11 +167,12 @@ export function F2RRHHTable({
 }) {
   return (
     <div className="overflow-x-auto rounded-lg border border-border/40">
-      <table className="w-full min-w-[900px] border-collapse text-xs">
+      <table className="w-full min-w-[1000px] border-collapse text-xs">
         <thead>
           <tr className="bg-muted/60 text-muted-foreground">
             <th className="px-2 py-2 text-left font-medium w-[140px] border-b border-border/40">Tipo Recurso</th>
-            <th className="px-2 py-2 text-left font-medium w-[160px] border-b border-border/40">Descripción</th>
+            <th className="px-2 py-2 text-left font-medium w-[90px] border-b border-border/40">Cuota</th>
+            <th className="px-2 py-2 text-left font-medium w-[150px] border-b border-border/40">Descripción</th>
             <th className="px-2 py-2 text-right font-medium w-[90px] border-b border-border/40">Valor s/Imp.</th>
             <th className="px-2 py-2 text-right font-medium w-[60px] border-b border-border/40">Cant.</th>
             <th className="px-2 py-2 text-right font-medium w-[90px] border-b border-border/40">Total Neto</th>
@@ -160,14 +191,20 @@ export function F2RRHHTable({
                   </SelectTrigger>
                   <SelectContent position="popper" sideOffset={4} className="z-[200]">
                     {[
-                      { value: "tecnico_interno",     label: "Técnico Interno" },
+                      { value: "tecnico_interno",      label: "Técnico Interno" },
                       { value: "especialista_externo", label: "Especialista Externo" },
-                      { value: "supervisor",           label: "Supervisor" },
-                      { value: "pm",                   label: "PM" },
-                      { value: "otro",                 label: "Otro" },
+                      { value: "supervisor",            label: "Supervisor" },
+                      { value: "pm",                    label: "PM" },
+                      { value: "otro",                  label: "Otro" },
                     ].map(t => <SelectItem key={t.value} value={t.value} className="text-xs">{t.label}</SelectItem>)}
                   </SelectContent>
                 </Select>
+              </td>
+              <td className="px-1 py-1">
+                <CuotaSelect
+                  value={row.cuota}
+                  onChange={v => onUpdate(row.id, "cuota", v)}
+                />
               </td>
               <td className="px-1 py-1">
                 <Input className="h-8 text-xs" placeholder="Descripción..."
@@ -307,7 +344,7 @@ export function F2OtrosTable({
         <Button variant="outline" size="sm" onClick={onAdd}>
           <Plus className="w-3.5 h-3.5 mr-1.5" /> Agregar gasto
         </Button>
-        <TotalRow label="Total Mes" total={total} inline fmt={fmt} />
+        <TotalRow label="Total" total={total} inline fmt={fmt} />
       </div>
     </div>
   );

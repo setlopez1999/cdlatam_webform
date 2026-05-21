@@ -7,7 +7,6 @@
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { FormSection } from "@/components/FormSection";
 import {
@@ -217,22 +216,6 @@ export function F1Consideraciones({
               <Plus className="w-3.5 h-3.5 mr-1" /> Agregar
             </Button>
           </div>
-        </div>
-
-        {/* ── Cláusulas legales (texto libre) ──────────────────────────── */}
-        <div className="space-y-2">
-          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-            Cláusulas legales
-          </p>
-          <p className="text-xs text-muted-foreground">
-            Pega o escribe aquí las cláusulas legales o condiciones adicionales del contrato.
-          </p>
-          <Textarea
-            className="min-h-[120px] text-sm resize-y"
-            placeholder="Ej: El cliente acepta los términos y condiciones descritos en el contrato marco N°..."
-            value={data.clausulasLegales ?? ""}
-            onChange={e => onUpdate({ clausulasLegales: e.target.value })}
-          />
         </div>
 
         {/* ── Cláusulas legales adjuntas (auto, según unidades en Servicios) ── */}

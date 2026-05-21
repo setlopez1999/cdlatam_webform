@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { FormSection, FieldGroup } from "@/components/FormSection";
 import { Info, Download } from "lucide-react";
-import { formatCurrency, parseNumeric, getCurrencyCode } from "@/lib/formatters";
+import { formatCurrency, parseNumeric } from "@/lib/formatters";
 import type { F2Data } from "../../types";
 
 interface CatalogItem { value: string; label: string; }
@@ -31,12 +31,12 @@ interface Props {
     rut?: string;
     paisImplementacion?: string;
     tipoMoneda?: string;
+    unidadNegocios?: string;
   } | null;
   onImportarDesdeF1?: () => void;
 }
 
 export function F2InfoGeneral({ data, onUpdate, catalogs, f1Suggestions, onImportarDesdeF1 }: Props) {
-  const currencyCode = getCurrencyCode(data.tipoMoneda ?? "");
   const totalClp = data.montoProyecto * (data.tipoCambio || 1);
 
   return (
@@ -48,6 +48,7 @@ export function F2InfoGeneral({ data, onUpdate, catalogs, f1Suggestions, onImpor
             <span className="font-semibold">F1 disponible:</span>{" "}
             {f1Suggestions.nombreCliente && <span>Cliente: <b>{f1Suggestions.nombreCliente}</b></span>}
             {f1Suggestions.tipoMoneda && <span className="ml-2">· Moneda: <b>{f1Suggestions.tipoMoneda}</b></span>}
+            {f1Suggestions.unidadNegocios && <span className="ml-2">· UN: <b>{f1Suggestions.unidadNegocios}</b></span>}
           </div>
           <Button
             type="button" variant="outline" size="sm"
@@ -65,14 +66,33 @@ export function F2InfoGeneral({ data, onUpdate, catalogs, f1Suggestions, onImpor
             onChange={e => onUpdate({ nombreCliente: e.target.value })} />
         </FieldGroup>
 
-        <FieldGroup label="Empresa / RUT">
-          <Input placeholder="Empresa o RUT" value={data.empresa}
+        <FieldGroup label="Razón Social">
+          <Input placeholder="Razón social de la empresa" value={data.empresa}
             onChange={e => onUpdate({ empresa: e.target.value })} />
+        </FieldGroup>
+
+        <FieldGroup label="Unidad de Negocio">
+          <Input placeholder="Unidad de negocio" value={data.unidadNegocios}
+            onChange={e => onUpdate({ unidadNegocios: e.target.value })} />
         </FieldGroup>
 
         <FieldGroup label="Solución / Proyecto">
           <Input placeholder="Nombre de la solución" value={data.solucion}
             onChange={e => onUpdate({ solucion: e.target.value })} />
+        </FieldGroup>
+
+        <FieldGroup label="Centro de Costo">
+          {catalogs?.cecos?.length ? (
+            <Select value={data.centroCostoHeader} onValueChange={v => onUpdate({ centroCostoHeader: v })}>
+              <SelectTrigger><SelectValue placeholder="Centro de costo..." /></SelectTrigger>
+              <SelectContent position="popper" sideOffset={4} className="z-[200]">
+                {catalogs.cecos.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          ) : (
+            <Input placeholder="Centro de costo" value={data.centroCostoHeader}
+              onChange={e => onUpdate({ centroCostoHeader: e.target.value })} />
+          )}
         </FieldGroup>
 
         <FieldGroup label="Tipo de Moneda" required>

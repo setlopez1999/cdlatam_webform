@@ -38,9 +38,6 @@ export default function F3View({ expedienteId, onVolverF2 }: Props) {
 
   const [pctGIM, setPctGIM] = useState(10);
   const [pctGP, setPctGP] = useState(90);
-  /** Porcentaje de impuesto sobre facturación bruta (tramo GP), 0.5–100. */
-  const [pctImpuesto, setPctImpuesto] = useState(19);
-
   const lastSyncedPayloadJson = useRef<string | null>(null);
 
   const syncResultado = trpc.expediente.syncResultado.useMutation({
@@ -68,7 +65,6 @@ export default function F3View({ expedienteId, onVolverF2 }: Props) {
 
     const payload = calcularResultadoF3(expediente.f2.data, expediente.f1.data, {
       fraccionGIM: pctGIM / 100,
-      tasaImpuesto: pctImpuesto / 100,
     });
     const json = JSON.stringify(payload);
     if (lastSyncedPayloadJson.current === json) return;
@@ -79,7 +75,7 @@ export default function F3View({ expedienteId, onVolverF2 }: Props) {
       payload,
       f3FormStatus: "guardado",
     });
-  }, [expediente, expedienteId, f1Guardado, f2Guardado, pctGIM, pctImpuesto, syncResultado]);
+  }, [expediente, expedienteId, f1Guardado, f2Guardado, pctGIM, syncResultado]);
 
   const setGIM = (raw: number) => {
     const g = Math.max(0, Math.min(100, Math.round(raw)));
@@ -93,10 +89,6 @@ export default function F3View({ expedienteId, onVolverF2 }: Props) {
     setPctGIM(100 - p);
   };
 
-  const clampPctImpuesto = (raw: number) => {
-    if (!Number.isFinite(raw)) return 19;
-    return Math.min(100, Math.max(0.5, Math.round(raw * 10) / 10));
-  };
 
   const f1 = expediente?.f1.data ?? F1_INITIAL;
   const f2 = expediente?.f2.data ?? F2_INITIAL;
@@ -107,10 +99,10 @@ export default function F3View({ expedienteId, onVolverF2 }: Props) {
         f2,
         f1,
         f1Guardado
-          ? { fraccionGIM: pctGIM / 100, tasaImpuesto: pctImpuesto / 100 }
+          ? { fraccionGIM: pctGIM / 100 }
           : undefined,
       ),
-    [f2, f1, f1Guardado, pctGIM, pctImpuesto],
+    [f2, f1, f1Guardado, pctGIM],
   );
 
   const totalIngreso   = r.ingreso.mes1 + r.ingreso.mes2 + r.ingreso.mes3;
@@ -129,9 +121,7 @@ export default function F3View({ expedienteId, onVolverF2 }: Props) {
 
   const etiquetaBloque = f1.sres?.trim() || "GIM";
 
-  type FilaMes =
-    | { kind: "texto"; label: string; m1: number; m2: number; m3: number; bold: boolean; color: string }
-    | { kind: "impuesto"; m1: number; m2: number; m3: number; bold: boolean; color: string };
+  type FilaMes = { kind: "texto"; label: string; m1: number; m2: number; m3: number; bold: boolean; color: string };
 
   const filas = useMemo((): FilaMes[] => {
     const base: FilaMes[] = [
@@ -143,9 +133,7 @@ export default function F3View({ expedienteId, onVolverF2 }: Props) {
     return [
       ...base,
       { kind: "texto", label: `${etiquetaBloque} (${pctGIM}%)`, m1: r.distribucion.gim.mes1, m2: r.distribucion.gim.mes2, m3: r.distribucion.gim.mes3, bold: false, color: "text-blue-600"   },
-      { kind: "texto", label: `GP (${pctGP}%)`,                 m1: r.distribucion.gp.mes1,  m2: r.distribucion.gp.mes2,  m3: r.distribucion.gp.mes3,  bold: false, color: "text-violet-600" },
-      { kind: "texto", label: "Facturación Bruta",             m1: r.facturacion.bruto.mes1,    m2: r.facturacion.bruto.mes2,    m3: r.facturacion.bruto.mes3,    bold: false, color: "text-foreground" },
-      { kind: "impuesto", m1: r.facturacion.impuesto.mes1, m2: r.facturacion.impuesto.mes2, m3: r.facturacion.impuesto.mes3, bold: false, color: "text-amber-600"  },
+      { kind: "texto", label: `CONTENIDOS DIGITALES SPA (${pctGP}%)`, m1: r.distribucion.gp.mes1,  m2: r.distribucion.gp.mes2,  m3: r.distribucion.gp.mes3,  bold: false, color: "text-violet-600" },
       { kind: "texto", label: "Facturación Neta",               m1: r.facturacion.neto.mes1,     m2: r.facturacion.neto.mes2,     m3: r.facturacion.neto.mes3,     bold: true,  color: "text-emerald-700"},
     ];
   }, [r, f1Guardado, etiquetaBloque, pctGIM, pctGP, resMes1, resMes2, resMes3]);
@@ -285,26 +273,9 @@ export default function F3View({ expedienteId, onVolverF2 }: Props) {
                     {filas.map((row, i) => {
                       const total = row.m1 + row.m2 + row.m3;
                       return (
-                        <tr key={i} className={`border-b border-border/20 last:border-b-0 ${row.bold ? "bg-muted/30" : row.kind === "impuesto" ? "bg-muted/15" : "hover:bg-muted/10"} transition-colors`}>
-                          <td className={`px-3 py-2 ${row.bold && row.kind === "texto" ? "font-semibold" : ""}`}>
-                            {row.kind === "impuesto" ? (
-                              <div className="flex flex-wrap items-center gap-2">
-                                <span className="font-medium">Impuesto</span>
-                                <Input
-                                  id="f3-pct-impuesto"
-                                  type="number"
-                                  min={0.5}
-                                  max={100}
-                                  step={0.1}
-                                  className="h-8 w-[4.75rem] font-mono text-xs"
-                                  value={pctImpuesto}
-                                  onChange={e => setPctImpuesto(clampPctImpuesto(Number(e.target.value)))}
-                                />
-                                <span className="text-[10px] text-muted-foreground whitespace-nowrap">% sobre bruto (país)</span>
-                              </div>
-                            ) : (
-                              row.label
-                            )}
+                        <tr key={i} className={`border-b border-border/20 last:border-b-0 ${row.bold ? "bg-muted/30" : "hover:bg-muted/10"} transition-colors`}>
+                          <td className={`px-3 py-2 ${row.bold ? "font-semibold" : ""}`}>
+                            {row.label}
                           </td>
                           <td className={`px-3 py-2 text-right font-mono ${row.color} ${row.bold ? "font-bold" : ""}`}>{fmt(row.m1)}</td>
                           <td className={`px-3 py-2 text-right font-mono ${row.color} ${row.bold ? "font-bold" : ""}`}>{fmt(row.m2)}</td>

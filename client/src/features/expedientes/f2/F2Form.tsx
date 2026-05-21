@@ -245,6 +245,7 @@ export default function F2Form({ expedienteId, onVerResultado }: Props) {
           monedas: catalogs?.monedas as any,
           paises: catalogs?.paises as any,
           plazos: catalogs?.plazos as any,
+          cecos: catalogs?.cecos as any,
         }}
         f1Suggestions={f1Suggestions}
         onImportarDesdeF1={importarDesdeF1}

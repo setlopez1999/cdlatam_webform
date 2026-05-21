@@ -220,31 +220,92 @@ interface PagoTableProps {
 
 function PagoTable({
   title, items, tipo, modo = "implementacion", catalogs, currencyCode = "USD", totalReferencia,
-  totalDescuentoMantencion = 0,
   precioUnitarioByServicioId = {},
   onUpdate, onAdd, onRemove,
 }: PagoTableProps) {
   const esMantencion = modo === "mantencion";
-  // Determinar cuántas columnas de cuotas mostrar (máximo de nCuotas en esta tabla, min 1, max 4)
+
+  // Mantención simplificada: solo muestra tipo de venta y referencia VU (sin cuotas de gracia)
+  if (esMantencion) {
+    return (
+      <div className="space-y-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-1">
+          <h4 className="text-sm font-semibold text-foreground">{title}</h4>
+          {onAdd && (
+            <Button type="button" variant="outline" size="sm" onClick={() => onAdd(tipo)} className="h-7 text-xs gap-1">
+              <Plus className="w-3 h-3" /> Agregar fila
+            </Button>
+          )}
+        </div>
+        <div className="overflow-x-auto rounded-lg border border-border/60 shadow-sm">
+          <table className="w-full min-w-[400px] text-xs border-collapse">
+            <thead>
+              <tr className="bg-muted/60">
+                <th className="border-b border-r border-border/60 px-2 py-2 text-left font-medium w-10">ITEM</th>
+                <th className="border-b border-r border-border/60 px-2 py-2 text-left font-medium">Tipo Venta</th>
+                <th className="border-b border-border/60 px-2 py-2 text-left font-medium">Ref. Mensual (VU)</th>
+                {onRemove && <th className="border-b border-l border-border/60 w-8"></th>}
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((pago, idx) => (
+                <tr key={pago.id} className="hover:bg-muted/10 transition-colors">
+                  <td className="border-b border-r border-border/40 px-2 py-1 text-center text-muted-foreground">{idx + 1}</td>
+                  <td className="border-b border-r border-border/40 px-1 py-0.5 min-w-[160px]">
+                    {catalogs?.tipoVenta && catalogs.tipoVenta.length > 0 ? (
+                      <Select value={pago.tipoVenta} onValueChange={v => onUpdate(tipo, pago.id, "tipoVenta", v)}>
+                        <SelectTrigger className="h-7 text-xs border-0 bg-transparent focus:ring-0">
+                          <SelectValue placeholder="Tipo..." />
+                        </SelectTrigger>
+                        <SelectContent position="popper" sideOffset={4} className="z-[200]">
+                          {catalogs.tipoVenta.map(t => (
+                            <SelectItem key={t.value} value={t.value} className="text-xs">{t.label}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <Input className="h-7 text-xs border-0 bg-transparent focus-visible:ring-0"
+                        placeholder="Tipo venta" value={pago.tipoVenta}
+                        onChange={e => onUpdate(tipo, pago.id, "tipoVenta", e.target.value)} />
+                    )}
+                  </td>
+                  <td className="border-b border-r border-border/40 px-2 py-1 text-muted-foreground">
+                    {pago.linkedServicioId && precioUnitarioByServicioId[pago.linkedServicioId] !== undefined
+                      ? formatCurrency(precioUnitarioByServicioId[pago.linkedServicioId] ?? 0, currencyCode)
+                      : <span className="italic text-muted-foreground/50">—</span>
+                    }
+                  </td>
+                  {onRemove && (
+                    <td className="border-b border-l border-border/40 px-1 py-0.5 text-center">
+                      <Button type="button" variant="ghost" size="icon"
+                        className="h-6 w-6 text-destructive/60 hover:text-destructive"
+                        onClick={() => onRemove(tipo, pago.id)}>
+                        <Trash2 className="w-3 h-3" />
+                      </Button>
+                    </td>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
+  }
+
+  // Implementación: tabla completa con N° cuotas, montos y fechas
   const maxCuotas = Math.min(4, Math.max(1, ...items.map(i => i.nCuotas || 0)));
-  
   const totalPagos = items.reduce(
     (sum, i) => sum + i.cuotas.reduce((s, c) => s + (c.monto || 0), 0), 0
   );
-
   const diff = Math.abs(totalPagos - totalReferencia);
-  const hasWarning = !esMantencion && diff > 0.1 && totalReferencia > 0;
+  const hasWarning = diff > 0.1 && totalReferencia > 0;
 
   return (
     <div className="space-y-3">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-1">
         <div className="flex flex-wrap items-center gap-3">
           <h4 className="text-sm font-semibold text-foreground">{title}</h4>
-          {esMantencion && (
-            <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 border-emerald-500/25 text-[10px] py-0 px-2">
-              Ahorro total (cuotas de gracia): {formatCurrency(totalDescuentoMantencion, currencyCode)}
-            </Badge>
-          )}
           {hasWarning && (
             <Badge variant="outline" className="bg-orange-500/10 text-orange-400 border-orange-500/20 text-[10px] py-0 px-2 flex items-center gap-1 animate-pulse">
               <ShieldOff className="w-3 h-3" /> La suma no coincide con el total de servicios ({formatCurrency(totalReferencia, currencyCode)})
@@ -264,12 +325,10 @@ function PagoTable({
             <tr className="bg-muted/60">
               <th className="border-b border-r border-border/60 px-2 py-2 text-left font-medium w-10">ITEM</th>
               <th className="border-b border-r border-border/60 px-2 py-2 text-left font-medium w-[130px] min-w-[130px]">Tipo Venta</th>
-              <th className="border-b border-r border-border/60 px-2 py-2 text-center font-medium w-16">
-                {esMantencion ? "N° Cuotas de Gracia" : "N° Cuotas"}
-              </th>
+              <th className="border-b border-r border-border/60 px-2 py-2 text-center font-medium w-16">N° Cuotas</th>
               {Array.from({ length: maxCuotas }).map((_, i) => (
                 <th key={i} className="border-b border-r border-border/60 px-2 py-2 text-center font-medium" colSpan={2}>
-                  {esMantencion ? `Cuota de gracia ${i + 1}` : `Cuota ${i + 1}`}
+                  Cuota {i + 1}
                 </th>
               ))}
               {onRemove && <th className="border-b border-l border-border/60 w-8"></th>}
@@ -291,46 +350,30 @@ function PagoTable({
             {items.map((pago, idx) => (
               <tr key={pago.id} className="hover:bg-muted/10 transition-colors">
                 <td className="border-b border-r border-border/40 px-2 py-1 text-center text-muted-foreground">{idx + 1}</td>
-
-                {/* Tipo Venta */}
                 <td className="border-b border-r border-border/40 px-1 py-0.5 min-w-[130px]">
-                  <div className="space-y-0.5">
-                    {catalogs?.tipoVenta && catalogs.tipoVenta.length > 0 ? (
-                      <Select
-                        value={pago.tipoVenta}
-                        onValueChange={v => onUpdate(tipo, pago.id, "tipoVenta", v)}
-                      >
-                        <SelectTrigger className="h-7 text-xs border-0 bg-transparent focus:ring-0 max-w-full overflow-hidden">
-                          <SelectValue placeholder="Tipo..." className="truncate" />
-                        </SelectTrigger>
-                        <SelectContent position="popper" sideOffset={4} className="z-[200]">
-                          {catalogs.tipoVenta.map(t => (
-                            <SelectItem key={t.value} value={t.value} className="text-xs">{t.label}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    ) : (
-                      <Input className="h-7 text-xs border-0 bg-transparent focus-visible:ring-0"
-                        placeholder="Tipo venta" value={pago.tipoVenta}
-                        onChange={e => onUpdate(tipo, pago.id, "tipoVenta", e.target.value)} />
-                    )}
-                    {esMantencion && pago.linkedServicioId && precioUnitarioByServicioId[pago.linkedServicioId] !== undefined && (
-                      <div className="text-[10px] text-muted-foreground px-0.5">
-                        Ref. mensual (VU): {formatCurrency(precioUnitarioByServicioId[pago.linkedServicioId] ?? 0, currencyCode)}
-                      </div>
-                    )}
-                  </div>
+                  {catalogs?.tipoVenta && catalogs.tipoVenta.length > 0 ? (
+                    <Select value={pago.tipoVenta} onValueChange={v => onUpdate(tipo, pago.id, "tipoVenta", v)}>
+                      <SelectTrigger className="h-7 text-xs border-0 bg-transparent focus:ring-0 max-w-full overflow-hidden">
+                        <SelectValue placeholder="Tipo..." className="truncate" />
+                      </SelectTrigger>
+                      <SelectContent position="popper" sideOffset={4} className="z-[200]">
+                        {catalogs.tipoVenta.map(t => (
+                          <SelectItem key={t.value} value={t.value} className="text-xs">{t.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <Input className="h-7 text-xs border-0 bg-transparent focus-visible:ring-0"
+                      placeholder="Tipo venta" value={pago.tipoVenta}
+                      onChange={e => onUpdate(tipo, pago.id, "tipoVenta", e.target.value)} />
+                  )}
                 </td>
-
-                {/* N° Cuotas */}
                 <td className="border-b border-r border-border/40 px-1 py-0.5">
                   <Input type="number" min={1} max={4}
                     className="h-7 text-xs text-center border-0 bg-transparent focus-visible:ring-0 font-medium text-blue-400"
                     value={pago.nCuotas}
                     onChange={e => onUpdate(tipo, pago.id, "nCuotas", e.target.value)} />
                 </td>
-
-                {/* Cuotas dinámicas */}
                 {Array.from({ length: maxCuotas }).map((_, i) => {
                   const isEnabled = i < (pago.nCuotas || 1);
                   return (
@@ -354,7 +397,6 @@ function PagoTable({
                     </Fragment>
                   );
                 })}
-
                 {onRemove && (
                   <td className="border-b border-l border-border/40 px-1 py-0.5 text-center">
                     <Button type="button" variant="ghost" size="icon"
@@ -367,23 +409,15 @@ function PagoTable({
               </tr>
             ))}
           </tbody>
-          {(esMantencion ? totalDescuentoMantencion > 0 || totalPagos > 0 : totalPagos > 0) && (
+          {totalPagos > 0 && (
             <tfoot>
               <tr className="bg-muted/40 font-medium">
-                <td colSpan={3} className="border-t border-r border-border/60 px-2 py-1.5 text-right text-xs">
-                  {esMantencion ? "Suma montos ingresados (gracia):" : "Total:"}
-                </td>
-                <td colSpan={2} className={`border-t border-r border-border/60 px-2 py-1.5 text-right text-xs font-bold ${hasWarning ? "text-orange-400" : esMantencion ? "text-foreground" : "text-emerald-400"}`}>
+                <td colSpan={3} className="border-t border-r border-border/60 px-2 py-1.5 text-right text-xs">Total:</td>
+                <td colSpan={2} className={`border-t border-r border-border/60 px-2 py-1.5 text-right text-xs font-bold ${hasWarning ? "text-orange-400" : "text-emerald-400"}`}>
                   {formatCurrency(totalPagos, currencyCode)}
                 </td>
                 <td colSpan={maxCuotas * 2 - 2} className="border-t border-border/60 px-2 py-1.5">
-                  {esMantencion ? (
-                    <span className="text-[10px] text-muted-foreground font-normal">
-                      Ahorro acumulado F1: {formatCurrency(totalDescuentoMantencion, currencyCode)}
-                    </span>
-                  ) : (
-                    hasWarning && <span className="text-[10px] text-orange-400/80 italic font-normal">Suma no coincide con servicios</span>
-                  )}
+                  {hasWarning && <span className="text-[10px] text-orange-400/80 italic font-normal">Suma no coincide con servicios</span>}
                 </td>
                 {onRemove && <td className="border-t border-l border-border/60"></td>}
               </tr>
@@ -487,7 +521,6 @@ export function F1FormasPago({
               catalogs={catalogs}
               currencyCode={currencyCode}
               totalReferencia={totalReferenciaMant}
-              totalDescuentoMantencion={data.total_descuento_mantencion ?? 0}
               precioUnitarioByServicioId={precioUnitarioByServicioId}
               onUpdate={onUpdate}
               onAdd={onAdd}
