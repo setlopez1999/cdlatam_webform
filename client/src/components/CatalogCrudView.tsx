@@ -328,7 +328,7 @@ export function CatalogCrudView({ config }: { config: CatalogConfig }) {
                     </div>
                   </th>
                 ))}
-                <th className="px-5 py-3.5 text-right font-semibold tracking-wider">Acciones</th>
+                <th className="px-5 py-3.5 text-right font-semibold tracking-wider sticky right-0 bg-[#242b3d] z-10 shadow-[-8px_0_12px_rgba(0,0,0,0.3)]">Acciones</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-white/5">
@@ -353,8 +353,8 @@ export function CatalogCrudView({ config }: { config: CatalogConfig }) {
                       )}
                     </td>
                   ))}
-                  <td className="px-5 py-3 whitespace-nowrap text-right">
-                    <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <td className="px-5 py-3 whitespace-nowrap text-right sticky right-0 bg-[#1a1f2e] group-hover:bg-[#1f2537] z-10 shadow-[-8px_0_12px_rgba(0,0,0,0.25)] transition-colors">
+                    <div className="flex items-center justify-end gap-2">
                       <Button variant="ghost" size="icon" onClick={() => openEdit(record)} className="h-8 w-8 text-blue-400 hover:text-blue-300 hover:bg-blue-500/10">
                         <Edit2 className="w-4 h-4" />
                       </Button>
