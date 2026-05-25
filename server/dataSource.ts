@@ -145,7 +145,7 @@ export async function ds_getCatalogOptions() {
     documentoIdentidad: toOptions(documentoIdentidad),
     unidadesNegocio:    unidadesNegocio.map(r => ({ id: r.id, value: r.valor, label: r.valor })),
     soluciones:         soluciones.map(r => ({ id: r.id, value: r.valor, label: r.valor, unidadNegocioId: r.unidadNegocioId })),
-    detalleServicio:    toOptions(detalleServicio),
+    detalleServicio:    detalleServicio.map(r => ({ id: r.id, value: r.valor, label: r.valor, solucionId: r.solucionId })),
     tipoVenta:          toOptions(tipoVenta),
     plazos:             toOptions(plazos),
     paises:             toOptions(paises),

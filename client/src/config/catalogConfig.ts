@@ -93,7 +93,8 @@ export const catalogConfigs: Record<string, CatalogConfig> = {
     bgColor: "bg-pink-500/10",
     fields: [
       { key: "valor", label: "Valor", type: "text", required: true },
-      { key: "activo", label: "Activo", type: "boolean",  },
+      { key: "solucionId", label: "Solución", type: "select", required: true, options: [] }, // Opciones se inyectarán dinámicamente
+      { key: "activo", label: "Activo", type: "boolean" },
     ],
   },
   tipos: {

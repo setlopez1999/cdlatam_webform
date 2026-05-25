@@ -13,7 +13,7 @@ import { Briefcase, Plus, Trash2, ShieldOff } from "lucide-react";
 import type { F1Data, ServicioContratado } from "../../types";
 import { formatCurrency, getCurrencyCode, parseNumeric } from "@/lib/formatters";
 
-interface CatalogItem { value: string; label: string; id?: number; unidadNegocioId?: number; }
+interface CatalogItem { value: string; label: string; id?: number; unidadNegocioId?: number; solucionId?: number; }
 interface Catalogs {
   unidadesNegocio?: CatalogItem[];
   soluciones?: CatalogItem[];
@@ -64,8 +64,14 @@ export function F1Servicios({ servicios, catalogs, moneda, onAdd, onAddVenta, on
                 // Filtrar soluciones basadas en la unidad de negocio seleccionada
                 const selectedUnidad = catalogs?.unidadesNegocio?.find(u => u.value === servicio.unidadNegocio);
                 const filteredSoluciones = catalogs?.soluciones?.filter(s => {
-                  if (!servicio.unidadNegocio) return true; // Si no hay unidad, mostrar todas (o ninguna, depende de preferencia)
+                  if (!servicio.unidadNegocio) return true;
                   return s.unidadNegocioId === selectedUnidad?.id;
+                });
+                // Filtrar detalles basados en la solución seleccionada
+                const selectedSolucion = catalogs?.soluciones?.find(s => s.value === servicio.solucion);
+                const filteredDetalles = (catalogs?.detalleServicio as CatalogItem[] | undefined)?.filter(d => {
+                  if (!servicio.solucion) return true;
+                  return d.solucionId === selectedSolucion?.id;
                 });
                 return (
                   <tr key={servicio.id} className="border-b border-border/20 last:border-b-0 hover:bg-muted/20 transition-colors">
@@ -113,9 +119,14 @@ export function F1Servicios({ servicios, catalogs, moneda, onAdd, onAddVenta, on
                           <SelectValue placeholder="Detalle..." className="truncate" />
                         </SelectTrigger>
                         <SelectContent position="popper" sideOffset={4} className="z-[200]">
-                          {catalogs?.detalleServicio?.map(d => (
+                          {filteredDetalles?.map(d => (
                             <SelectItem key={d.value} value={d.value} className="text-xs">{d.label}</SelectItem>
                           ))}
+                          {(!filteredDetalles || filteredDetalles.length === 0) && (
+                            <div className="p-2 text-[10px] text-muted-foreground text-center italic">
+                              {servicio.solucion ? "No hay detalles para esta solución" : "Selecciona una solución primero"}
+                            </div>
+                          )}
                         </SelectContent>
                       </Select>
                     </td>

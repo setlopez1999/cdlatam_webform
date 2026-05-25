@@ -483,6 +483,12 @@ export default function BaseDatos() {
                   selectField.options = data.unidades.map(u => ({ value: String(u.id), label: u.valor }));
                 }
               }
+              if (config.tableName === "detalle" && data?.soluciones) {
+                const selectField = config.fields.find(f => f.key === "solucionId");
+                if (selectField) {
+                  selectField.options = data.soluciones.map((s: any) => ({ value: String(s.id), label: s.valor }));
+                }
+              }
 
               // Siempre usar el título de catalog_meta (puede haber sido renombrado)
               return <CatalogCrudView key={activeTab} config={{ ...config, title: cat.title }} />;

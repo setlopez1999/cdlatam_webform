@@ -521,6 +521,10 @@ export async function runMigrations() {
     `ALTER TABLE catalog_soluciones ADD COLUMN unidadNegocioId INTEGER`,
     "Column unidadNegocioId added to catalog_soluciones"
   );
+  tryAlter(
+    `ALTER TABLE catalog_detalle_servicio ADD COLUMN solucionId INTEGER`,
+    "Column solucionId added to catalog_detalle_servicio"
+  );
   tryAlter(`
     CREATE TABLE IF NOT EXISTS resultados_expediente (
       id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
