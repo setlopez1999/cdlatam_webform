@@ -19,6 +19,9 @@ export function CatalogCrudView({ config }: { config: CatalogConfig }) {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [formData, setFormData] = useState<Record<string, any>>({});
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  // Estado para asignación masiva de FK
+  const [bulkAssignField, setBulkAssignField] = useState<string | null>(null);
+  const [bulkAssignValue, setBulkAssignValue] = useState<string>("");
 
   // ─── Consultas a la API ──────────────────────────────
   const { data: records = [], isLoading, refetch } = trpc.catalogsDB.list.useQuery({ tableName: config.tableName });
@@ -180,6 +183,29 @@ export function CatalogCrudView({ config }: { config: CatalogConfig }) {
     }
   };
 
+  // ─── Asignación masiva de FK ──────────────────────────
+  const fkFields = config.fields.filter(f => f.type === "select" && f.key.endsWith("Id") && f.options && f.options.length > 0);
+
+  const handleBulkAssign = async () => {
+    if (!bulkAssignField || !bulkAssignValue || !selectedIds.length) return;
+    const field = fkFields.find(f => f.key === bulkAssignField);
+    if (!confirm(`¿Asignar "${field?.options?.find((o: any) => o.value === bulkAssignValue)?.label}" a ${selectedIds.length} registro${selectedIds.length !== 1 ? 's' : ''}?`)) return;
+    try {
+      await bulkUpdateMutation.mutateAsync({
+        tableName: config.tableName,
+        ids: selectedIds,
+        data: { [bulkAssignField]: parseInt(bulkAssignValue, 10) }
+      });
+      toast.success(`${selectedIds.length} registro${selectedIds.length !== 1 ? 's' : ''} actualizados`);
+      setBulkAssignField(null);
+      setBulkAssignValue("");
+      setSelectedIds([]);
+      refetch();
+    } catch (error: any) {
+      toast.error("Error al asignar: " + parseErrorMessage(error));
+    }
+  };
+
   // ─── Componentes del Formulario ────────────────────────
   const renderInput = (field: any) => {
     if (field.hideOnCreate && !editingId) return null;
@@ -282,21 +308,60 @@ export function CatalogCrudView({ config }: { config: CatalogConfig }) {
 
       {/* Bulk Actions Header */}
       {selectedIds.length > 0 && (
-        <div className="flex flex-col sm:flex-row gap-3 items-center justify-between bg-blue-500/10 border border-blue-500/20 p-3 rounded-xl animate-in fade-in slide-in-from-top-2">
-          <span className="text-sm font-medium text-blue-400">
-            {selectedIds.length} registro{selectedIds.length !== 1 ? 's' : ''} seleccionado{selectedIds.length !== 1 ? 's' : ''}
-          </span>
-          <div className="flex gap-2 w-full sm:w-auto">
-            <Button size="sm" variant="ghost" className="flex-1 sm:flex-none h-9 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10" onClick={() => handleBulkAction('activar')}>
-              <Power className="w-4 h-4 mr-1.5" /> Activar
-            </Button>
-            <Button size="sm" variant="ghost" className="flex-1 sm:flex-none h-9 text-orange-400 hover:text-orange-300 hover:bg-orange-500/10" onClick={() => handleBulkAction('desactivar')}>
-              <Power className="w-4 h-4 mr-1.5" /> Desactivar
-            </Button>
-            <Button size="sm" variant="ghost" className="flex-1 sm:flex-none h-9 text-red-400 hover:text-red-300 hover:bg-red-500/10" onClick={() => handleBulkAction('borrar')}>
-              <Trash2 className="w-4 h-4 mr-1.5" /> Eliminar
-            </Button>
+        <div className="flex flex-col gap-2 bg-blue-500/10 border border-blue-500/20 p-3 rounded-xl animate-in fade-in slide-in-from-top-2">
+          <div className="flex flex-col sm:flex-row gap-3 items-center justify-between">
+            <span className="text-sm font-medium text-blue-400">
+              {selectedIds.length} registro{selectedIds.length !== 1 ? 's' : ''} seleccionado{selectedIds.length !== 1 ? 's' : ''}
+            </span>
+            <div className="flex gap-2 w-full sm:w-auto flex-wrap">
+              {/* Botones de asignación masiva de FK */}
+              {fkFields.map(fk => (
+                <Button
+                  key={fk.key}
+                  size="sm"
+                  variant="ghost"
+                  className={`flex-1 sm:flex-none h-9 text-violet-400 hover:text-violet-300 hover:bg-violet-500/10 ${bulkAssignField === fk.key ? 'bg-violet-500/10 ring-1 ring-violet-500/30' : ''}`}
+                  onClick={() => { setBulkAssignField(bulkAssignField === fk.key ? null : fk.key); setBulkAssignValue(""); }}
+                >
+                  <ArrowUpDown className="w-4 h-4 mr-1.5" /> Asignar {fk.label}
+                </Button>
+              ))}
+              <Button size="sm" variant="ghost" className="flex-1 sm:flex-none h-9 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10" onClick={() => handleBulkAction('activar')}>
+                <Power className="w-4 h-4 mr-1.5" /> Activar
+              </Button>
+              <Button size="sm" variant="ghost" className="flex-1 sm:flex-none h-9 text-orange-400 hover:text-orange-300 hover:bg-orange-500/10" onClick={() => handleBulkAction('desactivar')}>
+                <Power className="w-4 h-4 mr-1.5" /> Desactivar
+              </Button>
+              <Button size="sm" variant="ghost" className="flex-1 sm:flex-none h-9 text-red-400 hover:text-red-300 hover:bg-red-500/10" onClick={() => handleBulkAction('borrar')}>
+                <Trash2 className="w-4 h-4 mr-1.5" /> Eliminar
+              </Button>
+            </div>
           </div>
+          {/* Panel inline de asignación de FK */}
+          {bulkAssignField && (() => {
+            const fk = fkFields.find(f => f.key === bulkAssignField)!;
+            return (
+              <div className="flex items-center gap-2 pt-1 border-t border-violet-500/20 flex-wrap">
+                <span className="text-xs text-violet-300 font-medium">Asignar {fk.label} a los {selectedIds.length} seleccionados:</span>
+                <Select value={bulkAssignValue} onValueChange={setBulkAssignValue}>
+                  <SelectTrigger className="h-8 w-48 bg-[#1a1f2e] border-violet-500/30 text-white text-xs">
+                    <SelectValue placeholder={`Selecciona ${fk.label}...`} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {fk.options!.map((opt: any) => (
+                      <SelectItem key={opt.value} value={opt.value} className="text-xs">{opt.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button size="sm" className="h-8 bg-violet-600 hover:bg-violet-500 text-white text-xs" onClick={handleBulkAssign} disabled={!bulkAssignValue || bulkUpdateMutation.isPending}>
+                  {bulkUpdateMutation.isPending ? "Aplicando..." : "Aplicar"}
+                </Button>
+                <Button size="sm" variant="ghost" className="h-8 text-slate-400 hover:text-white text-xs" onClick={() => { setBulkAssignField(null); setBulkAssignValue(""); }}>
+                  Cancelar
+                </Button>
+              </div>
+            );
+          })()}
         </div>
       )}
 
