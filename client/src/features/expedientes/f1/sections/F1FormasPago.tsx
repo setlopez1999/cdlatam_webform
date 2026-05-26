@@ -225,73 +225,7 @@ function PagoTable({
 }: PagoTableProps) {
   const esMantencion = modo === "mantencion";
 
-  // Mantención simplificada: solo muestra tipo de venta y referencia VU (sin cuotas de gracia)
-  if (esMantencion) {
-    return (
-      <div className="space-y-3">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-1">
-          <h4 className="text-sm font-semibold text-foreground">{title}</h4>
-          {onAdd && (
-            <Button type="button" variant="outline" size="sm" onClick={() => onAdd(tipo)} className="h-7 text-xs gap-1">
-              <Plus className="w-3 h-3" /> Agregar fila
-            </Button>
-          )}
-        </div>
-        <div className="overflow-x-auto rounded-lg border border-border/60 shadow-sm">
-          <table className="w-full min-w-[400px] text-xs border-collapse">
-            <thead>
-              <tr className="bg-muted/60">
-                <th className="border-b border-r border-border/60 px-2 py-2 text-left font-medium w-10">ITEM</th>
-                <th className="border-b border-r border-border/60 px-2 py-2 text-left font-medium">Tipo Venta</th>
-                <th className="border-b border-border/60 px-2 py-2 text-left font-medium">Ref. Mensual (VU)</th>
-                {onRemove && <th className="border-b border-l border-border/60 w-8"></th>}
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((pago, idx) => (
-                <tr key={pago.id} className="hover:bg-muted/10 transition-colors">
-                  <td className="border-b border-r border-border/40 px-2 py-1 text-center text-muted-foreground">{idx + 1}</td>
-                  <td className="border-b border-r border-border/40 px-1 py-0.5 min-w-[160px]">
-                    {catalogs?.tipoVenta && catalogs.tipoVenta.length > 0 ? (
-                      <Select value={pago.tipoVenta} onValueChange={v => onUpdate(tipo, pago.id, "tipoVenta", v)}>
-                        <SelectTrigger className="h-7 text-xs border-0 bg-transparent focus:ring-0">
-                          <SelectValue placeholder="Tipo..." />
-                        </SelectTrigger>
-                        <SelectContent position="popper" sideOffset={4} className="z-[200]">
-                          {catalogs.tipoVenta.map(t => (
-                            <SelectItem key={t.value} value={t.value} className="text-xs">{t.label}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    ) : (
-                      <Input className="h-7 text-xs border-0 bg-transparent focus-visible:ring-0"
-                        placeholder="Tipo venta" value={pago.tipoVenta}
-                        onChange={e => onUpdate(tipo, pago.id, "tipoVenta", e.target.value)} />
-                    )}
-                  </td>
-                  <td className="border-b border-r border-border/40 px-2 py-1 text-muted-foreground">
-                    {pago.linkedServicioId && precioUnitarioByServicioId[pago.linkedServicioId] !== undefined
-                      ? formatCurrency(precioUnitarioByServicioId[pago.linkedServicioId] ?? 0, currencyCode)
-                      : <span className="italic text-muted-foreground/50">—</span>
-                    }
-                  </td>
-                  {onRemove && (
-                    <td className="border-b border-l border-border/40 px-1 py-0.5 text-center">
-                      <Button type="button" variant="ghost" size="icon"
-                        className="h-6 w-6 text-destructive/60 hover:text-destructive"
-                        onClick={() => onRemove(tipo, pago.id)}>
-                        <Trash2 className="w-3 h-3" />
-                      </Button>
-                    </td>
-                  )}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    );
-  }
+  // Mantención: tabla completa con N° cuotas (mensuales), montos y fechas — sin badge de ahorro ni glosa VU
 
   // Implementación: tabla completa con N° cuotas, montos y fechas
   const maxCuotas = Math.min(4, Math.max(1, ...items.map(i => i.nCuotas || 0)));
