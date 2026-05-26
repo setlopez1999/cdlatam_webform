@@ -293,9 +293,12 @@ export function calcularResultadoF3(
   const materiales  = f2.materiales  ?? [];
   const rrhh        = f2.rrhh        ?? [];
   const otrosGastos = f2.otrosGastos ?? [];
-  // F3-a: si se pasa f1, el ingreso viene de la suma de servicios contratados en F1
+  // F3-a: si se pasa f1, el ingreso viene SOLO de los servicios de implementación (excluye MANTENCIÓN)
+  // El valor de mantención es recurrente y no forma parte del proyecto de implementación.
   const montoProyecto = f1
-    ? (f1.serviciosContratados ?? []).reduce((s, sv) => s + (sv.total ?? 0), 0)
+    ? (f1.serviciosContratados ?? [])
+        .filter(sv => sv.tipoVenta?.toUpperCase() !== 'MANTENCIÓN')
+        .reduce((s, sv) => s + (sv.total ?? 0), 0)
     : (f2.montoProyecto ?? 0);
 
   const totalHardware   = hardware.reduce((s, r) => s + r.total, 0);
