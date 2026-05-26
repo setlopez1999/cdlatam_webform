@@ -153,11 +153,11 @@ export function F1Servicios({ servicios, catalogs, moneda, onAdd, onAddVenta, on
                       }
                     </td>
 
-                    {/* Cantidad */}
+                    {/* Cantidad — inamovible por ahora (cantidad=1 fija); habilitar onChange cuando se requiera */}
                     <td className="px-1 py-1 min-w-[75px]">
                       {restricted
                         ? <span className="text-muted-foreground italic text-xs">[Restringido]</span>
-                        : <Input type="number" className="h-8 text-xs text-right w-full min-w-[58px]" placeholder="1" value={servicio.cantidad || ""} onChange={e => onUpdate(servicio.id, "cantidad", parseNumeric(e.target.value))} />
+                        : <Input type="number" className="h-8 text-xs text-right w-full min-w-[58px] opacity-60 cursor-not-allowed" placeholder="1" value={servicio.cantidad || ""} readOnly disabled />
                       }
                     </td>
 
@@ -215,12 +215,15 @@ export function F1Servicios({ servicios, catalogs, moneda, onAdd, onAddVenta, on
                 <Plus className="w-3.5 h-3.5 mr-1.5" /> Agregar Venta
               </Button>
             </div>
+            {/* Total Servicios oculto intencionalmente — el valor suma implementación + mantención
+                 lo que no refleja el valor real del contrato. Descomentar si se requiere en el futuro.
             <div className="flex items-center gap-3">
               <span className="text-sm text-muted-foreground">Total Servicios:</span>
               <span className="text-base font-bold text-foreground font-mono">
                 {formatCurrency(totalServicios, currencyCode)}
               </span>
             </div>
+            */}
           </div>
         )}
 
