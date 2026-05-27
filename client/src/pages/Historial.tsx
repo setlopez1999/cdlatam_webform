@@ -9,7 +9,7 @@
 import { useState, useMemo, useEffect } from "react";
 import { useLocation } from "wouter";
 import {
-  FolderOpen, Trash2, Plus, AlertTriangle, Search, ChevronDown,
+  FolderOpen, Trash2, Plus, AlertTriangle, Search, ChevronDown, ArchiveX, RotateCcw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -282,7 +282,7 @@ export function ExpedienteCard({
   const empresa = exp.f1.data?.razonSocial || exp.f1.data?.nombreFantasia || null;
 
   const handleEliminar = () => {
-    if (!confirm(`¿Eliminar el expediente "${exp.nombre}"? Esta acción no se puede deshacer.`)) return;
+    if (!confirm(`¿Mover "${exp.nombre}" a la papelera?`)) return;
     onEliminar();
   };
 
@@ -297,7 +297,7 @@ export function ExpedienteCard({
           <p className="text-sm font-semibold truncate">{exp.nombre}</p>
           <p className="text-xs text-muted-foreground">
             {exp.nroActa ? <span className="font-mono text-cyan-400/80 font-medium">N° {String(exp.nroActa).padStart(6, "0")} · </span> : null}
-            {exp.codigo ? <span className="font-mono text-foreground/70">{exp.codigo} · </span> : null}
+            {exp.codigo ? <span className="font-mono text-primary/60">{exp.codigo} · </span> : null}
             {creadorDisplay ? (
               <span className="text-foreground/80">Creador: {creadorDisplay} · </span>
             ) : null}
@@ -347,11 +347,11 @@ export function ExpedienteCard({
           <Button
             size="icon"
             variant="ghost"
-            className="h-7 w-7 text-muted-foreground hover:text-destructive"
+            className="h-7 w-7 text-muted-foreground hover:text-amber-500"
             onClick={handleEliminar}
-            title="Eliminar expediente"
+            title="Mover a papelera"
           >
-            <Trash2 className="w-3.5 h-3.5" />
+            <ArchiveX className="w-3.5 h-3.5" />
           </Button>
         </div>
       </div>
@@ -393,20 +393,40 @@ export default function Historial() {
   const [, navigate] = useLocation();
   const { expedientes, eliminar, mergeListaDesdeServidor } = useExpedienteStore();
   const [search, setSearch] = useState("");
+  const [verPapelera, setVerPapelera] = useState(false);
 
-  // staleTime: 0 + invalidación tras guardar/renombrar/eliminar garantizan que
-  // al volver a Historial se vea la versión más reciente del server. El merge
-  // protege los locales con cambios `sin_guardar`.
   const resumenQuery = trpc.expediente.listarResumen.useQuery(undefined, { staleTime: 0 });
-  const eliminarSrv = trpc.expediente.eliminar.useMutation({
+  const papeleraQuery = trpc.expediente.listarPapelera.useQuery(undefined, { staleTime: 0 });
+
+  // Mover a papelera (soft-delete)
+  const moverAPapeleraSrv = trpc.expediente.moverAPapelera.useMutation({
     onSuccess: (_data, input) => {
       eliminar(input.uuid);
       void resumenQuery.refetch();
-      toast.success("Expediente eliminado");
+      void papeleraQuery.refetch();
+      toast.success("Expediente movido a la papelera");
     },
-    onError: (err) => {
-      toast.error(err.message || "No se pudo eliminar");
+    onError: (err) => toast.error(err.message || "No se pudo mover a papelera"),
+  });
+
+  // Restaurar desde papelera
+  const restaurarSrv = trpc.expediente.restaurarDePapelera.useMutation({
+    onSuccess: () => {
+      void resumenQuery.refetch();
+      void papeleraQuery.refetch();
+      toast.success("Expediente restaurado");
     },
+    onError: (err) => toast.error(err.message || "No se pudo restaurar"),
+  });
+
+  // Eliminar definitivamente
+  const eliminarSrv = trpc.expediente.eliminar.useMutation({
+    onSuccess: (_data, input) => {
+      eliminar(input.uuid);
+      void papeleraQuery.refetch();
+      toast.success("Expediente eliminado definitivamente");
+    },
+    onError: (err) => toast.error(err.message || "No se pudo eliminar"),
   });
 
   useEffect(() => {
@@ -424,6 +444,8 @@ export default function Historial() {
       e.f1.data?.nombreFantasia?.toLowerCase().includes(q)
     );
   }, [expedientes, search]);
+
+  const papelera = papeleraQuery.data ?? [];
 
   const subtitle = expedientes.length === 0
     ? "No hay expedientes aún."
@@ -445,37 +467,95 @@ export default function Historial() {
               className="pl-8 h-8 text-sm w-48"
             />
           </div>
+          <Button
+            variant={verPapelera ? "secondary" : "outline"}
+            className="gap-2 h-8 text-sm"
+            onClick={() => setVerPapelera(v => !v)}
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+            Papelera{papelera.length > 0 ? ` (${papelera.length})` : ""}
+          </Button>
           <Button className="gap-2 h-8 text-sm" onClick={() => navigate("/nuevo-expediente")}>
             <Plus className="w-4 h-4" />Nuevo
           </Button>
         </>
       }
     >
-      {filtrados.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-20 gap-4 text-center">
-          <FolderOpen className="w-12 h-12 text-muted-foreground/40" />
-          {search ? (
-            <p className="text-muted-foreground">No se encontraron expedientes con "{search}".</p>
+      {/* ── Vista Papelera ─────────────────────────────────────────────────── */}
+      {verPapelera ? (
+        <div className="flex flex-col gap-3">
+          {papelera.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-20 gap-3 text-center">
+              <Trash2 className="w-10 h-10 text-muted-foreground/30" />
+              <p className="text-muted-foreground text-sm">La papelera está vacía.</p>
+            </div>
           ) : (
-            <>
-              <p className="text-muted-foreground">Aún no has creado ningún expediente.</p>
-              <Button onClick={() => navigate("/nuevo-expediente")} className="gap-2">
-                <Plus className="w-4 h-4" />
-                Crear primer expediente
-              </Button>
-            </>
+            papelera.map(exp => (
+              <div key={exp.uuid} className="rounded-xl border border-border/60 bg-muted/10 p-4 flex items-center gap-3">
+                <ArchiveX className="w-5 h-5 text-muted-foreground/60 shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium truncate text-muted-foreground">{exp.nombre}</p>
+                  <p className="text-xs text-muted-foreground/60">
+                    {exp.codigo ?? exp.uuid.slice(0, 8)} · Borrado el{" "}
+                    {exp.deletedAt ? new Date(exp.deletedAt * 1000).toLocaleDateString("es-CL") : "—"}
+                  </p>
+                </div>
+                <div className="flex items-center gap-1 shrink-0">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 text-xs gap-1"
+                    onClick={() => restaurarSrv.mutate({ uuid: exp.uuid })}
+                    disabled={restaurarSrv.isPending}
+                  >
+                    <RotateCcw className="w-3 h-3" />Restaurar
+                  </Button>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                    title="Eliminar definitivamente"
+                    onClick={() => {
+                      if (!confirm(`¿Eliminar definitivamente "${exp.nombre}"? Esta acción no se puede deshacer.`)) return;
+                      eliminarSrv.mutate({ uuid: exp.uuid });
+                    }}
+                    disabled={eliminarSrv.isPending}
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </Button>
+                </div>
+              </div>
+            ))
           )}
         </div>
       ) : (
-        <div className="flex flex-col gap-3">
-          {filtrados.map(exp => (
-            <ExpedienteCard
-              key={exp.id}
-              exp={exp}
-              onEliminar={() => eliminarSrv.mutate({ uuid: exp.id })}
-            />
-          ))}
-        </div>
+        /* ── Vista Normal ──────────────────────────────────────────────────── */
+        filtrados.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-20 gap-4 text-center">
+            <FolderOpen className="w-12 h-12 text-muted-foreground/40" />
+            {search ? (
+              <p className="text-muted-foreground">No se encontraron expedientes con "{search}".</p>
+            ) : (
+              <>
+                <p className="text-muted-foreground">Aún no has creado ningún expediente.</p>
+                <Button onClick={() => navigate("/nuevo-expediente")} className="gap-2">
+                  <Plus className="w-4 h-4" />
+                  Crear primer expediente
+                </Button>
+              </>
+            )}
+          </div>
+        ) : (
+          <div className="flex flex-col gap-3">
+            {filtrados.map(exp => (
+              <ExpedienteCard
+                key={exp.id}
+                exp={exp}
+                onEliminar={() => moverAPapeleraSrv.mutate({ uuid: exp.id })}
+              />
+            ))}
+          </div>
+        )
       )}
     </PageLayout>
   );

@@ -561,6 +561,11 @@ export async function runMigrations() {
     `ALTER TABLE catalog_consideraciones_comerciales ADD COLUMN persistente INTEGER DEFAULT 0 NOT NULL`,
     "Column persistente added to catalog_consideraciones_comerciales"
   );
+  // Papelera de expedientes: soft-delete con timestamp Unix (NULL = activo, valor = fecha de borrado)
+  tryAlter(
+    `ALTER TABLE expedientes ADD COLUMN deleted_at INTEGER DEFAULT NULL`,
+    "Column deleted_at added to expedientes (papelera)"
+  );
 
   try {
     const db = await getDb();
@@ -1195,12 +1200,41 @@ export async function getExpedientes() {
   return db.select().from(expedientes).orderBy(desc(expedientes.createdAt));
 }
 
-/** Obtiene solo los expedientes de un usuario específico. */
+/** Obtiene solo los expedientes activos (no en papelera) de un usuario específico. */
 export async function getExpedientesByUser(userId: number) {
   const db = await getDb();
   return db.select().from(expedientes)
-    .where(eq(expedientes.creadorId, userId))
+    .where(and(eq(expedientes.creadorId, userId), sql`deleted_at IS NULL`))
     .orderBy(desc(expedientes.createdAt));
+}
+
+/** Obtiene expedientes en papelera de un usuario específico. */
+export async function getExpedientesEnPapelera(userId: number) {
+  const db = await getDb();
+  return db.select().from(expedientes)
+    .where(and(eq(expedientes.creadorId, userId), sql`deleted_at IS NOT NULL`))
+    .orderBy(desc(expedientes.updatedAt));
+}
+
+/** Mueve un expediente a la papelera (soft-delete). */
+export async function moverExpedienteAPapelera(uuid: string) {
+  const db = await getDb();
+  const now = Math.floor(Date.now() / 1000);
+  const result = await db.update(expedientes)
+    .set({ deletedAt: now, updatedAt: new Date() })
+    .where(eq(expedientes.uuid, uuid))
+    .returning();
+  return result[0] ?? null;
+}
+
+/** Restaura un expediente desde la papelera. */
+export async function restaurarExpedienteDePapelera(uuid: string) {
+  const db = await getDb();
+  const result = await db.update(expedientes)
+    .set({ deletedAt: null, updatedAt: new Date() })
+    .where(eq(expedientes.uuid, uuid))
+    .returning();
+  return result[0] ?? null;
 }
 
 /** Busca un expediente por su uuid (nanoid del store de Zustand). */

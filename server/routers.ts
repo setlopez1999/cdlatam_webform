@@ -27,6 +27,9 @@ import {
   getEvaluacionByExpedienteUuid,
   upsertResultadoExpediente,
   deleteExpedienteCascadeByUuid,
+  moverExpedienteAPapelera,
+  restaurarExpedienteDePapelera,
+  getExpedientesEnPapelera,
   listExpedientesResumen,
   listExpedientesResumenGlobal,
   getExpedienteDetalle,
@@ -1522,6 +1525,56 @@ export const appRouter = router({
         });
         return { success: true as const };
       }),
+
+    /** Mueve un expediente a la papelera (soft-delete). Solo el creador o admin. */
+    moverAPapelera: protectedProcedure
+      .input(z.object({ uuid: z.string().min(1) }))
+      .mutation(async ({ ctx, input }) => {
+        if (!ctx.user) throw new Error("No autenticado");
+        const row = await getExpedienteByUuid(input.uuid);
+        if (!row) throw new Error("Expediente no encontrado");
+        if (row.creadorId !== ctx.user.id && !mayAccessAllExpedientes(ctx.user.role)) {
+          throw new Error("No autorizado");
+        }
+        await moverExpedienteAPapelera(input.uuid);
+        await recordAuditFromTrpc(ctx, {
+          action: "UPDATE",
+          entity: "expediente",
+          entityId: row.id,
+          expedienteUuid: input.uuid,
+          expedienteCodigo: row.codigo ?? null,
+          changes: { after: { papelera: true } },
+        });
+        return { success: true as const };
+      }),
+
+    /** Restaura un expediente desde la papelera. Solo el creador o admin. */
+    restaurarDePapelera: protectedProcedure
+      .input(z.object({ uuid: z.string().min(1) }))
+      .mutation(async ({ ctx, input }) => {
+        if (!ctx.user) throw new Error("No autenticado");
+        const row = await getExpedienteByUuid(input.uuid);
+        if (!row) throw new Error("Expediente no encontrado");
+        if (row.creadorId !== ctx.user.id && !mayAccessAllExpedientes(ctx.user.role)) {
+          throw new Error("No autorizado");
+        }
+        await restaurarExpedienteDePapelera(input.uuid);
+        await recordAuditFromTrpc(ctx, {
+          action: "UPDATE",
+          entity: "expediente",
+          entityId: row.id,
+          expedienteUuid: input.uuid,
+          expedienteCodigo: row.codigo ?? null,
+          changes: { after: { papelera: false } },
+        });
+        return { success: true as const };
+      }),
+
+    /** Lista expedientes en papelera del usuario actual. */
+    listarPapelera: protectedProcedure.query(async ({ ctx }) => {
+      if (!ctx.user) throw new Error("No autenticado");
+      return getExpedientesEnPapelera(ctx.user.id);
+    }),
 
     /** Obtiene el audit log. Solo admin. */
     auditLog: protectedProcedure

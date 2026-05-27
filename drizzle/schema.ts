@@ -443,6 +443,8 @@ export const expedientes = sqliteTable("expedientes", {
   status: text("status").default("borrador").notNull(), // "borrador" | "en_proceso" | "completado"
   createdAt: integer("createdAt", { mode: "timestamp" }).default(sql`(strftime('%s', 'now'))`).notNull(),
   updatedAt: integer("updatedAt", { mode: "timestamp" }).default(sql`(strftime('%s', 'now'))`).notNull(),
+  /** Timestamp Unix de borrado suave (NULL = activo, valor = en papelera). */
+  deletedAt: integer("deleted_at"),
 });
 
 export type Expediente = typeof expedientes.$inferSelect;
