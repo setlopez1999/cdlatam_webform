@@ -47,12 +47,20 @@ function f1ImportSuggestions(f1: F1Data | null) {
   for (const { f1: fk, f2: tk } of F1_TO_F2_HEADER_FIELDS) {
     s[tk] = f1[fk] ?? "";
   }
+  // Agrega sugerencias de la primera fila de servicios contratados
+  const primeraFila = f1.serviciosContratados?.[0];
+  if (primeraFila) {
+    s["unidadNegocios"] = primeraFila.unidadNegocio ?? "";
+    s["solucion"] = primeraFila.solucion ?? "";
+  }
   return s as {
     nombreCliente: string;
     empresa: string;
     rut: string;
     paisImplementacion: string;
     tipoMoneda: string;
+    unidadNegocios: string;
+    solucion: string;
   };
 }
 
@@ -127,10 +135,18 @@ export function useF2(expedienteId: string) {
     }
   }, [utils, expedienteId, store]);
 
-  /** Importa al F2 los campos de encabezado definidos en F1_TO_F2_HEADER_FIELDS. */
+  /** Importa al F2 los campos de encabezado definidos en F1_TO_F2_HEADER_FIELDS
+   *  más solucion y unidadNegocios desde la primera fila de serviciosContratados. */
   const importarDesdeF1 = useCallback(() => {
     if (!f1Data) return;
-    update(f1ToF2HeaderPatch(f1Data));
+    const patch = f1ToF2HeaderPatch(f1Data);
+    // Importar solucion y unidadNegocios desde la primera fila de servicios contratados
+    const primeraFila = f1Data.serviciosContratados?.[0];
+    if (primeraFila) {
+      if (primeraFila.unidadNegocio) patch.unidadNegocios = primeraFila.unidadNegocio;
+      if (primeraFila.solucion)      patch.solucion      = primeraFila.solucion;
+    }
+    update(patch);
   }, [f1Data, update]);
 
   return {

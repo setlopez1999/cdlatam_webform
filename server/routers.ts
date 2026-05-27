@@ -389,6 +389,15 @@ export const appRouter = router({
       return await ds_getUsers();
     }),
 
+    /** Lista reducida de usuarios activos para selects (preventa, ejecutivo comercial, etc.).
+     *  Accesible para cualquier usuario autenticado — no expone passwordHash ni datos sensibles. */
+    listUsersForSelect: protectedProcedure.query(async () => {
+      const all = await ds_getUsers();
+      return all
+        .filter(u => u.isActive === 1)
+        .map(u => ({ id: u.id, value: u.username, label: u.displayName || u.username }));
+    }),
+
     createUser: protectedProcedure
       .input(z.object({
         username: z.string().min(3).max(64),

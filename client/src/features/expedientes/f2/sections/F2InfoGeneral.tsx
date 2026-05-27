@@ -3,6 +3,10 @@
  *
  * Sección de Información General del Proyecto (F2).
  * Incluye botón "Importar desde F1" para pre-llenar campos comunes.
+ *
+ * Preventa y Ejecutivo Comercial se cargan desde la lista de usuarios activos
+ * del sistema (trpc.localAuth.listUsersForSelect), con fallback a Input de texto
+ * si la lista no está disponible.
  */
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -11,6 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { FormSection, FieldGroup } from "@/components/FormSection";
 import { Info, Download } from "lucide-react";
 import { formatCurrency, parseNumeric } from "@/lib/formatters";
+import { trpc } from "@/lib/trpc";
 import type { F2Data } from "../../types";
 
 interface CatalogItem { value: string; label: string; }
@@ -32,12 +37,16 @@ interface Props {
     paisImplementacion?: string;
     tipoMoneda?: string;
     unidadNegocios?: string;
+    solucion?: string;
   } | null;
   onImportarDesdeF1?: () => void;
 }
 
 export function F2InfoGeneral({ data, onUpdate, catalogs, f1Suggestions, onImportarDesdeF1 }: Props) {
   const totalClp = data.montoProyecto * (data.tipoCambio || 1);
+
+  // Lista de usuarios activos para selects de Preventa y Ejecutivo Comercial
+  const { data: usersForSelect } = trpc.localAuth.listUsersForSelect.useQuery();
 
   return (
     <FormSection title="Información General del Proyecto" icon={Info} accent="violet">
@@ -49,6 +58,7 @@ export function F2InfoGeneral({ data, onUpdate, catalogs, f1Suggestions, onImpor
             {f1Suggestions.nombreCliente && <span>Cliente: <b>{f1Suggestions.nombreCliente}</b></span>}
             {f1Suggestions.tipoMoneda && <span className="ml-2">· Moneda: <b>{f1Suggestions.tipoMoneda}</b></span>}
             {f1Suggestions.unidadNegocios && <span className="ml-2">· UN: <b>{f1Suggestions.unidadNegocios}</b></span>}
+            {f1Suggestions.solucion && <span className="ml-2">· Sol: <b>{f1Suggestions.solucion}</b></span>}
           </div>
           <Button
             type="button" variant="outline" size="sm"
@@ -155,14 +165,38 @@ export function F2InfoGeneral({ data, onUpdate, catalogs, f1Suggestions, onImpor
           )}
         </FieldGroup>
 
+        {/* Ejecutivo Comercial — select desde usuarios del sistema, fallback a Input */}
         <FieldGroup label="Ejecutivo Comercial">
-          <Input placeholder="Nombre del ejecutivo" value={data.ejecutivoComercial}
-            onChange={e => onUpdate({ ejecutivoComercial: e.target.value })} />
+          {usersForSelect?.length ? (
+            <Select value={data.ejecutivoComercial} onValueChange={v => onUpdate({ ejecutivoComercial: v })}>
+              <SelectTrigger><SelectValue placeholder="Ejecutivo comercial..." /></SelectTrigger>
+              <SelectContent position="popper" sideOffset={4} className="z-[200]">
+                {usersForSelect.map(u => (
+                  <SelectItem key={u.value} value={u.value}>{u.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : (
+            <Input placeholder="Nombre del ejecutivo" value={data.ejecutivoComercial}
+              onChange={e => onUpdate({ ejecutivoComercial: e.target.value })} />
+          )}
         </FieldGroup>
 
+        {/* Preventa — select desde usuarios del sistema, fallback a Input */}
         <FieldGroup label="Preventa">
-          <Input placeholder="Responsable de preventa" value={data.preventa}
-            onChange={e => onUpdate({ preventa: e.target.value })} />
+          {usersForSelect?.length ? (
+            <Select value={data.preventa} onValueChange={v => onUpdate({ preventa: v })}>
+              <SelectTrigger><SelectValue placeholder="Responsable de preventa..." /></SelectTrigger>
+              <SelectContent position="popper" sideOffset={4} className="z-[200]">
+                {usersForSelect.map(u => (
+                  <SelectItem key={u.value} value={u.value}>{u.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : (
+            <Input placeholder="Responsable de preventa" value={data.preventa}
+              onChange={e => onUpdate({ preventa: e.target.value })} />
+          )}
         </FieldGroup>
 
         <FieldGroup label="Fecha Entrega">
