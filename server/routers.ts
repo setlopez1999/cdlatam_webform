@@ -744,7 +744,7 @@ export const appRouter = router({
         const ownerUserId = expedienteRow.creadorId;
         const { expedienteUuid, f1SavedAt: f1SavedAtStr, ...actaRest } = input;
         const f1SavedAt = f1SavedAtStr ? new Date(f1SavedAtStr) : undefined;
-        const codigoActa = buildActaCodigo(expedienteUuid);
+        const codigoActa = buildActaCodigo(expedienteUuid, expedienteRow.nroActa ?? null);
         /** No persistir firma dibujada en f1Datos (solo PDF con hueco vacío). */
         const f1DatosSinFirma = (raw: unknown): unknown => {
           if (!raw || typeof raw !== "object" || Array.isArray(raw)) return raw;

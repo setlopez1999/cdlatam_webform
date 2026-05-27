@@ -516,6 +516,7 @@ export async function runMigrations() {
   tryAlter(`ALTER TABLE evaluaciones ADD COLUMN f2FormStatus TEXT DEFAULT 'nuevo'`, "Column f2FormStatus added to evaluaciones");
   tryAlter(`ALTER TABLE evaluaciones ADD COLUMN f2SavedAt INTEGER`, "Column f2SavedAt added to evaluaciones");
   tryAlter(`ALTER TABLE expedientes ADD COLUMN codigo TEXT`, "Column codigo added to expedientes");
+  tryAlter(`ALTER TABLE expedientes ADD COLUMN nro_acta INTEGER`, "Column nro_acta added to expedientes");
   // Schema drizzle/schema.ts — migraciones 0000/0001 no añadieron esta FK; necesaria para ds_getCatalogSummary / summary UI
   tryAlter(
     `ALTER TABLE catalog_soluciones ADD COLUMN unidadNegocioId INTEGER`,
@@ -579,7 +580,14 @@ export async function runMigrations() {
       .from(actas);
     for (const row of actaRows) {
       if (!row.expedienteUuid) continue;
-      const codigo = buildActaCodigo(row.expedienteUuid);
+      // Buscar el nroActa del expediente para generar el código correcto
+      const expRow = await db
+        .select({ nroActa: expedientes.nroActa })
+        .from(expedientes)
+        .where(eq(expedientes.uuid, row.expedienteUuid))
+        .limit(1);
+      const nroActa = expRow[0]?.nroActa ?? null;
+      const codigo = buildActaCodigo(row.expedienteUuid, nroActa);
       if (!row.codigo || row.noActa !== codigo) {
         await db.update(actas)
           .set({ codigo, noActa: codigo, updatedAt: new Date() })
@@ -587,6 +595,23 @@ export async function runMigrations() {
       }
     }
     console.log("[DB] Compact code backfill completed");
+
+    // Backfill nro_acta: asignar consecutivo desde 1000 a expedientes sin número, en orden de creación
+    const expSinNro = await db
+      .select({ id: expedientes.id, nroActa: expedientes.nroActa })
+      .from(expedientes)
+      .orderBy(expedientes.createdAt);
+    const maxNro = expSinNro.reduce((m, r) => Math.max(m, r.nroActa ?? 0), 0);
+    let nextNro = Math.max(maxNro + 1, 1000);
+    for (const row of expSinNro) {
+      if (!row.nroActa) {
+        await db.update(expedientes)
+          .set({ nroActa: nextNro, updatedAt: new Date() })
+          .where(eq(expedientes.id, row.id));
+        nextNro++;
+      }
+    }
+    console.log("[DB] nro_acta backfill completed, last assigned:", nextNro - 1);
   } catch (codeBackfillErr: any) {
     console.warn("[DB] Could not backfill compact codes:", codeBackfillErr?.message ?? codeBackfillErr);
   }
@@ -1142,9 +1167,16 @@ export async function getBloquesSemanales(): Promise<Array<SchBloqueHorario & { 
  */
 export async function createExpediente(data: { uuid: string; nombre: string; creadorId: number; codigo?: string }) {
   const db = await getDb();
+  // Calcular el siguiente nro_acta consecutivo (MAX + 1, mínimo 1000)
+  const maxRow = await db
+    .select({ max: sql<number>`MAX(nro_acta)` })
+    .from(expedientes)
+    .limit(1);
+  const nextNroActa = Math.max((maxRow[0]?.max ?? 999) + 1, 1000);
   const result = await db.insert(expedientes).values({
     uuid: data.uuid,
     codigo: data.codigo ?? buildExpedienteCodigo(data.uuid),
+    nroActa: nextNroActa,
     nombre: data.nombre,
     creadorId: data.creadorId,
     status: "borrador",

@@ -296,6 +296,7 @@ export function ExpedienteCard({
         <div className="flex-1 min-w-0">
           <p className="text-sm font-semibold truncate">{exp.nombre}</p>
           <p className="text-xs text-muted-foreground">
+            {exp.nroActa ? <span className="font-mono text-cyan-400/80 font-medium">N° {String(exp.nroActa).padStart(6, "0")} · </span> : null}
             {exp.codigo ? <span className="font-mono text-foreground/70">{exp.codigo} · </span> : null}
             {creadorDisplay ? (
               <span className="text-foreground/80">Creador: {creadorDisplay} · </span>

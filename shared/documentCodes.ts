@@ -3,8 +3,8 @@
  * Cambiar solo aqui para adoptar nuevos formatos.
  *
  * N° de Acta: consecutivo numérico de 6 dígitos, partiendo desde 001000.
- * Se genera determinísticamente desde el UUID del expediente usando un hash
- * numérico mapeado al rango [1000, 999999].
+ * Se asigna en BD al crear el expediente (autoincremental real).
+ * Fallback: hash determinístico del UUID para expedientes sin nroActa en BD.
  */
 
 function numericHash(input: string): number {
@@ -35,12 +35,14 @@ export function buildExpedienteCodigo(uuid: string): string {
 
 /**
  * Genera el N° de Acta como un número consecutivo de 6 dígitos (001000–999999).
- * Determinístico desde el UUID del expediente: el mismo UUID siempre produce
- * el mismo número. El rango empieza en 1000 para que siempre sean 6 dígitos.
+ * Usa el nroActa real de BD si está disponible; fallback al hash del UUID.
  */
-export function buildActaCodigo(expedienteUuid: string): string {
+export function buildActaCodigo(expedienteUuid: string, nroActa?: number | null): string {
+  if (nroActa && nroActa > 0) {
+    return String(nroActa).padStart(6, "0");
+  }
+  // Fallback: hash determinístico del UUID (para expedientes sin nroActa en BD)
   const h = numericHash(expedienteUuid);
-  // Mapear al rango [1000, 999999] (6 dígitos garantizados)
   const num = 1000 + (h % 999000);
   return String(num).padStart(6, "0");
 }

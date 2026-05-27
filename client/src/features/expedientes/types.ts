@@ -367,6 +367,8 @@ export interface Expediente {
   id: string;
   /** Codigo compacto autogenerado del expediente (solo backend) */
   codigo?: string;
+  /** N° de Acta consecutivo real (de BD, 6 dígitos, desde 1000) */
+  nroActa?: number | null;
   /** Nombre editable por el usuario */
   nombre: string;
   /** F1 — Acta */

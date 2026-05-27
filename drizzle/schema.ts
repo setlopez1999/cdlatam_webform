@@ -432,6 +432,8 @@ export const expedientes = sqliteTable("expedientes", {
   uuid: text("uuid").notNull().unique(),          // nanoid del store de Zustand
   /** Codigo compacto autogenerado del expediente (solo backend). */
   codigo: text("codigo").unique(),
+  /** N° de Acta consecutivo real (autoincremental desde 1000). Editable manualmente en F1. */
+  nroActa: integer("nro_acta"),
   nombre: text("nombre").notNull(),
   creadorId: integer("creadorId").notNull(),       // FK blanda → users.id
   actaId: integer("actaId"),                       // FK blanda → actas.id (futuro)

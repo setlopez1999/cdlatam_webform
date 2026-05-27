@@ -172,6 +172,7 @@ export type ExpedienteResumenRow = {
     id: number;
     uuid: string;
     codigo?: string | null;
+    nroActa?: number | null;
     nombre: string;
     creadorId: number;
   };
@@ -245,6 +246,7 @@ export function mapResumenRowToExpediente(row: ExpedienteResumenRow): Expediente
   return {
     id: e.uuid,
     codigo: e.codigo ? String(e.codigo) : undefined,
+    nroActa: typeof e.nroActa === "number" ? e.nroActa : null,
     nombre: e.nombre,
     f1,
     f2,
