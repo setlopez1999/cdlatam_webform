@@ -5,8 +5,13 @@
  * Usa useF2() para leer/escribir en el store y acceder a f1.data del mismo expediente.
  *
  * Para conectar con tRPC en el futuro, modificar solo guardar() en useF2.ts.
+ *
+ * Reconciliación automática de filas:
+ *   Al cambiar nCuotasImpl (derivado de F1), hardware/materiales/RRHH se ajustan
+ *   para tener exactamente N filas (una por cuota), con cuota pre-asignada.
+ *   Gastos Mensuales también muestra N secciones.
  */
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -24,15 +29,15 @@ import { F2InfoGeneral, F2CostTable, F2RRHHTable, F2OtrosTable, TotalRow } from 
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function createFilaCosto(): FilaCosto {
-  return { id: nanoid(), centroCosto: "", descripcionGasto: "", valorNeto: 0, cantidad: 1, totalNeto: 0, iva: 0, total: 0, tipoMoneda: "", observacion: "" };
+function createFilaCosto(cuota?: 1 | 2 | 3 | 4): FilaCosto {
+  return { id: nanoid(), centroCosto: "", descripcionGasto: "", valorNeto: 0, cantidad: 1, totalNeto: 0, iva: 0, total: 0, tipoMoneda: "", observacion: "", cuota };
 }
 
-function createFilaRRHH(tipo: FilaRRHH["tipo"] = "tecnico_interno", descripcion = ""): FilaRRHH {
-  return { id: nanoid(), tipo, label: "", centroCosto: "", valorSinImpuesto: 0, tipoMoneda: "", cantidad: 1, totalNeto: 0, impuesto: 0, total: 0, descripcionGasto: "", observacion: "" };
+function createFilaRRHH(tipo: FilaRRHH["tipo"] = "tecnico_interno", descripcion = "", cuota?: 1 | 2 | 3 | 4): FilaRRHH {
+  return { id: nanoid(), tipo, label: "", centroCosto: "", valorSinImpuesto: 0, tipoMoneda: "", cantidad: 1, totalNeto: 0, impuesto: 0, total: 0, descripcionGasto: "", observacion: "", cuota };
 }
 
-function createFilaOtros(tipo: FilaOtros["tipo"] = "varios", descripcion = "", mes: 1 | 2 | 3 = 1): FilaOtros {
+function createFilaOtros(tipo: FilaOtros["tipo"] = "varios", descripcion = "", mes: 1 | 2 | 3 | 4 = 1): FilaOtros {
   return { id: nanoid(), tipo, label: descripcion, descripcionGasto: descripcion, centroCosto: "", tipoMoneda: "", valorNeto: 0, cantidad: 1, totalNeto: 0, iva: 0, total: 0, observacion: "", mes };
 }
 
@@ -47,8 +52,33 @@ const ITEMS_FIJOS: Array<{ tipo: FilaOtros["tipo"]; label: string }> = [
   { tipo: "varios",       label: "Varios" },
 ];
 
-function createItemsFijos(mes: 1 | 2 | 3, moneda = "USD"): FilaOtros[] {
+function createItemsFijos(mes: 1 | 2 | 3 | 4, moneda = "USD"): FilaOtros[] {
   return ITEMS_FIJOS.map(item => ({ ...createFilaOtros(item.tipo, item.label, mes), tipoMoneda: moneda }));
+}
+
+/**
+ * Reconcilia un array de filas para que tenga exactamente `n` filas,
+ * una por cuota (1..n). Preserva filas existentes por cuota, agrega las
+ * que faltan y elimina las que superan n.
+ */
+function reconcileFilasCosto(rows: FilaCosto[], n: number): FilaCosto[] {
+  const result: FilaCosto[] = [];
+  for (let c = 1; c <= n; c++) {
+    const cuota = c as 1 | 2 | 3 | 4;
+    const existing = rows.find(r => r.cuota === cuota);
+    result.push(existing ?? createFilaCosto(cuota));
+  }
+  return result;
+}
+
+function reconcileFilasRRHH(rows: FilaRRHH[], n: number): FilaRRHH[] {
+  const result: FilaRRHH[] = [];
+  for (let c = 1; c <= n; c++) {
+    const cuota = c as 1 | 2 | 3 | 4;
+    const existing = rows.find(r => r.cuota === cuota);
+    result.push(existing ?? createFilaRRHH("tecnico_interno", "", cuota));
+  }
+  return result;
 }
 
 // ─── Componente ───────────────────────────────────────────────────────────────
@@ -61,24 +91,58 @@ interface Props {
 export default function F2Form({ expedienteId, onVerResultado }: Props) {
   const { data, status, f1Data, f1Suggestions, update, guardar, descartar, importarDesdeF1, isSyncing } = useF2(expedienteId);
   const { data: catalogs } = trpc.catalogs.getAll.useQuery();
-  const [confirmRegenMes, setConfirmRegenMes] = useState<1 | 2 | 3 | null>(null);
+  const [confirmRegenMes, setConfirmRegenMes] = useState<1 | 2 | 3 | 4 | null>(null);
 
   // Bloqueo de navegación cuando hay cambios sin guardar.
-  // Activa beforeunload (cerrar tab/F5) y modal en navegación SPA.
   const { pendingTo, confirm: confirmNav, cancel: cancelNav } = useNavGuard({
     when: status === "sin_guardar",
   });
 
-  if (!data) return <div className="p-6 text-muted-foreground">Expediente no encontrado.</div>;
-
   // ── nCuotas desde F1 implementación ─────────────────────────────────────────
   // Toma el nCuotas de la primera fila de formasPagoImplementacion enlazada.
-  // Limita el CuotaSelect en Hardware, Materiales y RRHH a ese valor (1–4).
   const nCuotasImpl: number = (() => {
     const impl = f1Data?.formasPagoImplementacion?.find(fp => fp.linkedServicioId);
     if (impl && impl.nCuotas >= 1) return Math.min(4, Math.max(1, impl.nCuotas));
     return 4; // fallback: mostrar todas si no hay F1
   })();
+
+  // ── Reconciliación automática de filas ────────────────────────────────────
+  // Al cambiar nCuotasImpl, ajusta hardware/materiales/RRHH para tener
+  // exactamente N filas (una por cuota), con cuota pre-asignada.
+  const prevNCuotas = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (!data) return;
+    // Solo reconciliar cuando nCuotasImpl cambia (o en la primera carga con F1 disponible)
+    if (prevNCuotas.current === nCuotasImpl) return;
+    prevNCuotas.current = nCuotasImpl;
+
+    const newHardware   = reconcileFilasCosto(data.hardware,   nCuotasImpl);
+    const newMateriales = reconcileFilasCosto(data.materiales, nCuotasImpl);
+    const newRRHH       = reconcileFilasRRHH(data.rrhh,        nCuotasImpl);
+
+    // Reconciliar Gastos Mensuales: asegurar que existan ítems para cada cuota
+    const monedaGlobal = data.tipoMoneda || "USD";
+    let newOtros = [...data.otrosGastos];
+    for (let c = 1; c <= nCuotasImpl; c++) {
+      const mes = c as 1 | 2 | 3 | 4;
+      if (!newOtros.some(o => o.mes === mes)) {
+        newOtros = [...newOtros, ...createItemsFijos(mes, monedaGlobal)];
+      }
+    }
+    // Eliminar secciones de meses que ya no aplican
+    newOtros = newOtros.filter(o => o.mes <= nCuotasImpl);
+
+    update({
+      hardware:   newHardware,
+      materiales: newMateriales,
+      rrhh:       newRRHH,
+      otrosGastos: newOtros,
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nCuotasImpl]);
+
+  if (!data) return <div className="p-6 text-muted-foreground">Expediente no encontrado.</div>;
 
   const monedaGlobal = data.tipoMoneda || "USD";
   const currencyCode = getCurrencyCode(monedaGlobal);
@@ -142,7 +206,7 @@ export default function F2Form({ expedienteId, onVerResultado }: Props) {
     })});
   }, [data.otrosGastos, update]);
 
-  const doRegenMes = (mes: 1 | 2 | 3) => {
+  const doRegenMes = (mes: 1 | 2 | 3 | 4) => {
     const nuevos = createItemsFijos(mes, monedaGlobal);
     const otros = data.otrosGastos.filter(o => o.mes !== mes);
     update({ otrosGastos: [...otros, ...nuevos] });
@@ -163,10 +227,8 @@ export default function F2Form({ expedienteId, onVerResultado }: Props) {
     if (!validate()) return;
     const ok = await guardar();
     if (ok) toast.success("F2 guardado correctamente");
-    // El toast rojo de fallo lo emite el propio hook en onError.
   }, [validate, guardar]);
 
-  // Handlers del modal de cambios sin guardar
   const handleNavSave = useCallback(async (): Promise<boolean> => {
     if (!validate()) return false;
     const ok = await guardar();
@@ -187,6 +249,9 @@ export default function F2Form({ expedienteId, onVerResultado }: Props) {
     update(F2_INITIAL);
     toast.info("Formulario F2 limpiado");
   }, [update]);
+
+  // ── Cuotas activas (array dinámico 1..nCuotasImpl) ────────────────────────
+  const cuotasActivas = Array.from({ length: nCuotasImpl }, (_, i) => (i + 1) as 1 | 2 | 3 | 4);
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
@@ -216,8 +281,6 @@ export default function F2Form({ expedienteId, onVerResultado }: Props) {
           </div>
         }
       />
-
-      {/* Mensaje de ahorro mantención eliminado según solicitud */}
 
       {/* Live Preview Banner */}
       <div className="bg-violet-50 border border-violet-200 rounded-xl p-3 flex items-center gap-3">
@@ -260,7 +323,10 @@ export default function F2Form({ expedienteId, onVerResultado }: Props) {
         <F2CostTable
           rows={data.hardware} catalogs={catalogs}
           onUpdate={updateHardwareRow}
-          onAdd={() => update({ hardware: [...data.hardware, createFilaCosto()] })}
+          onAdd={() => {
+            const nextCuota = (data.hardware.length + 1) as 1 | 2 | 3 | 4;
+            update({ hardware: [...data.hardware, createFilaCosto(nextCuota <= nCuotasImpl ? nextCuota : undefined)] });
+          }}
           onRemove={id => update({ hardware: data.hardware.filter(r => r.id !== id) })}
           total={totalHardware}
           valueLabel="Valor Neto U." valueField="valorNeto"
@@ -275,7 +341,10 @@ export default function F2Form({ expedienteId, onVerResultado }: Props) {
         <F2CostTable
           rows={data.materiales} catalogs={catalogs}
           onUpdate={updateMaterialesRow}
-          onAdd={() => update({ materiales: [...data.materiales, createFilaCosto()] })}
+          onAdd={() => {
+            const nextCuota = (data.materiales.length + 1) as 1 | 2 | 3 | 4;
+            update({ materiales: [...data.materiales, createFilaCosto(nextCuota <= nCuotasImpl ? nextCuota : undefined)] });
+          }}
           onRemove={id => update({ materiales: data.materiales.filter(r => r.id !== id) })}
           total={totalMateriales}
           valueLabel="Valor Neto U." valueField="valorNeto"
@@ -290,24 +359,27 @@ export default function F2Form({ expedienteId, onVerResultado }: Props) {
         <F2RRHHTable
           rows={data.rrhh} catalogs={catalogs}
           onUpdate={updateRRHHRow}
-          onAdd={() => update({ rrhh: [...data.rrhh, createFilaRRHH()] })}
+          onAdd={() => {
+            const nextCuota = (data.rrhh.length + 1) as 1 | 2 | 3 | 4;
+            update({ rrhh: [...data.rrhh, createFilaRRHH("tecnico_interno", "", nextCuota <= nCuotasImpl ? nextCuota : undefined)] });
+          }}
           onRemove={id => update({ rrhh: data.rrhh.filter(r => r.id !== id) })}
           total={totalRRHH} fmt={fmt}
           nCuotas={nCuotasImpl}
         />
       </FormSection>
 
-      {/* Otros Gastos */}
+      {/* Otros Gastos — secciones dinámicas según nCuotasImpl */}
       <FormSection title="Otros Gastos" icon={MoreHorizontal} accent="violet" collapsible defaultOpen badge={fmt(totalOtros)}>
         <div className="space-y-6">
-          {([1, 2, 3] as const).map(mes => {
+          {cuotasActivas.map(mes => {
             const mesFiltrado = data.otrosGastos.filter(o => o.mes === mes);
             const totalMes = mesFiltrado.reduce((s, r) => s + r.total, 0);
             return (
               <div key={mes}>
                 <div className="flex items-center justify-between mb-2">
                   <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                    Gastos Mes {mes}
+                    Gastos Cuota {mes}
                   </p>
                   <div className="flex items-center gap-2">
                     <span className="text-xs font-mono text-muted-foreground">{fmt(totalMes)}</span>

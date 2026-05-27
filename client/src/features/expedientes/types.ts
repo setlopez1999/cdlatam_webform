@@ -146,7 +146,7 @@ export interface FilaCosto {
   total: number;
   descripcionGasto: string;
   observacion: string;
-  cuota?: 1 | 2 | 3; // Cuota a la que se imputa el gasto
+  cuota?: 1 | 2 | 3 | 4; // Cuota a la que se imputa el gasto
 }
 
 export interface FilaRRHH {
@@ -162,7 +162,7 @@ export interface FilaRRHH {
   total: number;
   descripcionGasto: string;
   observacion: string;
-  cuota?: 1 | 2 | 3; // Cuota a la que se imputa el gasto
+  cuota?: 1 | 2 | 3 | 4; // Cuota a la que se imputa el gasto
 }
 
 export interface FilaOtros {
@@ -178,7 +178,7 @@ export interface FilaOtros {
   total: number;
   descripcionGasto: string;
   observacion: string;
-  mes: 1 | 2 | 3;
+  mes: 1 | 2 | 3 | 4;
 }
 
 // ─── F2 — Evaluación de Proyecto ─────────────────────────────────────────────
