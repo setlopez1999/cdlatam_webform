@@ -233,7 +233,8 @@ function PagoTable({
     (sum, i) => sum + i.cuotas.reduce((s, c) => s + (c.monto || 0), 0), 0
   );
   const diff = Math.abs(totalPagos - totalReferencia);
-  const hasWarning = diff > 0.1 && totalReferencia > 0;
+  // En mantención no se valida integridad de suma vs total de servicios
+  const hasWarning = !esMantencion && diff > 0.1 && totalReferencia > 0;
 
   return (
     <div className="space-y-3">
@@ -259,7 +260,8 @@ function PagoTable({
             <tr className="bg-muted/60">
               <th className="border-b border-r border-border/60 px-2 py-2 text-left font-medium w-10">ITEM</th>
               <th className="border-b border-r border-border/60 px-2 py-2 text-left font-medium w-[130px] min-w-[130px]">Tipo Venta</th>
-              <th className="border-b border-r border-border/60 px-2 py-2 text-center font-medium w-16">N° Cuotas</th>
+              {/* N° Cuotas: oculto en mantención (columna no aplica) */}
+              {!esMantencion && <th className="border-b border-r border-border/60 px-2 py-2 text-center font-medium w-16">N° Cuotas</th>}
               {Array.from({ length: maxCuotas }).map((_, i) => (
                 <th key={i} className="border-b border-r border-border/60 px-2 py-2 text-center font-medium" colSpan={2}>
                   {esMantencion && i === maxCuotas - 1 && maxCuotas > 1
@@ -272,7 +274,8 @@ function PagoTable({
             <tr className="bg-muted/30 text-muted-foreground">
               <th className="border-b border-r border-border/60 px-1 py-1"></th>
               <th className="border-b border-r border-border/60 px-1 py-1"></th>
-              <th className="border-b border-r border-border/60 px-1 py-1"></th>
+              {/* Celda sub-header N° Cuotas: oculta en mantención */}
+              {!esMantencion && <th className="border-b border-r border-border/60 px-1 py-1"></th>}
               {Array.from({ length: maxCuotas }).map((_, i) => (
                 <Fragment key={i}>
                   <th className="border-b border-r border-border/60 px-2 py-1 text-center font-normal w-[90px] min-w-[90px]">Monto</th>
@@ -304,14 +307,18 @@ function PagoTable({
                       onChange={e => onUpdate(tipo, pago.id, "tipoVenta", e.target.value)} />
                   )}
                 </td>
-                <td className="border-b border-r border-border/40 px-1 py-0.5">
-                  <Input type="number" min={1} max={4}
-                    className="h-7 text-xs text-center border-0 bg-transparent focus-visible:ring-0 font-medium text-blue-400"
-                    value={pago.nCuotas}
-                    onChange={e => onUpdate(tipo, pago.id, "nCuotas", e.target.value)} />
-                </td>
+                {/* Celda N° Cuotas: oculta en mantención */}
+                {!esMantencion && (
+                  <td className="border-b border-r border-border/40 px-1 py-0.5">
+                    <Input type="number" min={1} max={4}
+                      className="h-7 text-xs text-center border-0 bg-transparent focus-visible:ring-0 font-medium text-blue-400"
+                      value={pago.nCuotas}
+                      onChange={e => onUpdate(tipo, pago.id, "nCuotas", e.target.value)} />
+                  </td>
+                )}
                 {Array.from({ length: maxCuotas }).map((_, i) => {
-                  const isEnabled = i < (pago.nCuotas || 1);
+                  // En mantención todas las cuotas están habilitadas (no hay control de N° cuotas)
+                  const isEnabled = esMantencion ? true : i < (pago.nCuotas || 1);
                   return (
                     <Fragment key={i}>
                       <td className={`border-b border-r border-border/40 px-1 py-0.5 min-w-[90px] ${!isEnabled ? "bg-muted/30" : ""}`}>
@@ -348,7 +355,7 @@ function PagoTable({
           {totalPagos > 0 && (
             <tfoot>
               <tr className="bg-muted/40 font-medium">
-                <td colSpan={3} className="border-t border-r border-border/60 px-2 py-1.5 text-right text-xs">Total:</td>
+                <td colSpan={esMantencion ? 2 : 3} className="border-t border-r border-border/60 px-2 py-1.5 text-right text-xs">Total:</td>
                 <td colSpan={2} className={`border-t border-r border-border/60 px-2 py-1.5 text-right text-xs font-bold ${hasWarning ? "text-orange-400" : "text-emerald-400"}`}>
                   {formatCurrency(totalPagos, currencyCode)}
                 </td>
