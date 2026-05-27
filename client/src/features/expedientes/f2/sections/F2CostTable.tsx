@@ -3,6 +3,10 @@
  *
  * Tabla de costos reutilizable para F2.
  * Usada por: Hardware, Materiales, RRHH, Otros Gastos.
+ *
+ * nCuotas (1–4): limita las opciones del CuotaSelect al número de cuotas
+ * definido en F1 para el servicio de Implementación. Si no se pasa, muestra
+ * las 4 opciones (comportamiento anterior).
  */
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,22 +36,33 @@ export function TotalRow({ label, total, inline, fmt }: {
   );
 }
 
-// ─── Selector de Cuota ────────────────────────────────────────────────────────
+// ─── Selector de Cuota (dinámico según nCuotas de F1) ─────────────────────────
 
-const CUOTAS = [
+const ALL_CUOTAS = [
   { value: "1", label: "Cuota 1" },
   { value: "2", label: "Cuota 2" },
   { value: "3", label: "Cuota 3" },
+  { value: "4", label: "Cuota 4" },
 ];
 
-function CuotaSelect({ value, onChange }: { value?: 1 | 2 | 3; onChange: (v: 1 | 2 | 3) => void }) {
+function CuotaSelect({
+  value,
+  onChange,
+  nCuotas = 4,
+}: {
+  value?: 1 | 2 | 3 | 4;
+  onChange: (v: 1 | 2 | 3 | 4) => void;
+  /** Número de cuotas habilitadas (1–4). Viene de F1 implementación. */
+  nCuotas?: number;
+}) {
+  const cuotas = ALL_CUOTAS.slice(0, Math.min(4, Math.max(1, nCuotas)));
   return (
-    <Select value={value ? String(value) : ""} onValueChange={v => onChange(Number(v) as 1 | 2 | 3)}>
+    <Select value={value ? String(value) : ""} onValueChange={v => onChange(Number(v) as 1 | 2 | 3 | 4)}>
       <SelectTrigger className="h-8 text-xs">
         <SelectValue placeholder="Cuota..." />
       </SelectTrigger>
       <SelectContent position="popper" sideOffset={4} className="z-[200]">
-        {CUOTAS.map(c => (
+        {cuotas.map(c => (
           <SelectItem key={c.value} value={c.value} className="text-xs">{c.label}</SelectItem>
         ))}
       </SelectContent>
@@ -59,7 +74,7 @@ function CuotaSelect({ value, onChange }: { value?: 1 | 2 | 3; onChange: (v: 1 |
 
 export function F2CostTable({
   rows, catalogs, onUpdate, onAdd, onRemove, total,
-  valueLabel, valueField, taxLabel, taxField, fmt,
+  valueLabel, valueField, taxLabel, taxField, fmt, nCuotas,
 }: {
   rows: FilaCosto[];
   catalogs: any;
@@ -72,6 +87,8 @@ export function F2CostTable({
   taxLabel: string;
   taxField: "iva";
   fmt: (v: number) => string;
+  /** Cuotas habilitadas desde F1 implementación (1–4). */
+  nCuotas?: number;
 }) {
   return (
     <div className="overflow-x-auto rounded-lg border border-border/40">
@@ -106,8 +123,9 @@ export function F2CostTable({
               </td>
               <td className="px-1 py-1">
                 <CuotaSelect
-                  value={row.cuota}
+                  value={row.cuota as 1 | 2 | 3 | 4 | undefined}
                   onChange={v => onUpdate(row.id, "cuota", v)}
+                  nCuotas={nCuotas}
                 />
               </td>
               <td className="px-1 py-1">
@@ -155,7 +173,7 @@ export function F2CostTable({
 // ─── RRHH Table ───────────────────────────────────────────────────────────────
 
 export function F2RRHHTable({
-  rows, catalogs, onUpdate, onAdd, onRemove, total, fmt,
+  rows, catalogs, onUpdate, onAdd, onRemove, total, fmt, nCuotas,
 }: {
   rows: FilaRRHH[];
   catalogs: any;
@@ -164,13 +182,15 @@ export function F2RRHHTable({
   onRemove: (id: string) => void;
   total: number;
   fmt: (v: number) => string;
+  /** Cuotas habilitadas desde F1 implementación (1–4). */
+  nCuotas?: number;
 }) {
   return (
     <div className="overflow-x-auto rounded-lg border border-border/40">
       <table className="w-full min-w-[1000px] border-collapse text-xs">
         <thead>
           <tr className="bg-muted/60 text-muted-foreground">
-            <th className="px-2 py-2 text-left font-medium w-[140px] border-b border-border/40">Tipo Recurso</th>
+            <th className="px-2 py-2 text-left font-medium w-[140px] border-b border-border/40">Centro Costo</th>
             <th className="px-2 py-2 text-left font-medium w-[90px] border-b border-border/40">Cuota</th>
             <th className="px-2 py-2 text-left font-medium w-[150px] border-b border-border/40">Descripción</th>
             <th className="px-2 py-2 text-right font-medium w-[90px] border-b border-border/40">Valor s/Imp.</th>
@@ -202,8 +222,9 @@ export function F2RRHHTable({
               </td>
               <td className="px-1 py-1">
                 <CuotaSelect
-                  value={row.cuota}
+                  value={row.cuota as 1 | 2 | 3 | 4 | undefined}
                   onChange={v => onUpdate(row.id, "cuota", v)}
+                  nCuotas={nCuotas}
                 />
               </td>
               <td className="px-1 py-1">
@@ -302,15 +323,15 @@ export function F2OtrosTable({
                     <SelectValue placeholder="CECO..." className="truncate" />
                   </SelectTrigger>
                   <SelectContent position="popper" sideOffset={4} className="z-[200]">
-                    {catalogs?.cecos?.map((c: any) => (
-                      <SelectItem key={c.value} value={c.value} className="text-xs">{c.label}</SelectItem>
+                    {catalogs?.cecos?.map((a: any) => (
+                      <SelectItem key={a.value} value={a.value} className="text-xs">{a.label}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </td>
               <td className="px-1 py-1">
                 <Input className="h-8 text-xs" placeholder="Descripción..."
-                  value={row.descripcionGasto ?? ""}
+                  value={row.descripcionGasto}
                   onChange={e => onUpdate(row.id, "descripcionGasto", e.target.value)} />
               </td>
               <td className="px-1 py-1">
@@ -344,7 +365,7 @@ export function F2OtrosTable({
         <Button variant="outline" size="sm" onClick={onAdd}>
           <Plus className="w-3.5 h-3.5 mr-1.5" /> Agregar gasto
         </Button>
-        <TotalRow label="Total" total={total} inline fmt={fmt} />
+        <TotalRow label="Total Otros" total={total} inline fmt={fmt} />
       </div>
     </div>
   );

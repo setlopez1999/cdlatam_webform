@@ -71,6 +71,15 @@ export default function F2Form({ expedienteId, onVerResultado }: Props) {
 
   if (!data) return <div className="p-6 text-muted-foreground">Expediente no encontrado.</div>;
 
+  // ── nCuotas desde F1 implementación ─────────────────────────────────────────
+  // Toma el nCuotas de la primera fila de formasPagoImplementacion enlazada.
+  // Limita el CuotaSelect en Hardware, Materiales y RRHH a ese valor (1–4).
+  const nCuotasImpl: number = (() => {
+    const impl = f1Data?.formasPagoImplementacion?.find(fp => fp.linkedServicioId);
+    if (impl && impl.nCuotas >= 1) return Math.min(4, Math.max(1, impl.nCuotas));
+    return 4; // fallback: mostrar todas si no hay F1
+  })();
+
   const monedaGlobal = data.tipoMoneda || "USD";
   const currencyCode = getCurrencyCode(monedaGlobal);
   const fmt = (v: number) => formatCurrency(v, currencyCode);
@@ -208,12 +217,7 @@ export default function F2Form({ expedienteId, onVerResultado }: Props) {
         }
       />
 
-      {f1Data != null && (f1Data.total_descuento_mantencion ?? 0) > 0 && (
-        <div className="rounded-lg border border-emerald-200 bg-emerald-50/90 px-3 py-2 text-xs text-emerald-950">
-          <span className="font-medium">Desde F1 — Ahorro Mantención (cuotas de gracia): </span>
-          {fmt(f1Data.total_descuento_mantencion ?? 0)}
-        </div>
-      )}
+      {/* Mensaje de ahorro mantención eliminado según solicitud */}
 
       {/* Live Preview Banner */}
       <div className="bg-violet-50 border border-violet-200 rounded-xl p-3 flex items-center gap-3">
@@ -262,6 +266,7 @@ export default function F2Form({ expedienteId, onVerResultado }: Props) {
           valueLabel="Valor Neto U." valueField="valorNeto"
           taxLabel="IVA" taxField="iva"
           fmt={fmt}
+          nCuotas={nCuotasImpl}
         />
       </FormSection>
 
@@ -276,6 +281,7 @@ export default function F2Form({ expedienteId, onVerResultado }: Props) {
           valueLabel="Valor Neto U." valueField="valorNeto"
           taxLabel="IVA" taxField="iva"
           fmt={fmt}
+          nCuotas={nCuotasImpl}
         />
       </FormSection>
 
@@ -287,6 +293,7 @@ export default function F2Form({ expedienteId, onVerResultado }: Props) {
           onAdd={() => update({ rrhh: [...data.rrhh, createFilaRRHH()] })}
           onRemove={id => update({ rrhh: data.rrhh.filter(r => r.id !== id) })}
           total={totalRRHH} fmt={fmt}
+          nCuotas={nCuotasImpl}
         />
       </FormSection>
 
