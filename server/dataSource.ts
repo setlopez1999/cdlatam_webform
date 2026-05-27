@@ -156,6 +156,7 @@ export async function ds_getCatalogOptions() {
       value: r.valor,
       label: r.valor,
       orden: r.orden,
+      persistente: r.persistente ?? 0,
     })),
     meses: MESES,
   };

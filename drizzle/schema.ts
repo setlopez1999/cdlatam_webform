@@ -375,6 +375,8 @@ export const catalogConsideracionesComerciales = sqliteTable("catalog_considerac
   valor: text("valor").notNull(),
   orden: integer("orden").default(0).notNull(),
   activo: integer("activo").default(1).notNull(),
+  /** 1 = siempre marcado y no desmarcable por usuarios con rol comercial */
+  persistente: integer("persistente").default(0).notNull(),
 });
 
 /** Maestro de ítems del checklist Implementación IPTV-OTT (`implementaciones.checkKey` → `key`). */

@@ -27,6 +27,8 @@ export interface PlantillaConsideracionCatalogo {
   value: string;
   label: string;
   orden: number;
+  /** 1 = siempre marcado y no desmarcable por usuarios sin permiso de edición */
+  persistente?: number;
 }
 
 interface Props {
@@ -35,6 +37,8 @@ interface Props {
   plantillasCatalogo: PlantillaConsideracionCatalogo[];
   clausulasAuto: ClausulasVigentesState;
   restricted?: boolean;
+  /** true si el usuario puede editar ítems persistentes (admin/full); false = comercial */
+  canEditPersistente?: boolean;
 }
 
 function matchesCatalogLine(texto: string, plantillas: PlantillaConsideracionCatalogo[]): boolean {
@@ -64,6 +68,7 @@ export function F1Consideraciones({
   plantillasCatalogo,
   clausulasAuto,
   restricted = false,
+  canEditPersistente = false,
 }: Props) {
   const [nuevoItem, setNuevoItem] = useState("");
 
@@ -143,25 +148,41 @@ export function F1Consideraciones({
 
           {plantillasOrdenadas.length === 0 ? (
             <p className="text-sm text-muted-foreground italic px-1 py-2">
-              No hay ítems en el catálogo. Configúralos en Base de datos → Consideraciones comerciales (Acta).
+              No hay ítems en el catálogo. Confíguralos en Base de datos → Consideraciones comerciales (Acta).
             </p>
           ) : (
             <ul className="space-y-3">
               {plantillasOrdenadas.map(row => {
-                const marcado = personalizadas.some(p => p.trim() === row.value.trim());
+                const esPersistente = (row.persistente ?? 0) === 1;
+                // Ítems persistentes: siempre marcados; comerciales no pueden desmarcarlo
+                const marcado = esPersistente ? true : personalizadas.some(p => p.trim() === row.value.trim());
+                const bloqueado = esPersistente && !canEditPersistente;
                 return (
                   <li key={row.id} className="flex items-start gap-3">
                     <Checkbox
                       id={`consideracion-cat-${row.id}`}
                       checked={marcado}
-                      onCheckedChange={v => toggleCatalogo(row.value, v === true)}
-                      className="mt-0.5"
+                      disabled={bloqueado}
+                      onCheckedChange={v => {
+                        if (bloqueado) return;
+                        toggleCatalogo(row.value, v === true);
+                      }}
+                      className={`mt-0.5 ${bloqueado ? "opacity-60 cursor-not-allowed" : ""}`}
                     />
                     <label
                       htmlFor={`consideracion-cat-${row.id}`}
-                      className="text-sm text-foreground/90 leading-snug cursor-pointer select-none flex-1"
+                      className={`text-sm leading-snug select-none flex-1 ${
+                        bloqueado
+                          ? "text-foreground/70 cursor-not-allowed"
+                          : "text-foreground/90 cursor-pointer"
+                      }`}
                     >
                       {row.label}
+                      {esPersistente && (
+                        <span className="ml-2 text-[10px] text-muted-foreground/60 font-normal italic">
+                          (siempre incluido)
+                        </span>
+                      )}
                     </label>
                   </li>
                 );

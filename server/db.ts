@@ -556,6 +556,11 @@ export async function runMigrations() {
   tryAlter(`CREATE INDEX IF NOT EXISTS idx_audit_log_created_at ON audit_log(createdAt)`, "Index audit_log createdAt");
   tryAlter(`CREATE INDEX IF NOT EXISTS idx_audit_log_user_created ON audit_log(userId, createdAt)`, "Index audit_log userId+createdAt");
   tryAlter(`CREATE INDEX IF NOT EXISTS idx_audit_log_expediente_uuid ON audit_log(expedienteUuid)`, "Index audit_log expedienteUuid");
+  // Campo persistente en consideraciones: 1 = siempre marcado, no desmarcable por comerciales
+  tryAlter(
+    `ALTER TABLE catalog_consideraciones_comerciales ADD COLUMN persistente INTEGER DEFAULT 0 NOT NULL`,
+    "Column persistente added to catalog_consideraciones_comerciales"
+  );
 
   try {
     const db = await getDb();

@@ -23,6 +23,7 @@ import { ActaPdfPreviewDialog } from "@/components/ActaPdfPreviewDialog";
 import { useF1 } from "./useF1";
 import { useClausulasVigentes } from "./useClausulasVigentes";
 import { useFieldVisibility } from "@/hooks/useFieldVisibility";
+import { useCan } from "@/hooks/useCan";
 import { useNavGuard } from "@/hooks/useNavGuard";
 import { UnsavedChangesDialog } from "@/components/UnsavedChangesDialog";
 import { F1_INITIAL } from "../types";
@@ -128,6 +129,7 @@ export default function F1Form({ expedienteId }: Props) {
   const { data, status, update, guardar, descartar, isSyncing } = useF1(expedienteId);
   // Visibilidad de campos sensibles — cuando el acta persista en BD, pasar data.creadorId
   const { canViewSensitiveFields } = useFieldVisibility(undefined);
+  const can = useCan();
   const { data: catalogs } = trpc.catalogs.getAll.useQuery();
 
   const catalogsEncabezado = useMemo(
@@ -551,6 +553,7 @@ export default function F1Form({ expedienteId }: Props) {
         plantillasCatalogo={plantillasConsideraciones as any}
         clausulasAuto={clausulasVigentes}
         restricted={!canViewSensitiveFields}
+        canEditPersistente={can("expediente:view_sensitive_fields")}
       />
 
       <F1Firmas data={data} onUpdate={update} />
