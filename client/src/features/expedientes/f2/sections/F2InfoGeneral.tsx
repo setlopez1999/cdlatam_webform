@@ -38,6 +38,8 @@ interface Props {
     tipoMoneda?: string;
     unidadNegocios?: string;
     solucion?: string;
+    plazoImplementacion?: string;
+    montoProyecto?: number;
   } | null;
   onImportarDesdeF1?: () => void;
 }
@@ -59,6 +61,8 @@ export function F2InfoGeneral({ data, onUpdate, catalogs, f1Suggestions, onImpor
             {f1Suggestions.tipoMoneda && <span className="ml-2">· Moneda: <b>{f1Suggestions.tipoMoneda}</b></span>}
             {f1Suggestions.unidadNegocios && <span className="ml-2">· UN: <b>{f1Suggestions.unidadNegocios}</b></span>}
             {f1Suggestions.solucion && <span className="ml-2">· Sol: <b>{f1Suggestions.solucion}</b></span>}
+            {f1Suggestions.plazoImplementacion && <span className="ml-2">· Plazo: <b>{f1Suggestions.plazoImplementacion}</b></span>}
+            {f1Suggestions.montoProyecto ? <span className="ml-2">· Monto impl: <b>$ {Number(f1Suggestions.montoProyecto).toLocaleString("es-CL")}</b></span> : null}
           </div>
           <Button
             type="button" variant="outline" size="sm"

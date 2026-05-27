@@ -43,16 +43,22 @@ function f1ToF2HeaderPatch(f1: F1Data): Partial<F2Data> {
 /** Objeto para banner «Importar desde F1» (mismas claves que F2InfoGeneral espera). */
 function f1ImportSuggestions(f1: F1Data | null) {
   if (!f1) return null;
-  const s: Record<string, string> = {};
+  const s: Record<string, string | number> = {};
   for (const { f1: fk, f2: tk } of F1_TO_F2_HEADER_FIELDS) {
     s[tk] = f1[fk] ?? "";
   }
   // Agrega sugerencias de la primera fila de servicios contratados
   const primeraFila = f1.serviciosContratados?.[0];
   if (primeraFila) {
-    s["unidadNegocios"] = primeraFila.unidadNegocio ?? "";
-    s["solucion"] = primeraFila.solucion ?? "";
+    s["unidadNegocios"]     = primeraFila.unidadNegocio ?? "";
+    s["solucion"]           = primeraFila.solucion ?? "";
+    s["plazoImplementacion"] = primeraFila.plazo ?? "";
   }
+  // Monto de implementación: suma de totales de servicios tipo Implementación
+  const totalImpl = f1.serviciosContratados
+    ?.filter(s => s.tipoVenta?.toLowerCase().includes("impl"))
+    .reduce((acc, s) => acc + (s.total ?? 0), 0) ?? 0;
+  if (totalImpl > 0) s["montoProyecto"] = totalImpl;
   return s as {
     nombreCliente: string;
     empresa: string;
@@ -61,6 +67,8 @@ function f1ImportSuggestions(f1: F1Data | null) {
     tipoMoneda: string;
     unidadNegocios: string;
     solucion: string;
+    plazoImplementacion: string;
+    montoProyecto: number;
   };
 }
 
@@ -136,16 +144,22 @@ export function useF2(expedienteId: string) {
   }, [utils, expedienteId, store]);
 
   /** Importa al F2 los campos de encabezado definidos en F1_TO_F2_HEADER_FIELDS
-   *  más solucion y unidadNegocios desde la primera fila de serviciosContratados. */
+   *  más solucion, unidadNegocios, plazoImplementacion y montoProyecto desde F1. */
   const importarDesdeF1 = useCallback(() => {
     if (!f1Data) return;
     const patch = f1ToF2HeaderPatch(f1Data);
-    // Importar solucion y unidadNegocios desde la primera fila de servicios contratados
+    // Importar desde la primera fila de servicios contratados
     const primeraFila = f1Data.serviciosContratados?.[0];
     if (primeraFila) {
-      if (primeraFila.unidadNegocio) patch.unidadNegocios = primeraFila.unidadNegocio;
-      if (primeraFila.solucion)      patch.solucion      = primeraFila.solucion;
+      if (primeraFila.unidadNegocio) patch.unidadNegocios      = primeraFila.unidadNegocio;
+      if (primeraFila.solucion)      patch.solucion            = primeraFila.solucion;
+      if (primeraFila.plazo)         patch.plazoImplementacion = primeraFila.plazo;
     }
+    // Monto de implementación: suma de totales de servicios tipo Implementación
+    const totalImpl = f1Data.serviciosContratados
+      ?.filter(s => s.tipoVenta?.toLowerCase().includes("impl"))
+      .reduce((acc, s) => acc + (s.total ?? 0), 0) ?? 0;
+    if (totalImpl > 0) patch.montoProyecto = totalImpl;
     update(patch);
   }, [f1Data, update]);
 
