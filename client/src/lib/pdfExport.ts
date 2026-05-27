@@ -18,7 +18,8 @@ import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import { PDFDocument } from "pdf-lib";
 import { formatCurrency, formatDate, getCurrencyCode } from "./formatters";
-import { cdlatamLogoAbsoluteUrl } from "./cdlatamBrand";
+// Logo importado estáticamente por Vite — siempre disponible sin fetch en runtime
+import cdlatamLogoDataUrl from "../assets/cdlatam-logo.png";
 
 /** Pixeles del PNG del logo (relación de aspecto al escalar en mm). */
 const LOGO_NATURAL_W_PX = 1215;
@@ -224,7 +225,8 @@ async function buildActaPdfBytes(acta: ActaData): Promise<Uint8Array> {
   let y = margin;
 
   // ── 1. Header ───────────────────────────────────────────────────────────
-  const logo = await loadImageAsDataUrl(cdlatamLogoAbsoluteUrl());
+  // Logo importado estáticamente por Vite: siempre disponible, sin fetch en runtime
+  const logo: string | null = cdlatamLogoDataUrl ?? null;
   if (logo) {
     doc.setFillColor(...COLOR_TEXT);
     doc.roundedRect(margin, y, 38, 14, 2, 2, "F");
@@ -650,7 +652,7 @@ function buildResultadoHTML(
     etiquetaBloqueGim?: string;
   },
 ): string {
-  const logoUrl = cdlatamLogoAbsoluteUrl();
+  const logoUrl = cdlatamLogoDataUrl;
   const fmt = (v: number) => formatCurrency(v, "USD");
   const mostrarDist = pdfOpts?.mostrarDistribucionYFacturacion !== false;
   const etiquetaGim = pdfOpts?.etiquetaBloqueGim?.trim() || "GIM";
