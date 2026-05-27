@@ -262,7 +262,9 @@ function PagoTable({
               <th className="border-b border-r border-border/60 px-2 py-2 text-center font-medium w-16">N° Cuotas</th>
               {Array.from({ length: maxCuotas }).map((_, i) => (
                 <th key={i} className="border-b border-r border-border/60 px-2 py-2 text-center font-medium" colSpan={2}>
-                  Cuota {i + 1}
+                  {esMantencion && i === maxCuotas - 1 && maxCuotas > 1
+                    ? `Cuota ${i + 1} en adelante`
+                    : `Cuota ${i + 1}`}
                 </th>
               ))}
               {onRemove && <th className="border-b border-l border-border/60 w-8"></th>}
