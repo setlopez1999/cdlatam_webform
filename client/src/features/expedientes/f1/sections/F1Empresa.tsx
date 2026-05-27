@@ -63,6 +63,7 @@ export function F1Empresa({ data, onUpdate, catalogs }: Props) {
             </SelectContent>
           </Select>
         </FieldGroup>
+        {/* AUTO_FILL: rucDniRut — futura integración con módulo de clientes (cliente.numeroIdentificacion) */}
         <FieldGroup label="Número de Identificación Fiscal" required>
           <Input
             id="f1-rucDniRut" placeholder="Número de identificación fiscal"
