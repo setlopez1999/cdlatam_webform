@@ -115,7 +115,8 @@ function resetGraceMontos(cuotas: FormaPago["cuotas"], nGrace: number): FormaPag
   return out;
 }
 
-/** Primera creación de fila Mantención enlazada — montos en cero; referencia = precio unitario. */
+/** Primera creación de fila Mantención enlazada — montos en cero; referencia = precio unitario.
+ * nCuotas arranca en 4 para mostrar siempre las 4 columnas de gracia al crear la fila. */
 function seedLinkedFormaPagoMant(servicio: ServicioContratado, item: number): FormaPago {
   const pu = servicio.precioUnitario ?? 0;
   return {
@@ -125,7 +126,7 @@ function seedLinkedFormaPagoMant(servicio: ServicioContratado, item: number): Fo
     linkedServicioTotal: servicio.total ?? 0,
     linkedServicioPrecioUnitario: pu,
     tipoVenta: servicio.tipoVenta,
-    nCuotas: 1,
+    nCuotas: 4,
     cuotas: createFourCuotasEmpty(),
   };
 }

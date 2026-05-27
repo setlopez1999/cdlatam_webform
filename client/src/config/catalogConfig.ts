@@ -158,6 +158,19 @@ export const catalogConfigs: Record<string, CatalogConfig> = {
       { key: "activo", label: "Activo", type: "boolean",  },
     ],
   },
+  consideraciones: {
+    tableName: "consideraciones",
+    title: "Consideraciones comerciales (Acta)",
+    description: "Ítems del checklist de Consideraciones y Alcances Comerciales en F1. Marcar \"Persistente\" para que el ítem siempre esté marcado y no sea desmarcable por comerciales.",
+    color: "text-indigo-400",
+    bgColor: "bg-indigo-500/10",
+    fields: [
+      { key: "valor", label: "Texto del ítem", type: "text", required: true },
+      { key: "orden", label: "Orden", type: "number", required: false },
+      { key: "activo", label: "Activo", type: "boolean" },
+      { key: "persistente", label: "Persistente (siempre marcado)", type: "boolean" },
+    ],
+  },
   impl_items: {
     tableName: "impl_items",
     title: "Ítems implementación IPTV-OTT",
