@@ -445,8 +445,18 @@ export default function F1Form({ expedienteId }: Props) {
     try {
       toast.loading("Generando PDF...", { id: "pdf-f1" });
       const failed: string[] = [];
+
+      // Inyectar ítems persistentes del catálogo que no estén ya en consideracionesPersonalizadas
+      const persistentes = (plantillasConsideraciones as any[]).filter(p => (p.persistente ?? 0) === 1);
+      const personalizadasConPersistentes = [...(data.consideracionesPersonalizadas ?? [])];
+      for (const p of persistentes) {
+        const yaEsta = personalizadasConPersistentes.some(x => x.trim() === p.value.trim());
+        if (!yaEsta) personalizadasConPersistentes.unshift(p.value);
+      }
+      const dataParaPdf = { ...data, consideracionesPersonalizadas: personalizadasConPersistentes };
+
       const { blob, filename } = await createActaPdfBlob(
-        data as any,
+        dataParaPdf as any,
         clausulasParaPdf.map(c => ({
           id: c.id,
           valor: c.valor,
