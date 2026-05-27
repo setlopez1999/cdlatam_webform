@@ -100,20 +100,25 @@ export default function F2Form({ expedienteId, onVerResultado }: Props) {
 
   // ── nCuotas desde F1 implementación ─────────────────────────────────────────
   // Toma el nCuotas de la primera fila de formasPagoImplementacion enlazada.
+  // Retorna 0 si no hay F1 guardado, para no reconciliar con un valor ficticio.
   const nCuotasImpl: number = (() => {
     const impl = f1Data?.formasPagoImplementacion?.find(fp => fp.linkedServicioId);
     if (impl && impl.nCuotas >= 1) return Math.min(4, Math.max(1, impl.nCuotas));
-    return 4; // fallback: mostrar todas si no hay F1
+    return 0; // 0 = sin F1 → no reconciliar
   })();
 
+  // nCuotas efectivo para el CuotaSelect (mínimo 4 si no hay F1)
+  const nCuotasDisplay = nCuotasImpl > 0 ? nCuotasImpl : 4;
+
   // ── Reconciliación automática de filas ────────────────────────────────────
-  // Al cambiar nCuotasImpl, ajusta hardware/materiales/RRHH para tener
-  // exactamente N filas (una por cuota), con cuota pre-asignada.
+  // Se dispara cuando nCuotasImpl cambia O cuando data pasa de null a disponible.
+  // Dependencias: nCuotasImpl + dataReady (booleano) para capturar la carga inicial.
+  const dataReady = !!data;
   const prevNCuotas = useRef<number | null>(null);
 
   useEffect(() => {
-    if (!data) return;
-    // Solo reconciliar cuando nCuotasImpl cambia (o en la primera carga con F1 disponible)
+    if (!data || nCuotasImpl === 0) return;
+    // Reconciliar si nCuotasImpl cambió o si es la primera vez que data está disponible
     if (prevNCuotas.current === nCuotasImpl) return;
     prevNCuotas.current = nCuotasImpl;
 
@@ -140,7 +145,7 @@ export default function F2Form({ expedienteId, onVerResultado }: Props) {
       otrosGastos: newOtros,
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [nCuotasImpl]);
+  }, [nCuotasImpl, dataReady]);
 
   if (!data) return <div className="p-6 text-muted-foreground">Expediente no encontrado.</div>;
 
@@ -251,7 +256,7 @@ export default function F2Form({ expedienteId, onVerResultado }: Props) {
   }, [update]);
 
   // ── Cuotas activas (array dinámico 1..nCuotasImpl) ────────────────────────
-  const cuotasActivas = Array.from({ length: nCuotasImpl }, (_, i) => (i + 1) as 1 | 2 | 3 | 4);
+  const cuotasActivas = Array.from({ length: nCuotasDisplay }, (_, i) => (i + 1) as 1 | 2 | 3 | 4);
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
@@ -325,14 +330,14 @@ export default function F2Form({ expedienteId, onVerResultado }: Props) {
           onUpdate={updateHardwareRow}
           onAdd={() => {
             const nextCuota = (data.hardware.length + 1) as 1 | 2 | 3 | 4;
-            update({ hardware: [...data.hardware, createFilaCosto(nextCuota <= nCuotasImpl ? nextCuota : undefined)] });
+            update({ hardware: [...data.hardware, createFilaCosto(nextCuota <= nCuotasDisplay ? nextCuota : undefined)] });
           }}
           onRemove={id => update({ hardware: data.hardware.filter(r => r.id !== id) })}
           total={totalHardware}
           valueLabel="Valor Neto U." valueField="valorNeto"
           taxLabel="IVA" taxField="iva"
           fmt={fmt}
-          nCuotas={nCuotasImpl}
+          nCuotas={nCuotasDisplay}
         />
       </FormSection>
 
@@ -343,14 +348,14 @@ export default function F2Form({ expedienteId, onVerResultado }: Props) {
           onUpdate={updateMaterialesRow}
           onAdd={() => {
             const nextCuota = (data.materiales.length + 1) as 1 | 2 | 3 | 4;
-            update({ materiales: [...data.materiales, createFilaCosto(nextCuota <= nCuotasImpl ? nextCuota : undefined)] });
+            update({ materiales: [...data.materiales, createFilaCosto(nextCuota <= nCuotasDisplay ? nextCuota : undefined)] });
           }}
           onRemove={id => update({ materiales: data.materiales.filter(r => r.id !== id) })}
           total={totalMateriales}
           valueLabel="Valor Neto U." valueField="valorNeto"
           taxLabel="IVA" taxField="iva"
           fmt={fmt}
-          nCuotas={nCuotasImpl}
+          nCuotas={nCuotasDisplay}
         />
       </FormSection>
 
@@ -361,11 +366,11 @@ export default function F2Form({ expedienteId, onVerResultado }: Props) {
           onUpdate={updateRRHHRow}
           onAdd={() => {
             const nextCuota = (data.rrhh.length + 1) as 1 | 2 | 3 | 4;
-            update({ rrhh: [...data.rrhh, createFilaRRHH("tecnico_interno", "", nextCuota <= nCuotasImpl ? nextCuota : undefined)] });
+            update({ rrhh: [...data.rrhh, createFilaRRHH("tecnico_interno", "", nextCuota <= nCuotasDisplay ? nextCuota : undefined)] });
           }}
           onRemove={id => update({ rrhh: data.rrhh.filter(r => r.id !== id) })}
           total={totalRRHH} fmt={fmt}
-          nCuotas={nCuotasImpl}
+          nCuotas={nCuotasDisplay}
         />
       </FormSection>
 
