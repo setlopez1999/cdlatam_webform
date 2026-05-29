@@ -80,49 +80,60 @@ export async function createActaPdfBlob(
     (a, b) => (a.ordenGlobal ?? 50) - (b.ordenGlobal ?? 50),
   );
 
-  // El PDF de Features Resumido dinámico se inserta con ordenGlobal=20
-  // (entre features=10 y cláusulas legales=30+).
+  // El PDF de Features Resumido dinámico tiene ordenGlobal=20
+  // (entre features=10 y cláusulas legales=21+).
+  // Se inserta como un ítem virtual en la posición correcta del array.
   const FEATURES_RESUMIDO_ORDEN = 20;
+
+  // Construir lista final de documentos a anexar, incluyendo el Features Resumido dinámico
+  type DocEntry =
+    | { kind: "static"; clausula: ClausulaParaPdf }
+    | { kind: "dynamic_features_resumido" };
+
+  const docsEnOrden: DocEntry[] = [];
   let featuresResumidoInsertado = false;
 
   for (const c of clausulasOrdenadas) {
-    // Insertar el PDF dinámico antes de la primera cláusula con ordenGlobal > 20
+    // Insertar el Features Resumido dinámico antes del primer documento con ordenGlobal > 20
     if (
       !featuresResumidoInsertado &&
       opts.featuresResumidoBytes &&
       (c.ordenGlobal ?? 50) > FEATURES_RESUMIDO_ORDEN
     ) {
+      docsEnOrden.push({ kind: "dynamic_features_resumido" });
+      featuresResumidoInsertado = true;
+    }
+    docsEnOrden.push({ kind: "static", clausula: c });
+  }
+
+  // Si no hubo ningún documento con ordenGlobal > 20, insertar al final
+  if (!featuresResumidoInsertado && opts.featuresResumidoBytes) {
+    docsEnOrden.push({ kind: "dynamic_features_resumido" });
+  }
+
+  // Procesar cada documento en orden
+  for (const entry of docsEnOrden) {
+    if (entry.kind === "dynamic_features_resumido") {
       try {
-        const pdf = await PDFDocument.load(opts.featuresResumidoBytes, { ignoreEncryption: true });
+        const pdf = await PDFDocument.load(opts.featuresResumidoBytes!, { ignoreEncryption: true });
         const pages = await merged.copyPages(pdf, pdf.getPageIndices());
         pages.forEach(p => merged.addPage(p));
       } catch (err) {
         console.warn("[pdfExport] features resumido falló, se omite:", err);
       }
-      featuresResumidoInsertado = true;
-    }
-
-    try {
-      const res = await fetch(c.filePath, { credentials: "include" });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const bytes = await res.arrayBuffer();
-      const pdf = await PDFDocument.load(bytes, { ignoreEncryption: true });
-      const pages = await merged.copyPages(pdf, pdf.getPageIndices());
-      pages.forEach(p => merged.addPage(p));
-    } catch (err) {
-      console.warn("[pdfExport] cláusula falló, se omite:", c.fileName, err);
-      opts.onClausulaError?.(c, err);
-    }
-  }
-
-  // Si no hubo ninguna cláusula con ordenGlobal > 20, insertar al final
-  if (!featuresResumidoInsertado && opts.featuresResumidoBytes) {
-    try {
-      const pdf = await PDFDocument.load(opts.featuresResumidoBytes, { ignoreEncryption: true });
-      const pages = await merged.copyPages(pdf, pdf.getPageIndices());
-      pages.forEach(p => merged.addPage(p));
-    } catch (err) {
-      console.warn("[pdfExport] features resumido (final) falló, se omite:", err);
+    } else {
+      const c = entry.clausula;
+      try {
+        const res = await fetch(c.filePath, { credentials: "include" });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const bytes = await res.arrayBuffer();
+        const pdf = await PDFDocument.load(bytes, { ignoreEncryption: true });
+        const pages = await merged.copyPages(pdf, pdf.getPageIndices());
+        pages.forEach(p => merged.addPage(p));
+      } catch (err) {
+        console.warn("[pdfExport] cláusula falló, se omite:", c.fileName, err);
+        opts.onClausulaError?.(c, err);
+      }
     }
   }
 
