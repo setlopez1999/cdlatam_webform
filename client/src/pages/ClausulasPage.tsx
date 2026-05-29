@@ -1,6 +1,6 @@
 import { useState, useRef, useMemo } from "react";
 import { trpc } from "@/lib/trpc";
-import { FileText, Upload, Download, Trash2, Search, FileCheck, Pencil, RefreshCw } from "lucide-react";
+import { FileText, Upload, Download, Trash2, Search, FileCheck, Pencil, RefreshCw, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -21,8 +21,20 @@ interface Clausula {
   fileName: string;
   fileSize?: number | null;
   activo: number;
+  siempreIncluir?: number;
+  /** 'clausula' | 'features' | 'anexo_soporte' */
+  tipo?: string;
+  /** Número de orden en el PDF final (editable) */
+  ordenGlobal?: number;
   createdAt: Date;
 }
+
+/** Etiqueta visual por tipo de documento */
+const TIPO_LABELS: Record<string, { label: string; color: string }> = {
+  clausula:       { label: "Cláusula",       color: "bg-blue-500/10 text-blue-300 border-blue-500/20" },
+  features:       { label: "Features",        color: "bg-amber-500/10 text-amber-300 border-amber-500/20" },
+  anexo_soporte:  { label: "Anexo Soporte",   color: "bg-violet-500/10 text-violet-300 border-violet-500/20" },
+};
 
 const SIN_UNIDAD = "__sin_unidad__";
 
@@ -34,10 +46,12 @@ export default function ClausulasPage() {
   const [nombre, setNombre] = useState("");
   const [unidadNegocioId, setUnidadNegocioId] = useState<string>("");
 
-  // Estado del dialog de edición (nombre + unidad)
+  // Estado del dialog de edición (nombre + unidad + tipo + orden)
   const [editing, setEditing] = useState<Clausula | null>(null);
   const [editNombre, setEditNombre] = useState("");
   const [editUnidad, setEditUnidad] = useState<string>(SIN_UNIDAD);
+  const [editTipo, setEditTipo] = useState<"clausula" | "features" | "anexo_soporte">("clausula");
+  const [editOrden, setEditOrden] = useState<number>(50);
 
   // Estado del dialog de reemplazo de PDF
   const [replacing, setReplacing] = useState<Clausula | null>(null);
@@ -82,10 +96,12 @@ export default function ClausulasPage() {
     onError: (err) => toast.error("Error: " + err.message),
   });
 
-  const filtered = clausulas.filter((c: Clausula) =>
-    c.valor.toLowerCase().includes(search.toLowerCase()) ||
-    c.fileName.toLowerCase().includes(search.toLowerCase())
-  );
+  const filtered = (clausulas as Clausula[])
+    .filter((c) =>
+      c.valor.toLowerCase().includes(search.toLowerCase()) ||
+      c.fileName.toLowerCase().includes(search.toLowerCase())
+    )
+    .sort((a, b) => (a.ordenGlobal ?? 50) - (b.ordenGlobal ?? 50));
 
   const handleUpload = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -127,6 +143,8 @@ export default function ClausulasPage() {
     setEditing(c);
     setEditNombre(c.valor);
     setEditUnidad(c.unidadNegocioId == null ? SIN_UNIDAD : String(c.unidadNegocioId));
+    setEditTipo((c.tipo ?? "clausula") as "clausula" | "features" | "anexo_soporte");
+    setEditOrden(c.ordenGlobal ?? 50);
   };
 
   const handleSaveEdit = () => {
@@ -140,6 +158,8 @@ export default function ClausulasPage() {
       id: editing.id,
       valor: editNombre.trim(),
       unidadNegocioId: unidadParsed,
+      tipo: editTipo,
+      ordenGlobal: editOrden,
     });
   };
 
@@ -176,18 +196,47 @@ export default function ClausulasPage() {
   };
 
   return (
-    <PageLayout title="Cláusulas Legales (PDFs)" subtitle="Gestión de cláusulas legales por unidad de negocio (solo admin)">
+    <PageLayout title="Cláusulas Legales (PDFs)" subtitle="Gestión de documentos adjuntos al Acta (solo admin)">
       <div className="space-y-4 animate-in fade-in zoom-in-95 duration-200">
+
+        {/* Leyenda del orden del PDF */}
+        <div className="bg-[#1a1f2e] border border-white/5 p-4 rounded-xl">
+          <div className="flex items-start gap-2">
+            <Info className="w-4 h-4 text-slate-400 mt-0.5 shrink-0" />
+            <div className="text-xs text-slate-400 space-y-1">
+              <p className="font-medium text-slate-300">Orden de ensamblado del PDF final</p>
+              <p>
+                <span className="text-white font-medium">1. Acta</span> — siempre primero (generada automáticamente)
+              </p>
+              <p>
+                <span className="text-amber-300 font-medium">2. Features</span> — tipo <code className="bg-white/5 px-1 rounded">features</code>, orden 10 (siempre incluido)
+              </p>
+              <p>
+                <span className="text-slate-300 font-medium">3. Features Resumido</span> — generado dinámicamente desde la pestaña de Implementación del expediente
+              </p>
+              <p>
+                <span className="text-blue-300 font-medium">4. Cláusulas</span> — tipo <code className="bg-white/5 px-1 rounded">clausula</code>, ordenadas por <strong>Orden Global</strong> (20–29 por convención). Se incluyen según la Unidad de Negocio del servicio.
+              </p>
+              <p>
+                <span className="text-violet-300 font-medium">5. Anexo de Soporte</span> — tipo <code className="bg-white/5 px-1 rounded">anexo_soporte</code>, orden 99 (siempre al final)
+              </p>
+              <p className="text-slate-500 pt-1">
+                El campo <strong>Orden Global</strong> es editable. Números menores aparecen antes. El Acta siempre es posición 0 (no configurable).
+              </p>
+            </div>
+          </div>
+        </div>
+
         {/* Upload Form */}
         <form onSubmit={handleUpload} className="bg-[#1a1f2e] border border-white/5 p-4 rounded-xl space-y-3">
           <h3 className="text-sm font-medium text-slate-300 flex items-center gap-2">
-            <Upload className="w-4 h-4" /> Subir Nueva Cláusula
+            <Upload className="w-4 h-4" /> Subir Nuevo Documento
           </h3>
           <div className="flex flex-col sm:flex-row gap-3">
             <Input
               value={nombre}
               onChange={e => setNombre(e.target.value)}
-              placeholder="Nombre de la cláusula"
+              placeholder="Nombre del documento"
               className="bg-[#242b3d] border-white/10 text-white flex-1"
               required
             />
@@ -232,30 +281,43 @@ export default function ClausulasPage() {
           {filtered.length === 0 ? (
             <div className="p-12 text-center text-slate-500">
               <FileText className="w-12 h-12 mx-auto mb-4 opacity-50" />
-              <p className="text-lg">No hay cláusulas</p>
+              <p className="text-lg">No hay documentos</p>
               <p className="text-sm">Sube un PDF usando el formulario de arriba</p>
             </div>
           ) : (
             <table className="w-full text-sm text-left">
               <thead className="bg-[#242b3d] text-xs uppercase text-slate-400 border-b border-white/10">
                 <tr>
-                  <th className="px-5 py-3.5">Nombre</th>
-                  <th className="px-5 py-3.5">Unidad de Negocio</th>
-                  <th className="px-5 py-3.5">Archivo</th>
-                  <th className="px-5 py-3.5">Tamaño</th>
-                  <th className="px-5 py-3.5">Estado</th>
-                  <th className="px-5 py-3.5 text-center">Siempre incluir</th>
-                  <th className="px-5 py-3.5 text-right">Acciones</th>
+                  <th className="px-4 py-3.5 w-8 text-center text-slate-500" title="Orden en el PDF final">Ord.</th>
+                  <th className="px-4 py-3.5">Nombre</th>
+                  <th className="px-4 py-3.5">Tipo</th>
+                  <th className="px-4 py-3.5">Unidad de Negocio</th>
+                  <th className="px-4 py-3.5">Archivo</th>
+                  <th className="px-4 py-3.5">Tamaño</th>
+                  <th className="px-4 py-3.5">Estado</th>
+                  <th className="px-4 py-3.5 text-center">Siempre incluir</th>
+                  <th className="px-4 py-3.5 text-right">Acciones</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/5">
-                {filtered.map((c: Clausula) => {
+                {filtered.map((c) => {
                   const unidadLabel =
                     c.unidadNegocioId != null ? unidadesById.get(c.unidadNegocioId) : undefined;
+                  const tipoInfo = TIPO_LABELS[c.tipo ?? "clausula"] ?? TIPO_LABELS.clausula;
                   return (
                     <tr key={c.id} className="hover:bg-white/[0.04] transition-colors">
-                      <td className="px-5 py-3 text-slate-300 font-medium">{c.valor}</td>
-                      <td className="px-5 py-3 text-xs">
+                      <td className="px-4 py-3 text-center">
+                        <span className="text-xs font-mono text-slate-400 bg-white/5 px-1.5 py-0.5 rounded">
+                          {c.ordenGlobal ?? 50}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-slate-300 font-medium">{c.valor}</td>
+                      <td className="px-4 py-3">
+                        <span className={`inline-flex px-2 py-0.5 rounded text-xs border ${tipoInfo.color}`}>
+                          {tipoInfo.label}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-xs">
                         {unidadLabel ? (
                           <span className="inline-flex px-2 py-1 rounded bg-blue-500/10 text-blue-300 border border-blue-500/20">
                             {unidadLabel}
@@ -264,29 +326,29 @@ export default function ClausulasPage() {
                           <span className="text-slate-500 italic">Sin unidad</span>
                         )}
                       </td>
-                      <td className="px-5 py-3 text-slate-400 text-xs">{c.fileName}</td>
-                      <td className="px-5 py-3 text-slate-400 text-xs">
+                      <td className="px-4 py-3 text-slate-400 text-xs">{c.fileName}</td>
+                      <td className="px-4 py-3 text-slate-400 text-xs">
                         {c.fileSize ? `${(c.fileSize / 1024).toFixed(1)} KB` : "-"}
                       </td>
-                      <td className="px-5 py-3">
+                      <td className="px-4 py-3">
                         <span className={`px-2 py-1 rounded text-xs ${c.activo ? "bg-emerald-500/20 text-emerald-400" : "bg-red-500/20 text-red-400"}`}>
                           {c.activo ? "Activo" : "Inactivo"}
                         </span>
                       </td>
-                      <td className="px-5 py-3 text-center">
+                      <td className="px-4 py-3 text-center">
                         <button
-                          onClick={() => toggleSiempreIncluirMutation.mutate({ id: c.id, siempreIncluir: (c as any).siempreIncluir ? 0 : 1 })}
+                          onClick={() => toggleSiempreIncluirMutation.mutate({ id: c.id, siempreIncluir: c.siempreIncluir ? 0 : 1 })}
                           className={`px-2 py-1 rounded text-xs font-medium transition-colors ${
-                            (c as any).siempreIncluir
+                            c.siempreIncluir
                               ? 'bg-violet-500/20 text-violet-300 border border-violet-500/30 hover:bg-violet-500/30'
                               : 'bg-slate-700/50 text-slate-500 border border-white/5 hover:bg-slate-600/50'
                           }`}
-                          title={(c as any).siempreIncluir ? 'Quitar de siempre incluir' : 'Marcar como siempre incluir'}
+                          title={c.siempreIncluir ? 'Quitar de siempre incluir' : 'Marcar como siempre incluir'}
                         >
-                          {(c as any).siempreIncluir ? '✦ Siempre' : 'No'}
+                          {c.siempreIncluir ? '✦ Siempre' : 'No'}
                         </button>
                       </td>
-                      <td className="px-5 py-3 text-right">
+                      <td className="px-4 py-3 text-right">
                         <div className="flex items-center justify-end gap-2">
                           <a
                             href={c.filePath}
@@ -300,7 +362,7 @@ export default function ClausulasPage() {
                           <button
                             onClick={() => openEdit(c)}
                             className="p-1.5 text-slate-300 hover:text-white hover:bg-white/10 rounded"
-                            title="Editar (renombrar y reasignar unidad)"
+                            title="Editar (nombre, unidad, tipo y orden)"
                           >
                             <Pencil className="w-4 h-4" />
                           </button>
@@ -340,11 +402,11 @@ export default function ClausulasPage() {
         </div>
       </div>
 
-      {/* Dialog de edición (nombre + unidad) */}
+      {/* Dialog de edición (nombre + unidad + tipo + orden) */}
       <Dialog open={!!editing} onOpenChange={(open) => !open && setEditing(null)}>
         <DialogContent className="bg-[#1a1f2e] border-white/10 text-slate-100">
           <DialogHeader>
-            <DialogTitle>Editar cláusula</DialogTitle>
+            <DialogTitle>Editar documento</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-1.5">
@@ -352,7 +414,7 @@ export default function ClausulasPage() {
               <Input
                 value={editNombre}
                 onChange={(e) => setEditNombre(e.target.value)}
-                placeholder="Nombre de la cláusula"
+                placeholder="Nombre del documento"
                 className="bg-[#242b3d] border-white/10 text-white"
               />
             </div>
@@ -369,8 +431,34 @@ export default function ClausulasPage() {
                 ))}
               </select>
               <p className="text-[11px] text-slate-500">
-                La cláusula aparecerá automáticamente en F1 cuando se use esta unidad en Servicios.
+                Las cláusulas aparecen en F1 cuando se usa esta unidad en Servicios.
               </p>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <label className="text-xs text-slate-400">Tipo de documento</label>
+                <select
+                  value={editTipo}
+                  onChange={(e) => setEditTipo(e.target.value as "clausula" | "features" | "anexo_soporte")}
+                  className="w-full bg-[#242b3d] border border-white/10 text-white rounded-md px-3 py-2 text-sm"
+                >
+                  <option value="clausula">Cláusula</option>
+                  <option value="features">Features</option>
+                  <option value="anexo_soporte">Anexo de Soporte</option>
+                </select>
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs text-slate-400">Orden Global en PDF</label>
+                <Input
+                  type="number"
+                  min={1}
+                  max={999}
+                  value={editOrden}
+                  onChange={(e) => setEditOrden(Number(e.target.value))}
+                  className="bg-[#242b3d] border-white/10 text-white"
+                />
+                <p className="text-[11px] text-slate-500">Menor = aparece antes. Acta=0 (fijo).</p>
+              </div>
             </div>
             {editing?.fileName && (
               <p className="text-xs text-slate-500">
@@ -415,7 +503,7 @@ export default function ClausulasPage() {
               />
             </div>
             <p className="text-[11px] text-slate-500">
-              El archivo anterior será eliminado del servidor y reemplazado por el nuevo. El nombre de la cláusula no cambia.
+              El archivo anterior será eliminado del servidor y reemplazado por el nuevo. El nombre del documento no cambia.
             </p>
           </div>
           <DialogFooter>
