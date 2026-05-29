@@ -60,6 +60,22 @@ export const toggleClausulaStatus = async (id: number, activo: number) => {
   return db.update(catalogClausulas).set({ activo }).where(eq(catalogClausulas.id, id)).returning();
 };
 
+export const toggleSiempreIncluir = async (id: number, siempreIncluir: number) => {
+  const db = await getDb();
+  return db.update(catalogClausulas).set({ siempreIncluir }).where(eq(catalogClausulas.id, id)).returning();
+};
+
+/** Devuelve cláusulas activas que siempre se incluyen (siempre_incluir=1), sin importar unidad. */
+export const getClausulasSiempreIncluir = async () => {
+  const db = await getDb();
+  return db.select().from(catalogClausulas)
+    .where(and(
+      eq(catalogClausulas.siempreIncluir, 1),
+      eq(catalogClausulas.activo, 1),
+    ))
+    .orderBy(catalogClausulas.valor);
+};
+
 // ─── Utilidad: Obtener unidades de negocio para el select ───────────────────────
 export const getUnidadesNegocioForSelect = async () => {
   const db = await getDb();

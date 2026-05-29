@@ -12,11 +12,9 @@
  *   2. Deduplica los ids con un Set (no consultar dos veces la misma unidad).
  *   3. Llama al procedure público `clausulas.getByUnidades` (devuelve solo
  *      activas, campos mínimos).
- *   4. Deduplica los resultados por `clausula.id` (una cláusula podría estar
- *      asignada a varias unidades en el futuro).
- *
- * Si pasas `catalogs` desde el padre (p. ej. mismo resultado que `catalogs.getAll`),
- * no se suscribe a una segunda query de catálogos en este hook.
+ *   4. Llama a `clausulas.getSiempreIncluir` para obtener cláusulas globales
+ *      (siempre_incluir=1) que se adjuntan sin importar la unidad de negocio.
+ *   5. Deduplica los resultados por `clausula.id`.
  */
 import { useMemo } from "react";
 import { trpc } from "@/lib/trpc";
@@ -70,27 +68,43 @@ export function useClausulasVigentes(
     return Array.from(ids);
   }, [servicios, catalogsResolved]);
 
-  const query = trpc.clausulas.getByUnidades.useQuery(
+  // Cláusulas por unidad de negocio (condicional)
+  const queryByUnidades = trpc.clausulas.getByUnidades.useQuery(
     { unidadNegocioIds },
     { enabled: unidadNegocioIds.length > 0 },
   );
 
+  // Cláusulas globales: siempre_incluir=1 (siempre activa)
+  const querySiempre = trpc.clausulas.getSiempreIncluir.useQuery();
+
   const clausulas = useMemo<ClausulaVigente[]>(() => {
-    if (!query.data) return [];
     const seen = new Set<number>();
     const out: ClausulaVigente[] = [];
-    for (const c of query.data) {
+
+    // Primero las globales (siempre_incluir=1) — aparecen al inicio de la lista
+    for (const c of querySiempre.data ?? []) {
+      if (seen.has(c.id)) continue;
+      seen.add(c.id);
+      out.push({ ...c, unidadNegocioId: null });
+    }
+
+    // Luego las de la unidad de negocio del expediente
+    for (const c of queryByUnidades.data ?? []) {
       if (seen.has(c.id)) continue;
       seen.add(c.id);
       out.push(c);
     }
+
     return out;
-  }, [query.data]);
+  }, [queryByUnidades.data, querySiempre.data]);
 
   return {
     clausulas,
-    /** True mientras la query está corriendo. False si está deshabilitada (sin ids). */
-    isLoading: unidadNegocioIds.length > 0 && (query.isLoading || query.isFetching),
+    /** True mientras alguna query está corriendo. */
+    isLoading:
+      querySiempre.isLoading ||
+      querySiempre.isFetching ||
+      (unidadNegocioIds.length > 0 && (queryByUnidades.isLoading || queryByUnidades.isFetching)),
     /** True si hay al menos una unidad de negocio en los servicios. */
     hasUnidades: unidadNegocioIds.length > 0,
   };

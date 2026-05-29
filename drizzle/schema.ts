@@ -524,6 +524,7 @@ export const catalogClausulas = sqliteTable("catalog_clausulas", {
   fileName: text("fileName").notNull(),        // nombre original del archivo
   fileSize: integer("fileSize"),               // tamaño en bytes
   activo: integer("activo").default(1).notNull(),
+  siempreIncluir: integer("siempre_incluir").default(0).notNull(), // si=1 se adjunta siempre al Acta
   createdAt: integer("createdAt", { mode: "timestamp" }).default(sql`(strftime('%s', 'now'))`).notNull(),
 });
 

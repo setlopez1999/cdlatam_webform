@@ -12,6 +12,8 @@ import {
   updateClausula,
   deleteClausula,
   toggleClausulaStatus,
+  toggleSiempreIncluir,
+  getClausulasSiempreIncluir,
   getUnidadesNegocioForSelect,
 } from "./db-clausulas";
 
@@ -24,4 +26,6 @@ export const ds_createClausula = createClausula;
 export const ds_updateClausula = updateClausula;
 export const ds_deleteClausula = deleteClausula;
 export const ds_toggleClausulaStatus = toggleClausulaStatus;
+export const ds_toggleSiempreIncluir = toggleSiempreIncluir;
+export const ds_getClausulasSiempreIncluir = getClausulasSiempreIncluir;
 export const ds_getUnidadesNegocioForSelect = getUnidadesNegocioForSelect;

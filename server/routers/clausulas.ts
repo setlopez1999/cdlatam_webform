@@ -9,6 +9,8 @@ import {
   ds_updateClausula,
   ds_deleteClausula,
   ds_toggleClausulaStatus,
+  ds_toggleSiempreIncluir,
+  ds_getClausulasSiempreIncluir,
   ds_getUnidadesNegocioForSelect,
 } from "../dataSource-clausulas";
 import { requireRole } from "../rbac";
@@ -54,6 +56,20 @@ export const clausulasRouter = router({
         unidadNegocioId: r.unidadNegocioId,
       }));
     }),
+
+  /**
+   * Devuelve cláusulas activas con siempre_incluir=1.
+   * Cualquier usuario autenticado puede acceder (para adjuntar al Acta).
+   */
+  getSiempreIncluir: protectedProcedure.query(async () => {
+    const rows = await ds_getClausulasSiempreIncluir();
+    return rows.map((r) => ({
+      id: r.id,
+      valor: r.valor,
+      filePath: r.filePath,
+      fileName: r.fileName,
+    }));
+  }),
 
   getUnidadesNegocio: protectedProcedure.query(async ({ ctx }) => {
     await requireRole(ctx, "admin");
@@ -131,6 +147,20 @@ export const clausulasRouter = router({
         entity: "catalog_clausulas",
         entityId: input.id,
         changes: { after: { activo: input.activo } },
+      });
+      return updated;
+    }),
+
+  toggleSiempreIncluir: protectedProcedure
+    .input(z.object({ id: z.number(), siempreIncluir: z.number().min(0).max(1) }))
+    .mutation(async ({ ctx, input }) => {
+      await requireRole(ctx, "admin");
+      const updated = await ds_toggleSiempreIncluir(input.id, input.siempreIncluir);
+      await recordAuditFromTrpc(ctx, {
+        action: "UPDATE",
+        entity: "catalog_clausulas",
+        entityId: input.id,
+        changes: { after: { siempreIncluir: input.siempreIncluir } },
       });
       return updated;
     }),

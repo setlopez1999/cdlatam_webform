@@ -566,6 +566,11 @@ export async function runMigrations() {
     `ALTER TABLE expedientes ADD COLUMN deleted_at INTEGER DEFAULT NULL`,
     "Column deleted_at added to expedientes (papelera)"
   );
+  // Cláusulas: siempre_incluir=1 → se adjunta siempre al Acta sin importar unidad de negocio
+  tryAlter(
+    `ALTER TABLE catalog_clausulas ADD COLUMN siempre_incluir INTEGER DEFAULT 0 NOT NULL`,
+    "Column siempre_incluir added to catalog_clausulas"
+  );
 
   try {
     const db = await getDb();
