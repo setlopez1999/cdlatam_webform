@@ -36,7 +36,7 @@ export const getClausulasByUnidades = async (ids: number[]) => {
       inArray(catalogClausulas.unidadNegocioId, ids),
       eq(catalogClausulas.activo, 1),
     ))
-    .orderBy(catalogClausulas.valor);
+    .orderBy(catalogClausulas.ordenGlobal);
 };
 
 // ─── Mutations ───────────────────────────────────────────────────
@@ -73,7 +73,7 @@ export const getClausulasSiempreIncluir = async () => {
       eq(catalogClausulas.siempreIncluir, 1),
       eq(catalogClausulas.activo, 1),
     ))
-    .orderBy(catalogClausulas.valor);
+    .orderBy(catalogClausulas.ordenGlobal);
 };
 
 // ─── Utilidad: Obtener unidades de negocio para el select ───────────────────────

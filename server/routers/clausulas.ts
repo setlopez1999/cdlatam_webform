@@ -54,8 +54,8 @@ export const clausulasRouter = router({
         filePath: r.filePath,
         fileName: r.fileName,
         unidadNegocioId: r.unidadNegocioId,
-        tipo: (r as Record<string, unknown>).tipo as string | undefined,
-        ordenGlobal: (r as Record<string, unknown>).orden_global as number | undefined,
+        tipo: r.tipo ?? undefined,
+        ordenGlobal: r.ordenGlobal ?? undefined,
       }));
     }),
 
@@ -70,8 +70,8 @@ export const clausulasRouter = router({
       valor: r.valor,
       filePath: r.filePath,
       fileName: r.fileName,
-      tipo: (r as Record<string, unknown>).tipo as string | undefined,
-      ordenGlobal: (r as Record<string, unknown>).orden_global as number | undefined,
+      tipo: r.tipo ?? undefined,
+      ordenGlobal: r.ordenGlobal ?? undefined,
     }));
   }),
 
