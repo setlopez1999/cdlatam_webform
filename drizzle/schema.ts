@@ -525,8 +525,25 @@ export const catalogClausulas = sqliteTable("catalog_clausulas", {
   fileSize: integer("fileSize"),               // tamaño en bytes
   activo: integer("activo").default(1).notNull(),
   siempreIncluir: integer("siempre_incluir").default(0).notNull(), // si=1 se adjunta siempre al Acta
+  /**
+   * tipo: clasifica el documento para el ensamblado del PDF final.
+   *   'clausula'      → cláusula legal según unidad de negocio
+   *   'features'      → PDF estático de especificaciones (siempre va, posición 2)
+   *   'anexo_soporte' → Nexo de soporte (siempre va, posición final)
+   */
+  tipo: text("tipo").default("clausula").notNull(),
+  /**
+   * orden_global: número que define el orden de aparición en el PDF final.
+   * El Acta siempre es posición 0 (generada aparte).
+   * Editable desde la UI de Cláusulas Legales.
+   * Convención inicial: features=10, clausulas=20-29, anexo_soporte=99
+   */
+  ordenGlobal: integer("orden_global").default(50).notNull(),
   createdAt: integer("createdAt", { mode: "timestamp" }).default(sql`(strftime('%s', 'now'))`).notNull(),
 });
 
 export type CatalogClausula = typeof catalogClausulas.$inferSelect;
 export type InsertCatalogClausula = typeof catalogClausulas.$inferInsert;
+
+/** Tipos válidos para el campo `tipo` de catalog_clausulas */
+export type ClausulaTipo = 'clausula' | 'features' | 'anexo_soporte';

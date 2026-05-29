@@ -571,6 +571,16 @@ export async function runMigrations() {
     `ALTER TABLE catalog_clausulas ADD COLUMN siempre_incluir INTEGER DEFAULT 0 NOT NULL`,
     "Column siempre_incluir added to catalog_clausulas"
   );
+  // Cláusulas: tipo — clasifica el documento en el PDF final ('clausula' | 'features' | 'anexo_soporte')
+  tryAlter(
+    `ALTER TABLE catalog_clausulas ADD COLUMN tipo TEXT DEFAULT 'clausula' NOT NULL`,
+    "Column tipo added to catalog_clausulas"
+  );
+  // Cláusulas: orden_global — número editable que define el orden de aparición en el PDF final
+  tryAlter(
+    `ALTER TABLE catalog_clausulas ADD COLUMN orden_global INTEGER DEFAULT 50 NOT NULL`,
+    "Column orden_global added to catalog_clausulas"
+  );
 
   try {
     const db = await getDb();

@@ -54,6 +54,8 @@ export const clausulasRouter = router({
         filePath: r.filePath,
         fileName: r.fileName,
         unidadNegocioId: r.unidadNegocioId,
+        tipo: (r as Record<string, unknown>).tipo as string | undefined,
+        ordenGlobal: (r as Record<string, unknown>).orden_global as number | undefined,
       }));
     }),
 
@@ -68,6 +70,8 @@ export const clausulasRouter = router({
       valor: r.valor,
       filePath: r.filePath,
       fileName: r.fileName,
+      tipo: (r as Record<string, unknown>).tipo as string | undefined,
+      ordenGlobal: (r as Record<string, unknown>).orden_global as number | undefined,
     }));
   }),
 
@@ -106,6 +110,10 @@ export const clausulasRouter = router({
       valor: z.string().min(1).optional(),
       unidadNegocioId: z.number().optional().nullable(),
       activo: z.number().min(0).max(1).optional(),
+      /** Tipo de documento: 'clausula' | 'features' | 'anexo_soporte' */
+      tipo: z.enum(["clausula", "features", "anexo_soporte"]).optional(),
+      /** Orden de aparición en el PDF final (editable) */
+      ordenGlobal: z.number().int().min(1).max(999).optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       await requireRole(ctx, "admin");
