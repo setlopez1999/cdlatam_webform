@@ -133,7 +133,7 @@ export default function F3View({ expedienteId, onVolverF2 }: Props) {
     return [
       ...base,
       { kind: "texto", label: `${etiquetaBloque} (${pctGIM}%)`, m1: r.distribucion.gim.mes1, m2: r.distribucion.gim.mes2, m3: r.distribucion.gim.mes3, bold: false, color: "text-blue-600"   },
-      { kind: "texto", label: `CONTENIDOS DIGITALES SPA (${pctGP}%)`, m1: r.distribucion.gp.mes1,  m2: r.distribucion.gp.mes2,  m3: r.distribucion.gp.mes3,  bold: false, color: "text-violet-600" },
+      { kind: "texto", label: `Groupalnet SpA (${pctGP}%)`, m1: r.distribucion.gp.mes1,  m2: r.distribucion.gp.mes2,  m3: r.distribucion.gp.mes3,  bold: false, color: "text-violet-600" },
       { kind: "texto", label: "Facturación Neta",               m1: r.facturacion.neto.mes1,     m2: r.facturacion.neto.mes2,     m3: r.facturacion.neto.mes3,     bold: true,  color: "text-emerald-700"},
     ];
   }, [r, f1Guardado, etiquetaBloque, pctGIM, pctGP, resMes1, resMes2, resMes3]);

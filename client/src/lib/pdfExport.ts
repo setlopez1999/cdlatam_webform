@@ -668,7 +668,7 @@ function buildResultadoHTML(
       <thead><tr><th>Concepto</th><th class="text-right">Monto</th></tr></thead>
       <tbody>
         <tr><td>Distribución ${etiquetaGim} (${pctGim}%)</td><td class="text-right">${fmt(resultado.distribucion?.gim?.mes1||0)}</td></tr>
-        <tr><td>Distribución GP (${pctGp}%)</td><td class="text-right">${fmt(resultado.distribucion?.gp?.mes1||0)}</td></tr>
+        <tr><td>Groupalnet SpA (${pctGp}%)</td><td class="text-right">${fmt(resultado.distribucion?.gp?.mes1||0)}</td></tr>
         <tr><td>Facturación Bruto</td><td class="text-right">${fmt(resultado.facturacion?.bruto?.mes1||0)}</td></tr>
         <tr><td>IVA (${pctIva}%)</td><td class="text-right">${fmt(resultado.facturacion?.impuesto?.mes1||0)}</td></tr>
         <tr class="total-row"><td>Facturación Neto</td><td class="text-right">${fmt(resultado.facturacion?.neto?.mes1||0)}</td></tr>
