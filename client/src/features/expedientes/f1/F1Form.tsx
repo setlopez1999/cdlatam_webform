@@ -18,7 +18,7 @@ import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/FormSection";
 import { FileText, Save, RefreshCw, Download } from "lucide-react";
 import { trpc } from "@/lib/trpc";
-import { createActaPdfBlob } from "@/lib/pdfExport";
+import { createActaPdfBlob, buildFeaturesResumidoPdfBytes } from "@/lib/pdfExport";
 import { ActaPdfPreviewDialog } from "@/components/ActaPdfPreviewDialog";
 import { useF1 } from "./useF1";
 import { useClausulasVigentes } from "./useClausulasVigentes";
@@ -166,6 +166,12 @@ export default function F1Form({ expedienteId }: Props) {
 
   const clausulasVigentes = useClausulasVigentes(data?.serviciosContratados, catalogs);
   const { clausulas: clausulasParaPdf, isLoading: clausulasLoading } = clausulasVigentes;
+
+  // Query de implementación para el PDF de Features Resumido (dinámico)
+  const implementacionQuery = trpc.expediente.implementacion.listar.useQuery(
+    { uuid: expedienteId ?? "" },
+    { enabled: !!expedienteId },
+  );
 
   const [actaPdfPreview, setActaPdfPreview] = useState<{ blob: Blob; filename: string } | null>(null);
 
@@ -455,6 +461,15 @@ export default function F1Form({ expedienteId }: Props) {
       }
       const dataParaPdf = { ...data, consideracionesPersonalizadas: personalizadasConPersistentes };
 
+      // Generar PDF de Features Resumido dinámico (SI/NO según implementación del expediente)
+      // Se inyecta en el orden correcto dentro de createActaPdfBlob según ordenGlobal de las cláusulas
+      const featuresResumidoBytes = (implementacionQuery.data?.length ?? 0) > 0
+        ? buildFeaturesResumidoPdfBytes(
+            implementacionQuery.data!,
+            data.razonSocial ?? "",
+          )
+        : undefined;
+
       const { blob, filename } = await createActaPdfBlob(
         dataParaPdf as any,
         clausulasParaPdf.map(c => ({
@@ -462,10 +477,13 @@ export default function F1Form({ expedienteId }: Props) {
           valor: c.valor,
           filePath: c.filePath,
           fileName: c.fileName,
+          tipo: c.tipo,
+          ordenGlobal: c.ordenGlobal,
         })),
         {
           expedienteUuid: expedienteId,
           onClausulaError: (c) => failed.push(c.fileName),
+          featuresResumidoBytes,
         },
       );
       setActaPdfPreview({ blob, filename });
@@ -480,7 +498,7 @@ export default function F1Form({ expedienteId }: Props) {
     } catch {
       toast.error("Error al generar PDF", { id: "pdf-f1" });
     }
-  }, [data, clausulasParaPdf, expedienteId]);
+  }, [data, clausulasParaPdf, expedienteId, implementacionQuery.data, plantillasConsideraciones]);
 
   if (!data) return <div className="p-6 text-muted-foreground">Expediente no encontrado.</div>;
 

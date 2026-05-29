@@ -35,6 +35,10 @@ export interface ClausulaParaPdf {
   valor: string;
   filePath: string;
   fileName: string;
+  /** Tipo semántico: 'clausula' | 'features' | 'features_resumido' | 'anexo_soporte' */
+  tipo?: string;
+  /** Orden global en el PDF final (menor = antes). Default 50. */
+  ordenGlobal?: number;
 }
 
 /** Opciones de export del Acta (PDF). */
@@ -42,6 +46,13 @@ export type ActaPdfExportOpts = {
   onClausulaError?: (c: ClausulaParaPdf, err: unknown) => void;
   /** UUID del expediente: si `noActa` está vacío, se usa el mismo código que el servidor (`F1-…`). */
   expedienteUuid?: string;
+  /**
+   * Bytes del PDF de Features Resumido generado dinámicamente.
+   * Se inserta en el orden correcto según `ordenGlobal` de las cláusulas
+   * (entre el PDF de Features estático y las cláusulas legales).
+   * El orden del features_resumido es 20 (entre features=10 y cláusulas=30+).
+   */
+  featuresResumidoBytes?: Uint8Array;
 };
 
 function effectiveNoActaForPdf(acta: ActaData, expedienteUuid?: string): string {
@@ -64,7 +75,33 @@ export async function createActaPdfBlob(
   const baseBytes = await buildActaPdfBytes(actaForPdf);
   const merged = await PDFDocument.load(baseBytes);
 
-  for (const c of clausulas) {
+  // Ordenar cláusulas por ordenGlobal (menor = antes). Default 50.
+  const clausulasOrdenadas = [...clausulas].sort(
+    (a, b) => (a.ordenGlobal ?? 50) - (b.ordenGlobal ?? 50),
+  );
+
+  // El PDF de Features Resumido dinámico se inserta con ordenGlobal=20
+  // (entre features=10 y cláusulas legales=30+).
+  const FEATURES_RESUMIDO_ORDEN = 20;
+  let featuresResumidoInsertado = false;
+
+  for (const c of clausulasOrdenadas) {
+    // Insertar el PDF dinámico antes de la primera cláusula con ordenGlobal > 20
+    if (
+      !featuresResumidoInsertado &&
+      opts.featuresResumidoBytes &&
+      (c.ordenGlobal ?? 50) > FEATURES_RESUMIDO_ORDEN
+    ) {
+      try {
+        const pdf = await PDFDocument.load(opts.featuresResumidoBytes, { ignoreEncryption: true });
+        const pages = await merged.copyPages(pdf, pdf.getPageIndices());
+        pages.forEach(p => merged.addPage(p));
+      } catch (err) {
+        console.warn("[pdfExport] features resumido falló, se omite:", err);
+      }
+      featuresResumidoInsertado = true;
+    }
+
     try {
       const res = await fetch(c.filePath, { credentials: "include" });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -75,6 +112,17 @@ export async function createActaPdfBlob(
     } catch (err) {
       console.warn("[pdfExport] cláusula falló, se omite:", c.fileName, err);
       opts.onClausulaError?.(c, err);
+    }
+  }
+
+  // Si no hubo ninguna cláusula con ordenGlobal > 20, insertar al final
+  if (!featuresResumidoInsertado && opts.featuresResumidoBytes) {
+    try {
+      const pdf = await PDFDocument.load(opts.featuresResumidoBytes, { ignoreEncryption: true });
+      const pages = await merged.copyPages(pdf, pdf.getPageIndices());
+      pages.forEach(p => merged.addPage(p));
+    } catch (err) {
+      console.warn("[pdfExport] features resumido (final) falló, se omite:", err);
     }
   }
 
@@ -773,6 +821,86 @@ function buildResultadoHTML(
 </div>
 </body>
 </html>`;
+}
+
+// ─── Features Resumido PDF ───────────────────────────────────────────────────
+
+/**
+ * Genera un PDF de una página con la tabla de Features Resumido (SI/NO)
+ * basado en el estado de implementación del expediente.
+ *
+ * @param items  Array de ImplementacionItemVM con { key, label, estado }
+ * @param razonSocial  Nombre del cliente para el encabezado
+ * @returns Uint8Array con los bytes del PDF generado
+ */
+export function buildFeaturesResumidoPdfBytes(
+  items: Array<{ key: string; label: string; estado: boolean }>,
+  razonSocial: string,
+): Uint8Array {
+  const doc = new jsPDF({ unit: "mm", format: "a4" });
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const margin = 15;
+  const contentWidth = pageWidth - margin * 2;
+  let y = margin;
+
+  // ── Encabezado ──────────────────────────────────────────────────────────
+  const logo: string | null = cdlatamLogoDataUrl ?? null;
+  if (logo) {
+    doc.setFillColor(...COLOR_TEXT);
+    doc.roundedRect(margin, y, 38, 14, 2, 2, "F");
+    try {
+      const innerX = margin + 4;
+      const innerY = y + 2;
+      const boxW = 30;
+      const boxH = 10;
+      const { drawW, drawH } = fitImagePreserveAspectMm(LOGO_NATURAL_W_PX, LOGO_NATURAL_H_PX, boxW, boxH);
+      const imgX = innerX + (boxW - drawW) / 2;
+      const imgY = innerY + (boxH - drawH) / 2;
+      doc.addImage(logo, "PNG", imgX, imgY, drawW, drawH, undefined, "FAST");
+    } catch { /* omitir si falla */ }
+  }
+
+  doc.setTextColor(...COLOR_TEXT);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(13);
+  doc.text("Features Resumido", pageWidth - margin, y + 5, { align: "right" });
+  doc.setTextColor(...COLOR_GRAY);
+  doc.setFontSize(9);
+  doc.setFont("helvetica", "normal");
+  doc.text(razonSocial || "—", pageWidth - margin, y + 11, { align: "right" });
+  y += 16;
+
+  doc.setDrawColor(...COLOR_BRAND);
+  doc.setLineWidth(0.7);
+  doc.line(margin, y, pageWidth - margin, y);
+  y += 6;
+
+  // ── Tabla ───────────────────────────────────────────────────────────────
+  const tableRows = items.map((item) => [item.label, item.estado ? "SI" : "NO"]);
+
+  autoTable(doc, {
+    startY: y,
+    head: [["Feature / Módulo", "Incluido"]],
+    body: tableRows,
+    margin: { left: margin, right: margin },
+    tableWidth: contentWidth,
+    styles: { fontSize: 9, cellPadding: 3, textColor: [15, 32, 39] as [number, number, number] },
+    headStyles: { fillColor: COLOR_BRAND, textColor: [255, 255, 255] as [number, number, number], fontStyle: "bold" },
+    columnStyles: {
+      0: { cellWidth: contentWidth - 30 },
+      1: { cellWidth: 30, halign: "center", fontStyle: "bold" },
+    },
+    didParseCell: (data) => {
+      if (data.section === "body" && data.column.index === 1) {
+        const val = data.cell.raw as string;
+        data.cell.styles.textColor = val === "SI"
+          ? ([16, 185, 129] as [number, number, number])  // emerald-500
+          : ([239, 68, 68] as [number, number, number]);  // red-500
+      }
+    },
+  });
+
+  return doc.output("arraybuffer") as unknown as Uint8Array;
 }
 
 // ─── Print Helper (solo Resultado EP) ─────────────────────────────────────────

@@ -6,6 +6,13 @@
  *   - El listado "Cláusulas legales adjuntas (auto)" en F1Consideraciones.
  *   - Los PDFs que se anexan al final del Acta exportada en pdfExport.ts.
  *
+ * Orden de ensamblado del PDF final (controlado por `ordenGlobal`):
+ *   1. Acta (generada aparte, no viene de aquí)
+ *   2. tipo=features       (orden_global=10, siempre incluido)
+ *   3. tipo=features_resumido (generado dinámicamente en F1Form, no viene de aquí)
+ *   4. tipo=clausula       (según unidad de negocio, orden_global define posición)
+ *   5. tipo=anexo_soporte  (orden_global=99, siempre al final)
+ *
  * Pasos:
  *   1. Resuelve `unidadNegocioId` numérico para cada servicio mapeando su
  *      `unidadNegocio` (string `value`) contra el catálogo de unidades.
@@ -15,6 +22,7 @@
  *   4. Llama a `clausulas.getSiempreIncluir` para obtener cláusulas globales
  *      (siempre_incluir=1) que se adjuntan sin importar la unidad de negocio.
  *   5. Deduplica los resultados por `clausula.id`.
+ *   6. Ordena por `ordenGlobal` ascendente para respetar el orden configurado.
  */
 import { useMemo } from "react";
 import { trpc } from "@/lib/trpc";
@@ -26,6 +34,10 @@ export interface ClausulaVigente {
   filePath: string;
   fileName: string;
   unidadNegocioId: number | null;
+  /** Tipo semántico: 'clausula' | 'features' | 'features_resumido' | 'anexo_soporte' */
+  tipo: string;
+  /** Orden global en el PDF final (menor = antes). Default 50. */
+  ordenGlobal: number;
 }
 
 /** Fragmento mínimo del catálogo necesario para resolver unidades de negocio. */
@@ -81,19 +93,41 @@ export function useClausulasVigentes(
     const seen = new Set<number>();
     const out: ClausulaVigente[] = [];
 
-    // Primero las globales (siempre_incluir=1) — aparecen al inicio de la lista
+    /** Normaliza un item de cualquier query al tipo ClausulaVigente */
+    const normalize = (c: {
+      id: number;
+      valor: string;
+      filePath: string;
+      fileName: string;
+      unidadNegocioId?: number | null;
+      tipo?: string | undefined;
+      ordenGlobal?: number | undefined;
+    }): ClausulaVigente => ({
+      id: c.id,
+      valor: c.valor,
+      filePath: c.filePath,
+      fileName: c.fileName,
+      unidadNegocioId: c.unidadNegocioId ?? null,
+      tipo: c.tipo ?? "clausula",
+      ordenGlobal: c.ordenGlobal ?? 50,
+    });
+
+    // Primero las globales (siempre_incluir=1)
     for (const c of querySiempre.data ?? []) {
       if (seen.has(c.id)) continue;
       seen.add(c.id);
-      out.push({ ...c, unidadNegocioId: null });
+      out.push(normalize({ ...c, unidadNegocioId: null }));
     }
 
     // Luego las de la unidad de negocio del expediente
     for (const c of queryByUnidades.data ?? []) {
       if (seen.has(c.id)) continue;
       seen.add(c.id);
-      out.push(c);
+      out.push(normalize(c));
     }
+
+    // Ordenar por ordenGlobal ascendente (respeta la configuración de la BD)
+    out.sort((a, b) => a.ordenGlobal - b.ordenGlobal);
 
     return out;
   }, [queryByUnidades.data, querySiempre.data]);
