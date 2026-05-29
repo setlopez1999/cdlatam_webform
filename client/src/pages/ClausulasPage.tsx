@@ -1,6 +1,6 @@
 import { useState, useRef, useMemo } from "react";
 import { trpc } from "@/lib/trpc";
-import { FileText, Upload, Download, Trash2, Search, FileCheck, Pencil } from "lucide-react";
+import { FileText, Upload, Download, Trash2, Search, FileCheck, Pencil, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -24,8 +24,6 @@ interface Clausula {
   createdAt: Date;
 }
 
-// Sentinel para representar "Sin unidad" en los <select> nativos. El backend
-// acepta `null` en `unidadNegocioId` (NO un string), así que mapeamos al guardar.
 const SIN_UNIDAD = "__sin_unidad__";
 
 export default function ClausulasPage() {
@@ -36,16 +34,19 @@ export default function ClausulasPage() {
   const [nombre, setNombre] = useState("");
   const [unidadNegocioId, setUnidadNegocioId] = useState<string>("");
 
-  // Estado del dialog de edición
+  // Estado del dialog de edición (nombre + unidad)
   const [editing, setEditing] = useState<Clausula | null>(null);
   const [editNombre, setEditNombre] = useState("");
   const [editUnidad, setEditUnidad] = useState<string>(SIN_UNIDAD);
 
+  // Estado del dialog de reemplazo de PDF
+  const [replacing, setReplacing] = useState<Clausula | null>(null);
+  const replaceFileRef = useRef<HTMLInputElement>(null);
+  const [replacingLoading, setReplacingLoading] = useState(false);
+
   const { data: clausulas = [], refetch } = trpc.clausulas.list.useQuery();
   const { data: unidadesNegocio = [] } = trpc.clausulas.getUnidadesNegocio.useQuery();
 
-  // Map<id, label> para resolver el nombre de la unidad por fila. Fuente de
-  // verdad: catalog_unidades_negocio (mismo origen que F1Servicios).
   const unidadesById = useMemo(() => {
     const m = new Map<number, string>();
     for (const u of unidadesNegocio as Array<{ id: number; valor: string }>) {
@@ -53,6 +54,11 @@ export default function ClausulasPage() {
     }
     return m;
   }, [unidadesNegocio]);
+
+  const toggleSiempreIncluirMutation = trpc.clausulas.toggleSiempreIncluir.useMutation({
+    onSuccess: () => refetch(),
+    onError: (err) => toast.error("Error: " + err.message),
+  });
 
   const deleteMutation = trpc.clausulas.delete.useMutation({
     onSuccess: () => {
@@ -129,14 +135,44 @@ export default function ClausulasPage() {
       toast.error("El nombre es requerido");
       return;
     }
-    // Convertir el valor del select al formato que espera el backend:
-    // null cuando no hay unidad, número cuando hay.
     const unidadParsed = editUnidad === SIN_UNIDAD ? null : Number(editUnidad);
     updateMutation.mutate({
       id: editing.id,
       valor: editNombre.trim(),
       unidadNegocioId: unidadParsed,
     });
+  };
+
+  const handleReplace = async () => {
+    if (!replacing) return;
+    const file = replaceFileRef.current?.files?.[0];
+    if (!file) {
+      toast.error("Selecciona un archivo PDF");
+      return;
+    }
+
+    setReplacingLoading(true);
+    const formData = new FormData();
+    formData.append("pdf", file);
+
+    try {
+      const res = await fetch(`/api/clausulas/replace/${replacing.id}`, {
+        method: "POST",
+        body: formData,
+        credentials: "include",
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error((body as { error?: string }).error || "Error reemplazando archivo");
+      }
+      toast.success("PDF reemplazado exitosamente");
+      void utils.clausulas.list.invalidate();
+      setReplacing(null);
+    } catch (err: any) {
+      toast.error(err.message || "Error reemplazando archivo");
+    } finally {
+      setReplacingLoading(false);
+    }
   };
 
   return (
@@ -208,6 +244,7 @@ export default function ClausulasPage() {
                   <th className="px-5 py-3.5">Archivo</th>
                   <th className="px-5 py-3.5">Tamaño</th>
                   <th className="px-5 py-3.5">Estado</th>
+                  <th className="px-5 py-3.5 text-center">Siempre incluir</th>
                   <th className="px-5 py-3.5 text-right">Acciones</th>
                 </tr>
               </thead>
@@ -236,6 +273,19 @@ export default function ClausulasPage() {
                           {c.activo ? "Activo" : "Inactivo"}
                         </span>
                       </td>
+                      <td className="px-5 py-3 text-center">
+                        <button
+                          onClick={() => toggleSiempreIncluirMutation.mutate({ id: c.id, siempreIncluir: (c as any).siempreIncluir ? 0 : 1 })}
+                          className={`px-2 py-1 rounded text-xs font-medium transition-colors ${
+                            (c as any).siempreIncluir
+                              ? 'bg-violet-500/20 text-violet-300 border border-violet-500/30 hover:bg-violet-500/30'
+                              : 'bg-slate-700/50 text-slate-500 border border-white/5 hover:bg-slate-600/50'
+                          }`}
+                          title={(c as any).siempreIncluir ? 'Quitar de siempre incluir' : 'Marcar como siempre incluir'}
+                        >
+                          {(c as any).siempreIncluir ? '✦ Siempre' : 'No'}
+                        </button>
+                      </td>
                       <td className="px-5 py-3 text-right">
                         <div className="flex items-center justify-end gap-2">
                           <a
@@ -253,6 +303,13 @@ export default function ClausulasPage() {
                             title="Editar (renombrar y reasignar unidad)"
                           >
                             <Pencil className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => { setReplacing(c); }}
+                            className="p-1.5 text-amber-400 hover:text-amber-300 hover:bg-amber-500/10 rounded"
+                            title="Reemplazar PDF"
+                          >
+                            <RefreshCw className="w-4 h-4" />
                           </button>
                           <button
                             onClick={() => toggleMutation.mutate({ id: c.id, activo: c.activo ? 0 : 1 })}
@@ -283,7 +340,7 @@ export default function ClausulasPage() {
         </div>
       </div>
 
-      {/* Dialog de edición */}
+      {/* Dialog de edición (nombre + unidad) */}
       <Dialog open={!!editing} onOpenChange={(open) => !open && setEditing(null)}>
         <DialogContent className="bg-[#1a1f2e] border-white/10 text-slate-100">
           <DialogHeader>
@@ -322,21 +379,51 @@ export default function ClausulasPage() {
             )}
           </div>
           <DialogFooter>
-            <Button
-              type="button"
-              variant="ghost"
-              onClick={() => setEditing(null)}
-              disabled={updateMutation.isPending}
-            >
+            <Button type="button" variant="ghost" onClick={() => setEditing(null)} disabled={updateMutation.isPending}>
               Cancelar
             </Button>
-            <Button
-              type="button"
-              onClick={handleSaveEdit}
-              disabled={updateMutation.isPending}
-              className="bg-blue-600 hover:bg-blue-700"
-            >
+            <Button type="button" onClick={handleSaveEdit} disabled={updateMutation.isPending} className="bg-blue-600 hover:bg-blue-700">
               {updateMutation.isPending ? "Guardando..." : "Guardar"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog de reemplazo de PDF */}
+      <Dialog open={!!replacing} onOpenChange={(open) => !open && setReplacing(null)}>
+        <DialogContent className="bg-[#1a1f2e] border-white/10 text-slate-100">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <RefreshCw className="w-4 h-4 text-amber-400" />
+              Reemplazar PDF
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <p className="text-sm text-slate-300">
+              Reemplazando el archivo de: <span className="font-semibold text-white">{replacing?.valor}</span>
+            </p>
+            <p className="text-xs text-slate-500">
+              Archivo actual: <span className="text-slate-400">{replacing?.fileName}</span>
+            </p>
+            <div className="space-y-1.5">
+              <label className="text-xs text-slate-400">Nuevo archivo PDF</label>
+              <Input
+                ref={replaceFileRef}
+                type="file"
+                accept=".pdf"
+                className="bg-[#242b3d] border-white/10 text-white"
+              />
+            </div>
+            <p className="text-[11px] text-slate-500">
+              El archivo anterior será eliminado del servidor y reemplazado por el nuevo. El nombre de la cláusula no cambia.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="ghost" onClick={() => setReplacing(null)} disabled={replacingLoading}>
+              Cancelar
+            </Button>
+            <Button type="button" onClick={handleReplace} disabled={replacingLoading} className="bg-amber-600 hover:bg-amber-700">
+              {replacingLoading ? "Reemplazando..." : "Reemplazar PDF"}
             </Button>
           </DialogFooter>
         </DialogContent>
