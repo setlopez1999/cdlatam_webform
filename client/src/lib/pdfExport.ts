@@ -520,7 +520,7 @@ async function buildActaPdfBytes(acta: ActaData): Promise<Uint8Array> {
     doc.setFont("helvetica", "normal");
     doc.text("CDLatam — Transformación Digital en Latinoamérica", margin, fy);
     doc.text(
-      `Generado el ${new Date().toLocaleDateString("es-CL")}  ·  pág. ${p}/${totalPages}`,
+      `Generado el ${new Date().toLocaleDateString("es-CL")}`,
       pageWidth - margin,
       fy,
       { align: "right" },
