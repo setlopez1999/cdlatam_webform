@@ -259,11 +259,14 @@ export function ExpedienteCard({
   exp,
   onEliminar,
   creadorDisplay,
+  creadorEliminado,
 }: {
   exp: Expediente;
   onEliminar: () => void;
   /** Solo vista workspace admin: etiqueta del usuario creador del expediente */
   creadorDisplay?: string;
+  /** true cuando el usuario creador fue eliminado del sistema */
+  creadorEliminado?: boolean;
 }) {
   const [, navigate] = useLocation();
   const [expandido, setExpandido] = useState(false);
@@ -300,6 +303,13 @@ export function ExpedienteCard({
             {exp.codigo ? <span className="font-mono text-primary/60">{exp.codigo} · </span> : null}
             {creadorDisplay ? (
               <span className="text-foreground/80">Creador: {creadorDisplay} · </span>
+            ) : creadorEliminado ? (
+              <span
+                className="inline-flex items-center gap-1 mr-1"
+                title="El usuario que creó este expediente ya no existe en el sistema"
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/40 inline-block" />
+              </span>
             ) : null}
             {empresa ? <span className="text-foreground/70">{empresa} · </span> : null}
             {fechaDisplay}

@@ -38,7 +38,8 @@ export default function AdminExpedientesWorkspace() {
         evaluacion: r.evaluacion,
         resultado: r.resultado,
       }),
-      creadorDisplay: r.creadorDisplay,
+      creadorDisplay: r.creadorDisplay ?? undefined,
+      creadorEliminado: r.creadorEliminado ?? false,
     }));
   }, [resumenQuery.data]);
 
@@ -196,7 +197,7 @@ export default function AdminExpedientesWorkspace() {
               </button>
             </div>
           )}
-          {filtrados.map(({ exp, creadorDisplay }) => (
+          {filtrados.map(({ exp, creadorDisplay, creadorEliminado }) => (
             <div key={exp.id} className="flex items-start gap-2">
               {/* Checkbox individual — solo si FEATURE_BULK_DELETE */}
               {FEATURE_BULK_DELETE && (
@@ -215,6 +216,7 @@ export default function AdminExpedientesWorkspace() {
                 <ExpedienteCard
                   exp={exp}
                   creadorDisplay={creadorDisplay}
+                  creadorEliminado={creadorEliminado}
                   onEliminar={() => eliminarSrv.mutate({ uuid: exp.id })}
                 />
               </div>

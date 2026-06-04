@@ -46,6 +46,7 @@ export default function Usuarios() {
   const [showCreateUser, setShowCreateUser] = useState(false);
   const [editUser, setEditUser] = useState<UserItem | null>(null);
   const [credentialsUser, setCredentialsUser] = useState<UserItem | null>(null);
+  const [deleteUserConfirm, setDeleteUserConfirm] = useState<UserItem | null>(null);
 
   // ── Estado modales roles ──
   const [showCreateRole, setShowCreateRole] = useState(false);
@@ -64,6 +65,10 @@ export default function Usuarios() {
 
   // ── Mutations usuarios ──
   const toggleStatusMut = trpc.localAuth.toggleStatus.useMutation();
+  const deleteUserMut = trpc.localAuth.deleteUser.useMutation({
+    onSuccess: () => { toast.success("Usuario eliminado permanentemente"); setDeleteUserConfirm(null); refetchUsers(); },
+    onError: (e) => toast.error(e.message),
+  });
 
   // ── Mutations roles ──
   const createRoleMut = trpc.roles.create.useMutation({
@@ -254,6 +259,14 @@ export default function Usuarios() {
                         className={`h-8 w-8 ${u.isActive ? "text-orange-400 hover:text-orange-300 hover:bg-orange-500/10" : "text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10"}`}>
                         <Power className="w-4 h-4" />
                       </Button>
+                      {/* Botón eliminar: solo visible en cuentas desactivadas */}
+                      {u.isActive === 0 && (
+                        <Button variant="ghost" size="icon" onClick={() => setDeleteUserConfirm(u)}
+                          title="Eliminar usuario permanentemente"
+                          className="h-8 w-8 text-destructive/50 hover:text-destructive hover:bg-destructive/10">
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -452,6 +465,36 @@ export default function Usuarios() {
               onClick={() => deleteRoleConfirm && deleteRoleForceMut.mutate({ id: deleteRoleConfirm.role.id })}>
               {deleteRoleForceMut.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Trash2 className="w-4 h-4 mr-2" />}
               Sí, eliminar rol
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      {/* ── Modal Confirmar Eliminar Usuario ── */}
+      <Dialog open={!!deleteUserConfirm} onOpenChange={(o) => { if (!o) setDeleteUserConfirm(null); }}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              <AlertTriangle className="w-4 h-4" />Eliminar usuario permanentemente
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Estás a punto de eliminar la cuenta de{" "}
+              <strong>{deleteUserConfirm?.displayName ?? deleteUserConfirm?.username}</strong>{" "}
+              (<span className="font-mono text-xs">@{deleteUserConfirm?.username}</span>).
+            </p>
+            <div className="rounded-lg bg-amber-500/10 border border-amber-500/30 p-3 text-xs text-amber-600 space-y-1">
+              <p>• La cuenta será eliminada de forma permanente.</p>
+              <p>• Sus expedientes quedarán en el sistema con un indicador de usuario eliminado.</p>
+              <p>• Esta acción no se puede deshacer.</p>
+            </div>
+          </div>
+          <DialogFooter className="pt-2">
+            <Button variant="outline" onClick={() => setDeleteUserConfirm(null)}>Cancelar</Button>
+            <Button variant="destructive" disabled={deleteUserMut.isPending}
+              onClick={() => deleteUserConfirm && deleteUserMut.mutate({ id: deleteUserConfirm.id })}>
+              {deleteUserMut.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Trash2 className="w-4 h-4 mr-2" />}
+              Sí, eliminar
             </Button>
           </DialogFooter>
         </DialogContent>
