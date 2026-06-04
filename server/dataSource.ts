@@ -24,6 +24,7 @@ import {
   toggleUserStatus,
   updateUser,
   updateUserCredentials,
+  deleteUserById,
   getRoles,
   getRoleById,
   createRole,
@@ -273,6 +274,18 @@ export async function ds_updateUserCredentials(
     return;
   }
   return updateUserCredentials(id, data);
+}
+
+/**
+ * Elimina un usuario permanentemente (solo users + user_roles).
+ * Los expedientes quedan huérfanos — se muestran en workspace con indicador visual.
+ */
+export async function ds_deleteUser(id: number): Promise<void> {
+  if (USE_API) {
+    await apiFetch<void>(`/users/${id}`, { method: "DELETE" });
+    return;
+  }
+  return deleteUserById(id);
 }
 
 // ─── Roles ────────────────────────────────────────────────────────────────────

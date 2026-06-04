@@ -60,6 +60,7 @@ import {
   ds_updateUser,
   ds_updateUserCredentials,
   ds_findUserById,
+  ds_deleteUser,
   ds_getRoles,
   ds_createRole,
   ds_updateRole,
@@ -553,6 +554,40 @@ export const appRouter = router({
           entityId: input.targetUserId,
           changes: { after: { newUsername: input.newUsername } },
         });
+        return { success: true };
+      }),
+
+    /**
+     * Elimina permanentemente un usuario.
+     * Reglas: solo admin, solo cuentas desactivadas (isActive=0), no puede borrarse a sí mismo.
+     * Los expedientes del usuario quedan huérfanos (se muestran en workspace con indicador visual).
+     */
+    deleteUser: protectedProcedure
+      .input(z.object({ id: z.number().int().positive() }))
+      .mutation(async ({ ctx, input }) => {
+        await requireRole(ctx, "admin");
+
+        // No puede borrarse a sí mismo
+        if (Number(ctx.localUser?.id) === input.id) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "No podés eliminar tu propia cuenta" });
+        }
+
+        // Solo cuentas desactivadas
+        const target = await ds_findUserById(input.id);
+        if (!target) throw new TRPCError({ code: "NOT_FOUND", message: "Usuario no encontrado" });
+        if (target.isActive !== 0) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Solo se pueden eliminar cuentas desactivadas" });
+        }
+
+        await ds_deleteUser(input.id);
+
+        await recordAuditFromTrpc(ctx, {
+          action: "DELETE",
+          entity: "user",
+          entityId: input.id,
+          changes: { before: { username: target.username, displayName: target.displayName } },
+        });
+
         return { success: true };
       }),
   }),
@@ -1364,18 +1399,27 @@ export const appRouter = router({
       }
       const rows = await listExpedientesResumenGlobal();
       const ids = Array.from(new Set(rows.map(r => r.expediente.creadorId)));
-      const labelMap = new Map<number, string>();
+      // Map: id → { label, exists }
+      const userMap = new Map<number, { label: string; exists: boolean }>();
       for (const id of ids) {
         const u = await findUserById(id);
-        labelMap.set(id, u?.displayName?.trim() || u?.username || `#${id}`);
+        if (u) {
+          userMap.set(id, { label: u.displayName?.trim() || u.username || `#${id}`, exists: true });
+        } else {
+          userMap.set(id, { label: `#${id}`, exists: false });
+        }
       }
-      return rows.map(r => ({
-        expediente: r.expediente,
-        acta: r.acta,
-        evaluacion: r.evaluacion,
-        resultado: r.resultado,
-        creadorDisplay: labelMap.get(r.expediente.creadorId) ?? `#${r.expediente.creadorId}`,
-      }));
+      return rows.map(r => {
+        const info = userMap.get(r.expediente.creadorId);
+        return {
+          expediente: r.expediente,
+          acta: r.acta,
+          evaluacion: r.evaluacion,
+          resultado: r.resultado,
+          creadorDisplay: info?.exists ? info.label : null,
+          creadorEliminado: !(info?.exists ?? true),
+        };
+      });
     }),
 
     /** Detalle completo de un expediente por uuid (F1/F2/F3 desde tablas). Dueño o rol workspace global. */

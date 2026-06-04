@@ -715,6 +715,18 @@ export async function updateUserCredentials(
   await db.update(users).set({ ...data, updatedAt: new Date() }).where(eq(users.id, id));
 }
 
+/**
+ * Elimina un usuario permanentemente.
+ * Solo borra `users` y `user_roles` — los expedientes quedan huérfanos (creadorId sin FK activa).
+ * El audit_log se preserva como historial.
+ * Prerequisito: verificar isActive === 0 antes de llamar.
+ */
+export async function deleteUserById(id: number): Promise<void> {
+  const db = await getDb();
+  await db.delete(userRoles).where(eq(userRoles.userId, id));
+  await db.delete(users).where(eq(users.id, id));
+}
+
 // --- ROLES --------------------------------------------------------------------
 
 // Roles ocultos (easter egg) — no aparecen en la lista de gestión de usuarios
