@@ -99,6 +99,11 @@ function _getSnapshot(): Expediente[] {
   return _state;
 }
 
+/** Lee un expediente directamente del singleton (sin esperar el ciclo de render de React). */
+export function getExpedienteFromState(id: string): Expediente | undefined {
+  return _state.find(e => e.id === id);
+}
+
 // ─── Hook principal ───────────────────────────────────────────────────────────
 
 /**

@@ -19,7 +19,7 @@
 import { useCallback } from "react";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
-import { useExpedienteStore } from "../store";
+import { useExpedienteStore, getExpedienteFromState } from "../store";
 import { f2DataToEvalSyncData, mapDetalleToExpediente } from "../fromServer";
 import type { F2Data, F1Data } from "../types";
 
@@ -106,8 +106,11 @@ export function useF2(expedienteId: string) {
    * problema de race condition entre flushDerived() y el estado de React).
    */
   const guardar = useCallback(async (derivedOverride?: Partial<F2Data>): Promise<boolean> => {
-    if (!data) return false;
-    const dataToSave: F2Data = derivedOverride ? { ...data, ...derivedOverride } : data;
+    // Leer del singleton directamente para evitar stale closure del snapshot de React.
+    // El singleton se actualiza síncronamente cuando el usuario edita un campo.
+    const freshData = getExpedienteFromState(expedienteId)?.f2.data ?? data;
+    if (!freshData) return false;
+    const dataToSave: F2Data = derivedOverride ? { ...freshData, ...derivedOverride } : freshData;
     const savedIso = new Date().toISOString();
 
     try {
