@@ -6,7 +6,7 @@
  *
  * Para acoplar a los endpoints tRPC en el futuro:
  *   - F1Data  →  ActaInputSchema   (trpc.actas.create / update)
- *   - F2Data  →  EvaluacionInputSchema (trpc.evaluaciones.create / update)
+ *   - F2Data  →  EvaluacionInputSchema (trpc.evaluaciones.syncF2); escalares en F2_SYNC_SCALAR_KEYS (fromServer.ts)
  *   - F3 es calculado automáticamente desde F2Data, sin endpoint propio
  */
 
@@ -227,6 +227,7 @@ export interface ResumenMeses {
   mes1: number;
   mes2: number;
   mes3: number;
+  mes4: number;
 }
 
 export interface F3Calculado {
@@ -257,99 +258,14 @@ export interface F3Calculado {
 /** Alias de F3Calculado para compatibilidad con el motor de cálculo */
 export type ResultadoCalculado = F3Calculado;
 
-// ─── Motor de cálculo F3 ─────────────────────────────────────────────────────
+// ─── Motor de cálculo F3 (implementación en f3/calcularResultadoF3.ts) ───────
 
-/** Fracción por defecto del bloque GIM / Sres. sobre el resultado (10%). */
-export const FRACCION_GIM_DEFAULT = 0.1;
-/** Tasa de impuesto por defecto sobre la facturación bruta (19%). */
-export const TASA_IMPUESTO_DEFAULT = 0.19;
-const IMPUESTO_FRACCION_MIN = 0.005; // 0.5 %
-const IMPUESTO_FRACCION_MAX = 1;
-
-export interface CalcularResultadoF3Opciones {
-  /** Entre 0 y 1. Por defecto 0.1 (10%). GP será 1 − fraccionGIM. */
-  fraccionGIM?: number;
-  /**
-   * Fracción de impuesto sobre facturación bruta (tramo GP), ej. 0.19 = 19%.
-   * Por defecto 19%. Rango efectivo 0.5 %–100 % (0.005–1).
-   */
-  tasaImpuesto?: number;
-}
-
-/**
- * Calcula el Resultado Evaluación (F3) a partir de los datos de F2.
- * Función pura — sin efectos secundarios, fácil de testear.
- */
-export function calcularResultadoF3(
-  f2: F2Data,
-  f1?: F1Data,
-  opciones?: CalcularResultadoF3Opciones,
-): F3Calculado {
-  let g = opciones?.fraccionGIM ?? FRACCION_GIM_DEFAULT;
-  if (!Number.isFinite(g)) g = FRACCION_GIM_DEFAULT;
-  g = Math.min(1, Math.max(0, g));
-  const p = 1 - g;
-  const hardware    = f2.hardware    ?? [];
-  const materiales  = f2.materiales  ?? [];
-  const rrhh        = f2.rrhh        ?? [];
-  const otrosGastos = f2.otrosGastos ?? [];
-  // F3-a: si se pasa f1, el ingreso viene SOLO de los servicios de implementación (excluye MANTENCIÓN)
-  // El valor de mantención es recurrente y no forma parte del proyecto de implementación.
-  const montoProyecto = f1
-    ? (f1.serviciosContratados ?? [])
-        .filter(sv => sv.tipoVenta?.toUpperCase() !== 'MANTENCIÓN')
-        .reduce((s, sv) => s + (sv.total ?? 0), 0)
-    : (f2.montoProyecto ?? 0);
-
-  const totalHardware   = hardware.reduce((s, r) => s + r.total, 0);
-  const totalMateriales = materiales.reduce((s, r) => s + r.total, 0);
-  const totalRRHH       = rrhh.reduce((s, r) => s + r.total, 0);
-  const otrosMes1 = otrosGastos.filter(o => o.mes === 1).reduce((s, o) => s + o.total, 0);
-  const otrosMes2 = otrosGastos.filter(o => o.mes === 2).reduce((s, o) => s + o.total, 0);
-  const otrosMes3 = otrosGastos.filter(o => o.mes === 3).reduce((s, o) => s + o.total, 0);
-
-  const gastosMes1 = totalHardware + totalMateriales + totalRRHH + otrosMes1;
-  const gastosMes2 = otrosMes2;
-  const gastosMes3 = otrosMes3;
-
-  const nCuotas = 3;
-  const ingresoPorMes = montoProyecto / nCuotas;
-
-  const resMes1 = ingresoPorMes - gastosMes1;
-  const resMes2 = ingresoPorMes - gastosMes2;
-  const resMes3 = ingresoPorMes - gastosMes3;
-
-  const gpMes1 = resMes1 * p;
-  const gpMes2 = resMes2 * p;
-  const gpMes3 = resMes3 * p;
-
-  let tImp = opciones?.tasaImpuesto ?? TASA_IMPUESTO_DEFAULT;
-  if (!Number.isFinite(tImp)) tImp = TASA_IMPUESTO_DEFAULT;
-  tImp = Math.min(IMPUESTO_FRACCION_MAX, Math.max(IMPUESTO_FRACCION_MIN, tImp));
-
-  return {
-    resumen: {
-      hardware:    { mes1: totalHardware,   mes2: 0,          mes3: 0          },
-      materiales:  { mes1: totalMateriales, mes2: 0,          mes3: 0          },
-      rh:          { mes1: totalRRHH,       mes2: 0,          mes3: 0          },
-      otros:       { mes1: otrosMes1,       mes2: otrosMes2,  mes3: otrosMes3  },
-      totalGastos: { mes1: gastosMes1,      mes2: gastosMes2, mes3: gastosMes3 },
-    },
-    nCuotas,
-    ingreso:   { mes1: ingresoPorMes, mes2: ingresoPorMes, mes3: ingresoPorMes },
-    gastos:    { mes1: gastosMes1,    mes2: gastosMes2,    mes3: gastosMes3    },
-    resultado: { mes1: resMes1,       mes2: resMes2,       mes3: resMes3       },
-    distribucion: {
-      gim: { porcentaje: g, mes1: resMes1 * g, mes2: resMes2 * g, mes3: resMes3 * g },
-      gp:  { porcentaje: p, mes1: gpMes1, mes2: gpMes2, mes3: gpMes3 },
-    },
-    facturacion: {
-      bruto:    { mes1: gpMes1,                          mes2: gpMes2,                          mes3: gpMes3                          },
-      impuesto: { tasa: tImp, mes1: gpMes1 * tImp, mes2: gpMes2 * tImp, mes3: gpMes3 * tImp },
-      neto:     { mes1: gpMes1 * (1 - tImp),   mes2: gpMes2 * (1 - tImp),   mes3: gpMes3 * (1 - tImp)   },
-    },
-  };
-}
+export type { CalcularResultadoF3Opciones } from "./f3/calcularResultadoF3";
+export {
+  calcularResultadoF3,
+  FRACCION_GIM_DEFAULT,
+  TASA_IMPUESTO_DEFAULT,
+} from "./f3/calcularResultadoF3";
 
 // ─── Formulario con estado ────────────────────────────────────────────────────
 

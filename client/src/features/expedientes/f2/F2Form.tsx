@@ -8,9 +8,9 @@
  *   render combinando lo que el usuario guardó en el store con nCuotasImpl (de F1).
  *   No se usa useEffect ni useRef para reconciliar — cero renders extra.
  *
- *   store.hardware  +  nCuotasImpl  →  hardwareRows  (para render y para guardar)
+ *   store.hardware  +  nCuotasImpl  →  hardwareRows  (vista agrupada por cuota; guardar usa store)
  */
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -21,84 +21,27 @@ import {
 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { formatCurrency, getCurrencyCode } from "@/lib/formatters";
-import { nanoid } from "nanoid";
 import { useF2 } from "./useF2";
 import { useNavGuard } from "@/hooks/useNavGuard";
 import { UnsavedChangesDialog } from "@/components/UnsavedChangesDialog";
 import { F2_INITIAL } from "../types";
 import type { FilaCosto, FilaRRHH, FilaOtros } from "../types";
+import type { Cuota } from "./f2RowDerivation";
+import {
+  deriveFilasCosto,
+  deriveFilasRRHH,
+  deriveFilasOtros,
+  appendCostoAtCuota,
+  appendRRHHAtCuota,
+  newFilaOtros,
+  removeRowById,
+  updateCostRowInList,
+  updateRRHHRowInList,
+  updateOtrosRowInList,
+  ITEMS_FIJOS,
+} from "./f2RowDerivation";
+import { getNCuotasImplementacion } from "../f1/f1ImplementacionCuotas";
 import { F2InfoGeneral, F2CostTable, F2RRHHTable, F2OtrosTable } from "./sections";
-
-// ─── Helpers de creación ──────────────────────────────────────────────────────
-
-function newFilaCosto(cuota: 1 | 2 | 3 | 4): FilaCosto {
-  return {
-    id: nanoid(), centroCosto: "", descripcionGasto: "",
-    valorNeto: 0, cantidad: 1, totalNeto: 0, iva: 0, total: 0,
-    tipoMoneda: "", observacion: "", cuota,
-  };
-}
-
-function newFilaRRHH(cuota: 1 | 2 | 3 | 4): FilaRRHH {
-  return {
-    id: nanoid(), tipo: "tecnico_interno", label: "", centroCosto: "",
-    valorSinImpuesto: 0, tipoMoneda: "", cantidad: 1, totalNeto: 0,
-    impuesto: 0, total: 0, descripcionGasto: "", observacion: "", cuota,
-  };
-}
-
-function newFilaOtros(tipo: FilaOtros["tipo"], label: string, mes: 1 | 2 | 3 | 4, moneda = "USD"): FilaOtros {
-  return {
-    id: nanoid(), tipo, label, descripcionGasto: label, centroCosto: "",
-    tipoMoneda: moneda, valorNeto: 0, cantidad: 1, totalNeto: 0,
-    iva: 0, total: 0, observacion: "", mes,
-  };
-}
-
-const ITEMS_FIJOS: Array<{ tipo: FilaOtros["tipo"]; label: string }> = [
-  { tipo: "comision",     label: "Comisión" },
-  { tipo: "movilizacion", label: "Movilización" },
-  { tipo: "viatico",      label: "Viático" },
-  { tipo: "movilizacion", label: "Movilización" },
-  { tipo: "viatico",      label: "Viático" },
-  { tipo: "movilizacion", label: "Movilización" },
-  { tipo: "alojamiento",  label: "Alojamiento" },
-  { tipo: "varios",       label: "Varios" },
-];
-
-// ─── Funciones de derivación pura ─────────────────────────────────────────────
-//
-// Reciben lo que hay en el store + nCuotas de F1.
-// Devuelven exactamente N filas: preservan las existentes por cuota,
-// crean vacías para las que faltan. Sin efectos secundarios.
-
-function deriveFilasCosto(stored: FilaCosto[], n: number): FilaCosto[] {
-  return Array.from({ length: n }, (_, i) => {
-    const cuota = (i + 1) as 1 | 2 | 3 | 4;
-    return stored.find(r => r.cuota === cuota) ?? newFilaCosto(cuota);
-  });
-}
-
-function deriveFilasRRHH(stored: FilaRRHH[], n: number): FilaRRHH[] {
-  return Array.from({ length: n }, (_, i) => {
-    const cuota = (i + 1) as 1 | 2 | 3 | 4;
-    return stored.find(r => r.cuota === cuota) ?? newFilaRRHH(cuota);
-  });
-}
-
-function deriveFilasOtros(stored: FilaOtros[], n: number, moneda: string): FilaOtros[] {
-  const result: FilaOtros[] = [];
-  for (let i = 1; i <= n; i++) {
-    const mes = i as 1 | 2 | 3 | 4;
-    const existentes = stored.filter(o => o.mes === mes);
-    if (existentes.length > 0) {
-      result.push(...existentes);
-    } else {
-      result.push(...ITEMS_FIJOS.map(item => newFilaOtros(item.tipo, item.label, mes, moneda)));
-    }
-  }
-  return result;
-}
 
 // ─── Componente ───────────────────────────────────────────────────────────────
 
@@ -110,136 +53,179 @@ interface Props {
 export default function F2Form({ expedienteId, onVerResultado }: Props) {
   const { data, status, f1Data, f1Suggestions, update, guardar, descartar, importarDesdeF1, isSyncing } = useF2(expedienteId);
   const { data: catalogs } = trpc.catalogs.getAll.useQuery();
-  const [confirmRegenMes, setConfirmRegenMes] = useState<1 | 2 | 3 | 4 | null>(null);
+  const [confirmRegenMes, setConfirmRegenMes] = useState<Cuota | null>(null);
 
   const { pendingTo, confirm: confirmNav, cancel: cancelNav } = useNavGuard({
     when: status === "sin_guardar",
   });
 
-  if (!data) return <div className="p-6 text-muted-foreground">Expediente no encontrado.</div>;
+  const nCuotas = useMemo(() => getNCuotasImplementacion(f1Data), [f1Data]);
 
-  // ── nCuotas desde F1 ────────────────────────────────────────────────────────
-  // Si no hay F1 guardado → 4 (el usuario puede llenar libremente hasta 4 cuotas).
-  const nCuotas: number = (() => {
-    const impl = f1Data?.formasPagoImplementacion?.find(fp => fp.linkedServicioId);
-    if (impl && impl.nCuotas >= 1) return Math.min(4, Math.max(1, impl.nCuotas));
-    return 4;
-  })();
-
-  const moneda = data.tipoMoneda || "USD";
+  const moneda = data?.tipoMoneda || "USD";
   const currencyCode = getCurrencyCode(moneda);
-  const fmt = (v: number) => formatCurrency(v, currencyCode);
+  const fmt = useCallback((v: number) => formatCurrency(v, currencyCode), [currencyCode]);
 
-  // ── Derivación pura de filas ─────────────────────────────────────────────────
-  // Se recalcula en cada render. Sin efectos secundarios ni renders extra.
-  const hardwareRows   = deriveFilasCosto(data.hardware,   nCuotas);
-  const materialesRows = deriveFilasCosto(data.materiales, nCuotas);
-  const rrhhRows       = deriveFilasRRHH(data.rrhh,        nCuotas);
-  const otrosRows      = deriveFilasOtros(data.otrosGastos, nCuotas, moneda);
-  const cuotasActivas  = Array.from({ length: nCuotas }, (_, i) => (i + 1) as 1 | 2 | 3 | 4);
+  const hardwareRows = useMemo(
+    () => deriveFilasCosto(data?.hardware ?? [], nCuotas),
+    [data?.hardware, nCuotas],
+  );
+  const materialesRows = useMemo(
+    () => deriveFilasCosto(data?.materiales ?? [], nCuotas),
+    [data?.materiales, nCuotas],
+  );
+  const rrhhRows = useMemo(
+    () => deriveFilasRRHH(data?.rrhh ?? [], nCuotas),
+    [data?.rrhh, nCuotas],
+  );
+  const otrosRows = useMemo(
+    () => deriveFilasOtros(data?.otrosGastos ?? [], nCuotas, moneda),
+    [data?.otrosGastos, nCuotas, moneda],
+  );
+  const cuotasActivas = useMemo(
+    () => Array.from({ length: nCuotas }, (_, i) => (i + 1) as Cuota),
+    [nCuotas],
+  );
 
-  // ── Totales ────────────────────────────────────────────────────────────────
-  const totalHardware   = hardwareRows.reduce((s, r) => s + r.total, 0);
-  const totalMateriales = materialesRows.reduce((s, r) => s + r.total, 0);
-  const totalRRHH       = rrhhRows.reduce((s, r) => s + r.total, 0);
-  const totalOtros      = otrosRows.reduce((s, r) => s + r.total, 0);
-  const totalGastos     = totalHardware + totalMateriales + totalRRHH + totalOtros;
+  const totalHardware = useMemo(
+    () => hardwareRows.reduce((s, r) => s + r.total, 0),
+    [hardwareRows],
+  );
+  const totalMateriales = useMemo(
+    () => materialesRows.reduce((s, r) => s + r.total, 0),
+    [materialesRows],
+  );
+  const totalRRHH = useMemo(
+    () => rrhhRows.reduce((s, r) => s + r.total, 0),
+    [rrhhRows],
+  );
+  const totalOtros = useMemo(
+    () => otrosRows.reduce((s, r) => s + r.total, 0),
+    [otrosRows],
+  );
+  const totalGastos = totalHardware + totalMateriales + totalRRHH + totalOtros;
 
-  // ── Badge de estado ────────────────────────────────────────────────────────
-  const statusBadge = {
-    nuevo:       { label: "Nuevo",       className: "bg-slate-50 text-slate-600 border-slate-200" },
-    sin_guardar: { label: "Sin guardar", className: "bg-amber-50 text-amber-700 border-amber-200" },
-    guardado:    { label: "Guardado",    className: "bg-emerald-50 text-emerald-700 border-emerald-200" },
-  }[status];
+  const otrosPorCuota = useMemo(
+    () => cuotasActivas.map(mes => {
+      const rows = otrosRows.filter(o => o.mes === mes);
+      return { mes, rows, total: rows.reduce((s, r) => s + r.total, 0) };
+    }),
+    [otrosRows, cuotasActivas],
+  );
 
-  // ── Handlers de actualización ─────────────────────────────────────────────
-  // Operan sobre las filas derivadas y persisten al store.
+  const catalogsInfo = useMemo(
+    () => ({
+      monedas: catalogs?.monedas as { value: string; label: string }[] | undefined,
+      paises: catalogs?.paises as { value: string; label: string }[] | undefined,
+      plazos: catalogs?.plazos as { value: string; label: string }[] | undefined,
+      cecos: catalogs?.cecos as { value: string; label: string }[] | undefined,
+    }),
+    [catalogs?.monedas, catalogs?.paises, catalogs?.plazos, catalogs?.cecos],
+  );
+
+  const catalogsTable = useMemo(
+    () => ({ cecos: catalogs?.cecos }),
+    [catalogs?.cecos],
+  );
 
   const updateHardwareRow = useCallback((id: string, field: keyof FilaCosto, value: string | number) => {
-    const rows = deriveFilasCosto(data.hardware, nCuotas).map(r => {
-      if (r.id !== id) return r;
-      const u = { ...r, [field]: value };
-      if (field === "valorNeto" || field === "cantidad") { u.totalNeto = u.valorNeto * u.cantidad; u.total = u.totalNeto + u.iva; }
-      if (field === "iva") u.total = u.totalNeto + u.iva;
-      return u;
-    });
-    update({ hardware: rows });
-  }, [data.hardware, nCuotas, update]);
+    if (!data) return;
+    update({ hardware: updateCostRowInList(data.hardware, nCuotas, id, field, value) });
+  }, [data, nCuotas, update]);
 
   const updateMaterialesRow = useCallback((id: string, field: keyof FilaCosto, value: string | number) => {
-    const rows = deriveFilasCosto(data.materiales, nCuotas).map(r => {
-      if (r.id !== id) return r;
-      const u = { ...r, [field]: value };
-      if (field === "valorNeto" || field === "cantidad") { u.totalNeto = u.valorNeto * u.cantidad; u.total = u.totalNeto + u.iva; }
-      if (field === "iva") u.total = u.totalNeto + u.iva;
-      return u;
-    });
-    update({ materiales: rows });
-  }, [data.materiales, nCuotas, update]);
+    if (!data) return;
+    update({ materiales: updateCostRowInList(data.materiales, nCuotas, id, field, value) });
+  }, [data, nCuotas, update]);
 
   const updateRRHHRow = useCallback((id: string, field: keyof FilaRRHH, value: string | number) => {
-    const rows = deriveFilasRRHH(data.rrhh, nCuotas).map(r => {
-      if (r.id !== id) return r;
-      const u = { ...r, [field]: value };
-      if (field === "valorSinImpuesto" || field === "cantidad") { u.totalNeto = u.valorSinImpuesto * u.cantidad; u.total = u.totalNeto + u.impuesto; }
-      if (field === "impuesto") u.total = u.totalNeto + u.impuesto;
-      return u;
-    });
-    update({ rrhh: rows });
-  }, [data.rrhh, nCuotas, update]);
+    if (!data) return;
+    update({ rrhh: updateRRHHRowInList(data.rrhh, nCuotas, id, field, value) });
+  }, [data, nCuotas, update]);
 
   const updateOtrosRow = useCallback((id: string, field: keyof FilaOtros, value: string | number) => {
-    const rows = deriveFilasOtros(data.otrosGastos, nCuotas, moneda).map(r => {
-      if (r.id !== id) return r;
-      const u = { ...r, [field]: value };
-      if (field === "valorNeto" || field === "cantidad") { u.totalNeto = u.valorNeto * u.cantidad; u.total = u.totalNeto + u.iva; }
-      if (field === "iva") u.total = u.totalNeto + u.iva;
-      return u;
-    });
-    update({ otrosGastos: rows });
-  }, [data.otrosGastos, nCuotas, moneda, update]);
+    if (!data) return;
+    update({ otrosGastos: updateOtrosRowInList(data.otrosGastos, nCuotas, moneda, id, field, value) });
+  }, [data, nCuotas, moneda, update]);
 
-  const doRegenMes = (mes: 1 | 2 | 3 | 4) => {
+  const addHardwareAtCuota = useCallback((cuota: Cuota) => {
+    if (!data) return;
+    update({ hardware: appendCostoAtCuota(data.hardware, cuota) });
+  }, [data, update]);
+
+  const removeHardwareRow = useCallback((id: string) => {
+    if (!data) return;
+    update({ hardware: removeRowById(data.hardware, id) });
+  }, [data, update]);
+
+  const addMaterialesAtCuota = useCallback((cuota: Cuota) => {
+    if (!data) return;
+    update({ materiales: appendCostoAtCuota(data.materiales, cuota) });
+  }, [data, update]);
+
+  const removeMaterialesRow = useCallback((id: string) => {
+    if (!data) return;
+    update({ materiales: removeRowById(data.materiales, id) });
+  }, [data, update]);
+
+  const addRRHHAtCuota = useCallback((cuota: Cuota) => {
+    if (!data) return;
+    update({ rrhh: appendRRHHAtCuota(data.rrhh, cuota) });
+  }, [data, update]);
+
+  const removeRRHHRow = useCallback((id: string) => {
+    if (!data) return;
+    update({ rrhh: removeRowById(data.rrhh, id) });
+  }, [data, update]);
+
+  const addOtrosRow = useCallback((mes: Cuota) => {
+    if (!data) return;
+    update({ otrosGastos: [...data.otrosGastos, newFilaOtros("varios", "Varios", mes, moneda)] });
+  }, [data, moneda, update]);
+
+  const removeOtrosRow = useCallback((id: string) => {
+    if (!data) return;
+    update({ otrosGastos: removeRowById(data.otrosGastos, id) });
+  }, [data, update]);
+
+  const doRegenMes = useCallback((mes: Cuota) => {
+    if (!data) return;
     const sin = data.otrosGastos.filter(o => o.mes !== mes);
     const nuevos = ITEMS_FIJOS.map(item => newFilaOtros(item.tipo, item.label, mes, moneda));
     update({ otrosGastos: [...sin, ...nuevos] });
     setConfirmRegenMes(null);
     toast.success(`Ítems de la Cuota ${mes} regenerados`);
-  };
+  }, [data, moneda, update]);
 
-  // ── Guardar ────────────────────────────────────────────────────────────────
   const validate = useCallback((): boolean => {
-    if (!data.nombreCliente && !data.empresa) {
+    if (!data?.nombreCliente && !data?.empresa) {
       toast.error("El nombre del cliente o empresa es requerido");
       return false;
     }
     return true;
-  }, [data]);
+  }, [data?.nombreCliente, data?.empresa]);
 
   const handleSave = useCallback(async () => {
-    if (!validate()) return;
-    // Pasamos las filas derivadas directamente a guardar() para evitar la race
-    // condition entre el setState de flushDerived() y la lectura del store en guardar().
+    if (!data || !validate()) return;
     const ok = await guardar({
-      hardware:    hardwareRows,
-      materiales:  materialesRows,
-      rrhh:        rrhhRows,
+      hardware: data.hardware,
+      materiales: data.materiales,
+      rrhh: data.rrhh,
       otrosGastos: otrosRows,
     });
     if (ok) toast.success("F2 guardado correctamente");
-  }, [validate, guardar, hardwareRows, materialesRows, rrhhRows, otrosRows]);
+  }, [validate, guardar, data, otrosRows]);
 
   const handleNavSave = useCallback(async (): Promise<boolean> => {
-    if (!validate()) return false;
+    if (!data || !validate()) return false;
     const ok = await guardar({
-      hardware:    hardwareRows,
-      materiales:  materialesRows,
-      rrhh:        rrhhRows,
+      hardware: data.hardware,
+      materiales: data.materiales,
+      rrhh: data.rrhh,
       otrosGastos: otrosRows,
     });
     if (ok) { toast.success("F2 guardado correctamente"); confirmNav(); }
     return ok;
-  }, [validate, guardar, hardwareRows, materialesRows, rrhhRows, otrosRows, confirmNav]);
+  }, [validate, guardar, data, otrosRows, confirmNav]);
 
   const handleNavDiscard = useCallback(async () => {
     await descartar();
@@ -252,7 +238,14 @@ export default function F2Form({ expedienteId, onVerResultado }: Props) {
     toast.info("Formulario F2 limpiado");
   }, [update]);
 
-  // ── Render ─────────────────────────────────────────────────────────────────
+  if (!data) return <div className="p-6 text-muted-foreground">Expediente no encontrado.</div>;
+
+  const statusBadge = {
+    nuevo:       { label: "Nuevo",       className: "bg-slate-50 text-slate-600 border-slate-200" },
+    sin_guardar: { label: "Sin guardar", className: "bg-amber-50 text-amber-700 border-amber-200" },
+    guardado:    { label: "Guardado",    className: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+  }[status];
+
   return (
     <div className="p-6 max-w-6xl mx-auto space-y-6" translate="no">
       <PageHeader
@@ -281,7 +274,6 @@ export default function F2Form({ expedienteId, onVerResultado }: Props) {
         }
       />
 
-      {/* Live Preview Banner */}
       <div className="bg-violet-50 border border-violet-200 rounded-xl p-3 flex items-center gap-3">
         <div className="w-7 h-7 bg-violet-100 rounded-lg flex items-center justify-center flex-shrink-0">
           <TrendingUp className="w-3.5 h-3.5 text-violet-600" />
@@ -304,103 +296,107 @@ export default function F2Form({ expedienteId, onVerResultado }: Props) {
         </div>
       </div>
 
-      {/* Información General */}
       <F2InfoGeneral
-        data={data} onUpdate={update}
-        catalogs={{
-          monedas: catalogs?.monedas as any,
-          paises:  catalogs?.paises  as any,
-          plazos:  catalogs?.plazos  as any,
-          cecos:   catalogs?.cecos   as any,
-        }}
+        data={data}
+        onUpdate={update}
+        catalogs={catalogsInfo}
         f1Suggestions={f1Suggestions}
         onImportarDesdeF1={importarDesdeF1}
       />
 
-      {/* Hardware */}
       <FormSection title="Hardware" icon={Cpu} accent="violet" collapsible defaultOpen badge={fmt(totalHardware)}>
         <F2CostTable
-          rows={hardwareRows} catalogs={catalogs}
+          rows={hardwareRows}
+          catalogs={catalogsTable}
           onUpdate={updateHardwareRow}
-          onAdd={() => update({ hardware: [...hardwareRows, newFilaCosto((hardwareRows.length + 1) as 1 | 2 | 3 | 4)] })}
-          onRemove={id => update({ hardware: hardwareRows.filter(r => r.id !== id) })}
+          onAddCuota={addHardwareAtCuota}
+          onRemove={removeHardwareRow}
           total={totalHardware}
-          valueLabel="Valor Neto U." valueField="valorNeto"
-          taxLabel="IVA" taxField="iva"
-          fmt={fmt} nCuotas={nCuotas}
+          valueLabel="Valor Neto U."
+          valueField="valorNeto"
+          taxLabel="IVA"
+          taxField="iva"
+          fmt={fmt}
+          nCuotas={nCuotas}
         />
       </FormSection>
 
-      {/* Materiales */}
       <FormSection title="Materiales" icon={Package} accent="violet" collapsible defaultOpen badge={fmt(totalMateriales)}>
         <F2CostTable
-          rows={materialesRows} catalogs={catalogs}
+          rows={materialesRows}
+          catalogs={catalogsTable}
           onUpdate={updateMaterialesRow}
-          onAdd={() => update({ materiales: [...materialesRows, newFilaCosto((materialesRows.length + 1) as 1 | 2 | 3 | 4)] })}
-          onRemove={id => update({ materiales: materialesRows.filter(r => r.id !== id) })}
+          onAddCuota={addMaterialesAtCuota}
+          onRemove={removeMaterialesRow}
           total={totalMateriales}
-          valueLabel="Valor Neto U." valueField="valorNeto"
-          taxLabel="IVA" taxField="iva"
-          fmt={fmt} nCuotas={nCuotas}
+          valueLabel="Valor Neto U."
+          valueField="valorNeto"
+          taxLabel="IVA"
+          taxField="iva"
+          fmt={fmt}
+          nCuotas={nCuotas}
         />
       </FormSection>
 
-      {/* RRHH */}
       <FormSection title="RRHH — Recursos Humanos" icon={Users} accent="violet" collapsible defaultOpen badge={fmt(totalRRHH)}>
         <F2RRHHTable
-          rows={rrhhRows} catalogs={catalogs}
+          rows={rrhhRows}
+          catalogs={catalogsTable}
           onUpdate={updateRRHHRow}
-          onAdd={() => update({ rrhh: [...rrhhRows, newFilaRRHH((rrhhRows.length + 1) as 1 | 2 | 3 | 4)] })}
-          onRemove={id => update({ rrhh: rrhhRows.filter(r => r.id !== id) })}
-          total={totalRRHH} fmt={fmt} nCuotas={nCuotas}
+          onAddCuota={addRRHHAtCuota}
+          onRemove={removeRRHHRow}
+          total={totalRRHH}
+          fmt={fmt}
+          nCuotas={nCuotas}
         />
       </FormSection>
 
-      {/* Otros Gastos — secciones dinámicas según nCuotas */}
       <FormSection title="Otros Gastos" icon={MoreHorizontal} accent="violet" collapsible defaultOpen badge={fmt(totalOtros)}>
         <div className="space-y-6">
-          {cuotasActivas.map(mes => {
-            const mesFiltrado = otrosRows.filter(o => o.mes === mes);
-            const totalMes = mesFiltrado.reduce((s, r) => s + r.total, 0);
-            return (
-              <div key={mes}>
-                <div className="flex items-center justify-between mb-2">
-                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                    Gastos Cuota {mes}
-                  </p>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-mono text-muted-foreground">{fmt(totalMes)}</span>
-                    {confirmRegenMes === mes ? (
-                      <div className="flex items-center gap-1">
-                        <span className="text-xs text-amber-600 font-medium">¿Borrar y regenerar?</span>
-                        <Button size="sm" variant="destructive" className="h-6 text-xs px-2" onClick={() => doRegenMes(mes)}>Sí</Button>
-                        <Button size="sm" variant="outline"     className="h-6 text-xs px-2" onClick={() => setConfirmRegenMes(null)}>No</Button>
-                      </div>
-                    ) : (
-                      <Button size="sm" variant="outline" className="h-6 text-xs px-2 gap-1"
-                        onClick={() => {
-                          const tieneData = mesFiltrado.some(r => r.valorNeto > 0 || r.iva > 0 || r.descripcionGasto);
-                          tieneData ? setConfirmRegenMes(mes) : doRegenMes(mes);
-                        }}>
-                        <RotateCcw className="w-3 h-3" /> Regenerar ítems
-                      </Button>
-                    )}
-                  </div>
+          {otrosPorCuota.map(({ mes, rows: mesFiltrado, total: totalMes }) => (
+            <div key={mes}>
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                  Gastos Cuota {mes}
+                </p>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-mono text-muted-foreground">{fmt(totalMes)}</span>
+                  {confirmRegenMes === mes ? (
+                    <div className="flex items-center gap-1">
+                      <span className="text-xs text-amber-600 font-medium">¿Borrar y regenerar?</span>
+                      <Button size="sm" variant="destructive" className="h-6 text-xs px-2" onClick={() => doRegenMes(mes)}>Sí</Button>
+                      <Button size="sm" variant="outline" className="h-6 text-xs px-2" onClick={() => setConfirmRegenMes(null)}>No</Button>
+                    </div>
+                  ) : (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-6 text-xs px-2 gap-1"
+                      onClick={() => {
+                        const tieneData = mesFiltrado.some(r => r.valorNeto > 0 || r.iva > 0 || r.descripcionGasto);
+                        tieneData ? setConfirmRegenMes(mes) : doRegenMes(mes);
+                      }}
+                    >
+                      <RotateCcw className="w-3 h-3" /> Regenerar ítems
+                    </Button>
+                  )}
                 </div>
-                <F2OtrosTable
-                  rows={mesFiltrado} catalogs={catalogs}
-                  onUpdate={updateOtrosRow}
-                  onAdd={() => update({ otrosGastos: [...otrosRows, newFilaOtros("varios", "Varios", mes, moneda)] })}
-                  onRemove={id => update({ otrosGastos: otrosRows.filter(r => r.id !== id) })}
-                  total={totalMes} fmt={fmt}
-                />
               </div>
-            );
-          })}
+              <F2OtrosTable
+                rows={mesFiltrado}
+                catalogs={catalogsTable}
+                onUpdate={updateOtrosRow}
+                onAdd={() => addOtrosRow(mes)}
+                onRemove={removeOtrosRow}
+                total={totalMes}
+                fmt={fmt}
+                cuotaMes={mes}
+              />
+            </div>
+          ))}
         </div>
       </FormSection>
 
-      {/* Resumen Total */}
       <div className="bg-card border border-border rounded-xl p-5 shadow-sm">
         <h3 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2">
           <TrendingUp className="w-4 h-4 text-violet-500" /> Resumen de Costos
@@ -421,7 +417,6 @@ export default function F2Form({ expedienteId, onVerResultado }: Props) {
         </div>
       </div>
 
-      {/* Footer */}
       <div className="flex justify-end gap-3 pb-6">
         <Button variant="outline" onClick={handleReset}>
           <RefreshCw className="w-4 h-4 mr-2" /> Limpiar

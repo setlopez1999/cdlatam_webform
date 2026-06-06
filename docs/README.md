@@ -14,8 +14,32 @@ Guia rapida para saber que documento abrir segun el tipo de cambio.
 | Desplegar en servidor | [`DEPLOY.md`](../DEPLOY.md) | [`README.md`](../README.md) |
 | Ajustar contrato con API externa (`USE_API`) | [`API_CONTRACT.md`](../API_CONTRACT.md) | [`.env.example`](../.env.example), [`README.md`](../README.md) |
 
+## Errores frecuentes (dev local / SQLite)
+
+| Síntoma | Documento |
+|---|---|
+| No arranca / `better_sqlite3.node` / `NODE_MODULE_VERSION` | [`ERROR_BETTER_SQLITE3_BINARY.md`](./ERROR_BETTER_SQLITE3_BINARY.md) |
+| Import BD falla con `C:\app\data\gestion.db` (Windows) | [`ERROR_DATABASE_URL_WINDOWS_VS_DOCKER.md`](./ERROR_DATABASE_URL_WINDOWS_VS_DOCKER.md) |
+| App levanta pero `database disk image is malformed` | [`ERROR_SQLITE_CORRUPT.md`](./ERROR_SQLITE_CORRUPT.md) |
+| Warning migración Drizzle + fallback manual | [`DATABASE_SCHEMA.md`](./DATABASE_SCHEMA.md) |
+| Traducciones i18n faltantes | [`ERROR_TRANSLATION_NOT_FOUND.md`](./ERROR_TRANSLATION_NOT_FOUND.md) |
+
+## Patrones UI
+
+| Quiero... | Documento |
+|---|---|
+| Evitar que textos largos compriman columnas numéricas en tablas | [`UI_TABLAS_OVERFLOW.md`](./UI_TABLAS_OVERFLOW.md) |
+
+## Expedientes (F1 / F2 / F3)
+
+| Síntoma | Documento |
+|---|---|
+| Campo F2 se borra al guardar o al recargar expediente | [`F2_SYNC_PIPELINE.md`](./F2_SYNC_PIPELINE.md) |
+| Lógica cuotas F1 → gastos/ingreso F3 | [`LOGICA_NEGOCIO_FORMAS_PAGO.md`](./LOGICA_NEGOCIO_FORMAS_PAGO.md) |
+| Integridad store vs BD expedientes | [`ARQUITECTURA_EXPEDIENTES_INTEGRIDAD.md`](./ARQUITECTURA_EXPEDIENTES_INTEGRIDAD.md) |
+
 ## Estado de documentos
 
-- Activos y recomendados: `DATABASE_SCHEMA`, `WORKFLOW_DB_TS_DATASOURCE`, `AUDITORIA_FUENTE_VERDAD`, `WORKFLOW_UI_VERIFICATION`, `DEPLOY`, `API_CONTRACT`.
+- Activos y recomendados: `DATABASE_SCHEMA`, `WORKFLOW_DB_TS_DATASOURCE`, `AUDITORIA_FUENTE_VERDAD`, `WORKFLOW_UI_VERIFICATION`, `DEPLOY`, `API_CONTRACT`, `ERROR_BETTER_SQLITE3_BINARY`, `ERROR_DATABASE_URL_WINDOWS_VS_DOCKER`, `ERROR_SQLITE_CORRUPT`, `UI_TABLAS_OVERFLOW`.
 - Historicos: `RESUMEN_MODIFICACIONES_FEATURE2`, `WORKFLOW_DB_CHANGELOG` (bitacora manual opcional).
 - Con partes legacy: `WORKFLOW_NEW_TABLE_WITH_RELATION`, `WORKFLOW_RENAME_TABLE` (mantener el orden de capas, pero ejecutar migraciones con Drizzle segun `DATABASE_SCHEMA`).

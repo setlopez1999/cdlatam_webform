@@ -515,6 +515,7 @@ export async function runMigrations() {
   tryAlter(`ALTER TABLE evaluaciones ADD COLUMN firmaImagen TEXT`, "Column firmaImagen added to evaluaciones");
   tryAlter(`ALTER TABLE evaluaciones ADD COLUMN f2FormStatus TEXT DEFAULT 'nuevo'`, "Column f2FormStatus added to evaluaciones");
   tryAlter(`ALTER TABLE evaluaciones ADD COLUMN f2SavedAt INTEGER`, "Column f2SavedAt added to evaluaciones");
+  tryAlter(`ALTER TABLE evaluaciones ADD COLUMN centroCostoHeader TEXT`, "Column centroCostoHeader added to evaluaciones");
   tryAlter(`ALTER TABLE expedientes ADD COLUMN codigo TEXT`, "Column codigo added to expedientes");
   tryAlter(`ALTER TABLE expedientes ADD COLUMN nro_acta INTEGER`, "Column nro_acta added to expedientes");
   // Schema drizzle/schema.ts — migraciones 0000/0001 no añadieron esta FK; necesaria para ds_getCatalogSummary / summary UI

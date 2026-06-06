@@ -8,6 +8,7 @@
  * del sistema (trpc.localAuth.listUsersForSelect), con fallback a Input de texto
  * si la lista no está disponible.
  */
+import { memo } from "react";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
@@ -44,7 +45,27 @@ interface Props {
   onImportarDesdeF1?: () => void;
 }
 
-export function F2InfoGeneral({ data, onUpdate, catalogs, f1Suggestions, onImportarDesdeF1 }: Props) {
+/** Campos de encabezado — ignorar arrays de costos al comparar props para memo. */
+const F2_INFO_FIELDS: (keyof F2Data)[] = [
+  "unidadNegocios", "empresa", "centroCostoHeader", "solucion", "tipoMoneda",
+  "montoProyecto", "tipoCambio", "totalClp", "descripcion", "preventa",
+  "fechaEntrega", "ejecutivoComercial", "plazoImplementacion", "propuestaNumero",
+  "paisImplementacion", "rut", "nombreCliente", "firmaImagen",
+];
+
+function f2InfoGeneralPropsEqual(prev: Props, next: Props): boolean {
+  for (const key of F2_INFO_FIELDS) {
+    if (prev.data[key] !== next.data[key]) return false;
+  }
+  return (
+    prev.catalogs === next.catalogs &&
+    prev.f1Suggestions === next.f1Suggestions &&
+    prev.onUpdate === next.onUpdate &&
+    prev.onImportarDesdeF1 === next.onImportarDesdeF1
+  );
+}
+
+function F2InfoGeneralInner({ data, onUpdate, catalogs, f1Suggestions, onImportarDesdeF1 }: Props) {
   const totalClp = data.montoProyecto * (data.tipoCambio || 1);
 
   // Lista de usuarios activos para selects de Preventa y Ejecutivo Comercial
@@ -216,3 +237,5 @@ export function F2InfoGeneral({ data, onUpdate, catalogs, f1Suggestions, onImpor
     </FormSection>
   );
 }
+
+export const F2InfoGeneral = memo(F2InfoGeneralInner, f2InfoGeneralPropsEqual);

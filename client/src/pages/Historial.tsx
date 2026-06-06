@@ -18,7 +18,9 @@ import { useExpedienteStore } from "@/features/expedientes/store";
 import { mapResumenRowToExpediente } from "@/features/expedientes/fromServer";
 import type { Expediente } from "@/features/expedientes/types";
 import { trpc } from "@/lib/trpc";
+import { getMesValue, mesesActivos } from "@/features/expedientes/f1/f1ImplementacionCuotas";
 import { calcularResultadoF3 } from "@/features/expedientes/types";
+import type { ResumenMeses } from "@/features/expedientes/types";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { PageLayout } from "@/components/PageLayout";
@@ -88,6 +90,21 @@ function ResultadosExpandidos({ exp }: { exp: Expediente }) {
     [exp.f2.data, exp.f1.data],
   );
   const res = r.resumen;
+  const meses = mesesActivos(r.nCuotas);
+  const colSpanMeses = 1 + meses.length;
+
+  const filasGasto: { label: string; values: ResumenMeses }[] = [
+    { label: "Hardware", values: res.hardware },
+    { label: "Materiales", values: res.materiales },
+    { label: "RH", values: res.rh },
+    { label: "Otros", values: res.otros },
+  ];
+
+  const filasResultado: { label: string; values: ResumenMeses; bold?: boolean }[] = [
+    { label: "Ingreso", values: r.ingreso },
+    { label: "Gastos", values: r.gastos },
+    { label: "Resultado", values: r.resultado, bold: true },
+  ];
 
   return (
     <div className="mt-3 space-y-4 border-t border-border/40 pt-3">
@@ -109,30 +126,25 @@ function ResultadosExpandidos({ exp }: { exp: Expediente }) {
             <thead>
               <tr className="bg-muted/50 border-b border-border">
                 <th className="px-3 py-1.5 text-left font-semibold">Tipo de gasto</th>
-                <th className="px-3 py-1.5 text-center font-semibold">MES 1</th>
-                <th className="px-3 py-1.5 text-center font-semibold">MES 2</th>
-                <th className="px-3 py-1.5 text-center font-semibold">MES 3</th>
+                {meses.map(mes => (
+                  <th key={mes} className="px-3 py-1.5 text-center font-semibold">MES {mes}</th>
+                ))}
               </tr>
             </thead>
             <tbody>
-              {[
-                { label: "Hardware",   m1: res.hardware.mes1,   m2: res.hardware.mes2,   m3: res.hardware.mes3 },
-                { label: "Materiales", m1: res.materiales.mes1, m2: res.materiales.mes2, m3: res.materiales.mes3 },
-                { label: "RH",         m1: res.rh.mes1,         m2: res.rh.mes2,         m3: res.rh.mes3 },
-                { label: "Otros",      m1: res.otros.mes1,      m2: res.otros.mes2,      m3: res.otros.mes3 },
-              ].map((row, i) => (
+              {filasGasto.map((row, i) => (
                 <tr key={row.label} className={cn("border-b border-border/30", i % 2 !== 0 && "bg-muted/10")}>
                   <td className="px-3 py-1.5 font-medium">{row.label}</td>
-                  <td className="px-3 py-1.5 text-center">{fmtCell(row.m1)}</td>
-                  <td className="px-3 py-1.5 text-center">{fmtCell(row.m2)}</td>
-                  <td className="px-3 py-1.5 text-center">{fmtCell(row.m3)}</td>
+                  {meses.map(mes => (
+                    <td key={mes} className="px-3 py-1.5 text-center">{fmtCell(getMesValue(row.values, mes))}</td>
+                  ))}
                 </tr>
               ))}
               <tr className="bg-[#00c2b2]/10 border-t border-[#00c2b2]/30">
                 <td className="px-3 py-1.5 font-bold">Total Gastos Imputados</td>
-                <td className="px-3 py-1.5 text-center font-bold">{fmtCell(res.totalGastos.mes1)}</td>
-                <td className="px-3 py-1.5 text-center font-bold">{fmtCell(res.totalGastos.mes2)}</td>
-                <td className="px-3 py-1.5 text-center font-bold">{fmtCell(res.totalGastos.mes3)}</td>
+                {meses.map(mes => (
+                  <td key={mes} className="px-3 py-1.5 text-center font-bold">{fmtCell(getMesValue(res.totalGastos, mes))}</td>
+                ))}
               </tr>
             </tbody>
           </table>
@@ -150,54 +162,54 @@ function ResultadosExpandidos({ exp }: { exp: Expediente }) {
               <tr className="bg-muted/50 border-b border-border">
                 <th className="px-3 py-1.5 text-left font-semibold">N° Cuotas</th>
                 <th className="px-3 py-1.5 text-center font-semibold">{r.nCuotas}</th>
-                <th className="px-3 py-1.5 text-center font-semibold">MES 1</th>
-                <th className="px-3 py-1.5 text-center font-semibold">MES 2</th>
-                <th className="px-3 py-1.5 text-center font-semibold">MES 3</th>
+                {meses.map(mes => (
+                  <th key={mes} className="px-3 py-1.5 text-center font-semibold">MES {mes}</th>
+                ))}
               </tr>
             </thead>
             <tbody>
-              <tr className="border-b border-border/30">
-                <td className="px-3 py-1.5 font-medium">Ingreso</td><td />
-                <td className="px-3 py-1.5 text-center">{fmtCell(r.ingreso.mes1)}</td>
-                <td className="px-3 py-1.5 text-center">{fmtCell(r.ingreso.mes2)}</td>
-                <td className="px-3 py-1.5 text-center">{fmtCell(r.ingreso.mes3)}</td>
-              </tr>
-              <tr className="border-b border-border/30 bg-muted/10">
-                <td className="px-3 py-1.5 font-medium">Gastos</td><td />
-                <td className="px-3 py-1.5 text-center">{fmtCell(r.gastos.mes1)}</td>
-                <td className="px-3 py-1.5 text-center">{fmtCell(r.gastos.mes2)}</td>
-                <td className="px-3 py-1.5 text-center">{fmtCell(r.gastos.mes3)}</td>
-              </tr>
-              <tr className="border-b-2 border-[#00c2b2]/30 bg-[#00c2b2]/10">
-                <td className="px-3 py-1.5 font-bold">Resultado</td><td />
-                <td className="px-3 py-1.5 text-center font-bold">{fmtCell(r.resultado.mes1)}</td>
-                <td className="px-3 py-1.5 text-center font-bold">{fmtCell(r.resultado.mes2)}</td>
-                <td className="px-3 py-1.5 text-center font-bold">{fmtCell(r.resultado.mes3)}</td>
-              </tr>
+              {filasResultado.map((row, i) => (
+                <tr
+                  key={row.label}
+                  className={cn(
+                    "border-b border-border/30",
+                    row.bold && "border-b-2 border-[#00c2b2]/30 bg-[#00c2b2]/10",
+                    !row.bold && i % 2 !== 0 && "bg-muted/10",
+                  )}
+                >
+                  <td className={cn("px-3 py-1.5", row.bold ? "font-bold" : "font-medium")}>{row.label}</td>
+                  <td />
+                  {meses.map(mes => (
+                    <td key={mes} className={cn("px-3 py-1.5 text-center", row.bold && "font-bold")}>
+                      {fmtCell(getMesValue(row.values, mes))}
+                    </td>
+                  ))}
+                </tr>
+              ))}
               {f1Guardado && (
                 <>
                   <tr className="bg-muted/20">
-                    <td colSpan={5} className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Distribución:</td>
+                    <td colSpan={colSpanMeses} className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Distribución:</td>
                   </tr>
                   <tr className="border-b border-border/30">
                     <td className="px-3 py-1.5 pl-5 font-medium">{etiquetaGim}</td>
                     <td className="px-3 py-1.5 text-center text-muted-foreground">{(r.distribucion.gim.porcentaje * 100).toFixed(0)}%</td>
-                    <td className="px-3 py-1.5 text-center">{fmtCell(r.distribucion.gim.mes1)}</td>
-                    <td className="px-3 py-1.5 text-center">{fmtCell(r.distribucion.gim.mes2)}</td>
-                    <td className="px-3 py-1.5 text-center">{fmtCell(r.distribucion.gim.mes3)}</td>
+                    {meses.map(mes => (
+                      <td key={mes} className="px-3 py-1.5 text-center">{fmtCell(getMesValue(r.distribucion.gim, mes))}</td>
+                    ))}
                   </tr>
                   <tr className="border-b border-border/30 bg-muted/10">
                     <td className="px-3 py-1.5 pl-5 font-medium">Groupalnet SpA</td>
                     <td className="px-3 py-1.5 text-center text-muted-foreground">{(r.distribucion.gp.porcentaje * 100).toFixed(0)}%</td>
-                    <td className="px-3 py-1.5 text-center">{fmtCell(r.distribucion.gp.mes1)}</td>
-                    <td className="px-3 py-1.5 text-center">{fmtCell(r.distribucion.gp.mes2)}</td>
-                    <td className="px-3 py-1.5 text-center">{fmtCell(r.distribucion.gp.mes3)}</td>
+                    {meses.map(mes => (
+                      <td key={mes} className="px-3 py-1.5 text-center">{fmtCell(getMesValue(r.distribucion.gp, mes))}</td>
+                    ))}
                   </tr>
                 </>
               )}
               {!f1Guardado && (
                 <tr className="bg-amber-500/5">
-                  <td colSpan={5} className="px-3 py-2 text-[11px] text-amber-700/90">
+                  <td colSpan={colSpanMeses} className="px-3 py-2 text-[11px] text-amber-700/90">
                     Guarde el Acta (F1) para ver la distribución ({etiquetaGim} / Groupalnet SpA) y la facturación inter-empresa.
                   </td>
                 </tr>
@@ -219,30 +231,30 @@ function ResultadosExpandidos({ exp }: { exp: Expediente }) {
                 <tr className="bg-muted/50 border-b border-border">
                   <th className="px-3 py-1.5 text-left font-semibold" />
                   <th className="px-3 py-1.5 text-center font-semibold w-16" />
-                  <th className="px-3 py-1.5 text-center font-semibold">MES 1</th>
-                  <th className="px-3 py-1.5 text-center font-semibold">MES 2</th>
-                  <th className="px-3 py-1.5 text-center font-semibold">MES 3</th>
+                  {meses.map(mes => (
+                    <th key={mes} className="px-3 py-1.5 text-center font-semibold">MES {mes}</th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
                 <tr className="border-b border-border/30">
                   <td className="px-3 py-1.5 font-medium">Bruto</td><td />
-                  <td className="px-3 py-1.5 text-center">{fmtCell(r.facturacion.bruto.mes1)}</td>
-                  <td className="px-3 py-1.5 text-center">{fmtCell(r.facturacion.bruto.mes2)}</td>
-                  <td className="px-3 py-1.5 text-center">{fmtCell(r.facturacion.bruto.mes3)}</td>
+                  {meses.map(mes => (
+                    <td key={mes} className="px-3 py-1.5 text-center">{fmtCell(getMesValue(r.facturacion.bruto, mes))}</td>
+                  ))}
                 </tr>
                 <tr className="border-b border-border/30 bg-muted/10">
                   <td className="px-3 py-1.5 font-medium">Impuesto</td>
                   <td className="px-3 py-1.5 text-center text-muted-foreground">{r.facturacion.impuesto.tasa.toFixed(2)}</td>
-                  <td className="px-3 py-1.5 text-center">{fmtCell(r.facturacion.impuesto.mes1)}</td>
-                  <td className="px-3 py-1.5 text-center">{fmtCell(r.facturacion.impuesto.mes2)}</td>
-                  <td className="px-3 py-1.5 text-center">{fmtCell(r.facturacion.impuesto.mes3)}</td>
+                  {meses.map(mes => (
+                    <td key={mes} className="px-3 py-1.5 text-center">{fmtCell(getMesValue(r.facturacion.impuesto, mes))}</td>
+                  ))}
                 </tr>
                 <tr className="bg-[#1a2a3a]/10 border-t border-[#1a2a3a]/20">
                   <td className="px-3 py-1.5 font-bold">Neto</td><td />
-                  <td className="px-3 py-1.5 text-center font-bold">{fmtCell(r.facturacion.neto.mes1)}</td>
-                  <td className="px-3 py-1.5 text-center font-bold">{fmtCell(r.facturacion.neto.mes2)}</td>
-                  <td className="px-3 py-1.5 text-center font-bold">{fmtCell(r.facturacion.neto.mes3)}</td>
+                  {meses.map(mes => (
+                    <td key={mes} className="px-3 py-1.5 text-center font-bold">{fmtCell(getMesValue(r.facturacion.neto, mes))}</td>
+                  ))}
                 </tr>
               </tbody>
             </table>

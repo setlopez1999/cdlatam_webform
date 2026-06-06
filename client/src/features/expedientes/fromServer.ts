@@ -7,6 +7,58 @@ import type { Expediente, F1Data, F2Data, FormStatus, F3Calculado } from "./type
 
 export type EvalSyncInput = inferRouterInputs<AppRouter>["evaluaciones"]["syncF2"]["data"];
 import { F1_INITIAL, F2_INITIAL } from "./types";
+import { normalizeFilasCosto } from "./f2/f2RowDerivation";
+
+/**
+ * Campos escalares de F2 que deben viajar store ↔ BD ↔ syncF2.
+ * Si agregas un campo en F2Data (encabezado), inclúyelo aquí y en EvaluacionInputSchema.
+ * Ver docs/F2_SYNC_PIPELINE.md
+ */
+export const F2_SYNC_SCALAR_KEYS = [
+  "unidadNegocios",
+  "empresa",
+  "centroCostoHeader",
+  "solucion",
+  "tipoMoneda",
+  "montoProyecto",
+  "tipoCambio",
+  "totalClp",
+  "descripcion",
+  "preventa",
+  "fechaEntrega",
+  "ejecutivoComercial",
+  "plazoImplementacion",
+  "propuestaNumero",
+  "paisImplementacion",
+  "rut",
+  "nombreCliente",
+] as const satisfies readonly (keyof F2Data)[];
+
+function f2ScalarsFromDb(ev: Record<string, unknown>): Pick<F2Data, (typeof F2_SYNC_SCALAR_KEYS)[number]> {
+  const out = {} as Pick<F2Data, (typeof F2_SYNC_SCALAR_KEYS)[number]>;
+  for (const key of F2_SYNC_SCALAR_KEYS) {
+    if (key === "montoProyecto" || key === "tipoCambio" || key === "totalClp") {
+      out[key] = Number(ev[key] ?? (key === "tipoCambio" ? 1 : 0)) as F2Data[typeof key];
+    } else if (key === "fechaEntrega") {
+      out[key] = isoDate(ev[key]);
+    } else {
+      out[key] = String(ev[key] ?? "") as F2Data[typeof key];
+    }
+  }
+  return out;
+}
+
+function f2ScalarsToSync(d: F2Data): Pick<EvalSyncInput, (typeof F2_SYNC_SCALAR_KEYS)[number]> {
+  const out = {} as Pick<EvalSyncInput, (typeof F2_SYNC_SCALAR_KEYS)[number]>;
+  for (const key of F2_SYNC_SCALAR_KEYS) {
+    if (key === "fechaEntrega") {
+      (out as Record<string, unknown>)[key] = d.fechaEntrega || undefined;
+    } else {
+      (out as Record<string, unknown>)[key] = d[key];
+    }
+  }
+  return out;
+}
 
 function asFormStatus(s: string | null | undefined, fallback: FormStatus): FormStatus {
   if (s === "nuevo" || s === "sin_guardar" || s === "guardado") return s;
@@ -125,24 +177,13 @@ export function mapDbEvaluacionToF2(ev: Record<string, unknown> | null): {
   })) as F2Data["otrosGastos"];
   const data: F2Data = {
     ...F2_INITIAL,
-    unidadNegocios: String(ev.unidadNegocios ?? ""),
-    empresa: String(ev.empresa ?? ""),
-    solucion: String(ev.solucion ?? ""),
-    tipoMoneda: String(ev.tipoMoneda ?? ""),
-    montoProyecto: Number(ev.montoProyecto ?? 0),
-    tipoCambio: Number(ev.tipoCambio ?? 1),
-    totalClp: Number(ev.totalClp ?? 0),
-    descripcion: String(ev.descripcion ?? ""),
-    preventa: String(ev.preventa ?? ""),
-    fechaEntrega: isoDate(ev.fechaEntrega),
-    ejecutivoComercial: String(ev.ejecutivoComercial ?? ""),
-    plazoImplementacion: String(ev.plazoImplementacion ?? ""),
-    propuestaNumero: String(ev.propuestaNumero ?? ""),
-    paisImplementacion: String(ev.paisImplementacion ?? ""),
-    rut: String(ev.rut ?? ""),
-    nombreCliente: String(ev.nombreCliente ?? ""),
-    hardware: Array.isArray(ev.hardware) ? (ev.hardware as F2Data["hardware"]) : [],
-    materiales: Array.isArray(ev.materiales) ? (ev.materiales as F2Data["materiales"]) : [],
+    ...f2ScalarsFromDb(ev),
+    hardware: Array.isArray(ev.hardware)
+      ? normalizeFilasCosto(ev.hardware as F2Data["hardware"])
+      : [],
+    materiales: Array.isArray(ev.materiales)
+      ? normalizeFilasCosto(ev.materiales as F2Data["materiales"])
+      : [],
     rrhh,
     otrosGastos,
     firmaImagen: ev.firmaImagen ? String(ev.firmaImagen) : undefined,
@@ -190,22 +231,7 @@ export function f2DataToEvalSyncData(d: F2Data): EvalSyncInput {
   const totalOtros = d.otrosGastos.reduce((s, r) => s + r.total, 0);
   const totalGastos = totalHardware + totalMateriales + totalRrhh + totalOtros;
   return {
-    unidadNegocios: d.unidadNegocios,
-    empresa: d.empresa,
-    solucion: d.solucion,
-    tipoMoneda: d.tipoMoneda,
-    montoProyecto: d.montoProyecto,
-    tipoCambio: d.tipoCambio,
-    totalClp: d.totalClp,
-    descripcion: d.descripcion,
-    preventa: d.preventa,
-    fechaEntrega: d.fechaEntrega || undefined,
-    ejecutivoComercial: d.ejecutivoComercial,
-    plazoImplementacion: d.plazoImplementacion,
-    propuestaNumero: d.propuestaNumero,
-    paisImplementacion: d.paisImplementacion,
-    rut: d.rut,
-    nombreCliente: d.nombreCliente,
+    ...f2ScalarsToSync(d),
     hardware: d.hardware,
     materiales: d.materiales,
     rrhh: d.rrhh,

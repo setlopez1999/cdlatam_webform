@@ -34,6 +34,8 @@ Para lograr la integridad completa y permitir la auditoría a nivel de campos, s
 1. Repetir el proceso de F1 para F2, usando la tabla `evaluaciones`.
 2. Actualizar el campo `evaluacionId` en la tabla `expedientes`.
 
+> **Operativo hoy:** `evaluaciones.syncF2` + store Zustand. Si un campo F2 «desaparece al guardar», ver el mapa de causas y checklist en [`F2_SYNC_PIPELINE.md`](./F2_SYNC_PIPELINE.md) (escalares en `F2_SYNC_SCALAR_KEYS`, tablas desde store real).
+
 ### 3. Auditoría a nivel de campos
 
 Una vez que los datos viajen al backend, se debe modificar el router para que registre en `audit_log` exactamente qué campos cambiaron.

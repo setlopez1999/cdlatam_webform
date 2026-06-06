@@ -138,6 +138,8 @@ const FormaPagoHitosSchema = z.object({
   hitos: z.array(HitoPagoSchema),
 });
 
+const CuotaSchema = z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]);
+
 const FilaCostoSchema = z.object({
   id: z.string(),
   centroCosto: z.string(),
@@ -149,6 +151,7 @@ const FilaCostoSchema = z.object({
   total: z.number(),
   descripcionGasto: z.string(),
   observacion: z.string(),
+  cuota: CuotaSchema.optional(),
 });
 
 const FilaRRHHSchema = z.object({
@@ -163,6 +166,7 @@ const FilaRRHHSchema = z.object({
   total: z.number(),
   descripcionGasto: z.string(),
   observacion: z.string(),
+  cuota: CuotaSchema.optional(),
 }).passthrough();
 
 const FilaOtrosSchema = z.object({
@@ -177,7 +181,7 @@ const FilaOtrosSchema = z.object({
   total: z.number(),
   descripcionGasto: z.string(),
   observacion: z.string(),
-  mes: z.union([z.literal(1), z.literal(2), z.literal(3)]),
+  mes: CuotaSchema,
 }).passthrough();
 
 const ActaInputSchema = z.object({
@@ -215,6 +219,7 @@ const EvaluacionInputSchema = z.object({
   expedienteUuid: z.string().optional(),
   unidadNegocios: z.string().optional(),
   empresa: z.string().optional(),
+  centroCostoHeader: z.string().optional(),
   solucion: z.string().optional(),
   tipoMoneda: z.string().optional(),
   montoProyecto: z.number().min(0).optional(),
@@ -947,6 +952,7 @@ export const appRouter = router({
           actaId: d.actaId ?? acta?.id ?? null,
           unidadNegocios: d.unidadNegocios,
           empresa: d.empresa,
+          centroCostoHeader: d.centroCostoHeader,
           solucion: d.solucion,
           tipoMoneda: d.tipoMoneda,
           montoProyecto: d.montoProyecto,

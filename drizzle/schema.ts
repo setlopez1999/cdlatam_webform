@@ -91,6 +91,8 @@ export const evaluaciones = sqliteTable("evaluaciones", {
   // Información General
   unidadNegocios: text("unidadNegocios"),
   empresa: text("empresa"),
+  /** Centro de costo del encabezado F2 (catálogo CECOs). */
+  centroCostoHeader: text("centroCostoHeader"),
   solucion: text("solucion"),
   tipoMoneda: text("tipoMoneda"),
   montoProyecto: real("montoProyecto"),

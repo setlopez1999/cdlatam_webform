@@ -17,6 +17,8 @@ import { buildActaCodigo } from "@shared/documentCodes";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import { PDFDocument } from "pdf-lib";
+import { getMesValue, mesesActivos, sumResumenMeses } from "@/features/expedientes/f1/f1ImplementacionCuotas";
+import type { ResumenMeses } from "@/features/expedientes/types";
 import { formatCurrency, formatDate, getCurrencyCode } from "./formatters";
 // Logo importado estáticamente por Vite — siempre disponible sin fetch en runtime
 import cdlatamLogoDataUrl from "../assets/cdlatam-logo.png";
@@ -703,6 +705,15 @@ function porcentajeUIMostrar(val: number | undefined, fallback: number): number 
   return Math.round(v);
 }
 
+function resumenToMeses(res: { mes1?: number; mes2?: number; mes3?: number; mes4?: number } | undefined): ResumenMeses {
+  return {
+    mes1: res?.mes1 ?? 0,
+    mes2: res?.mes2 ?? 0,
+    mes3: res?.mes3 ?? 0,
+    mes4: res?.mes4 ?? 0,
+  };
+}
+
 function buildResultadoHTML(
   ep: EPData,
   resultado: ResultadoCalculado,
@@ -718,6 +729,14 @@ function buildResultadoHTML(
   const pctGim = porcentajeUIMostrar(resultado.distribucion?.gim?.porcentaje, 10);
   const pctGp = porcentajeUIMostrar(resultado.distribucion?.gp?.porcentaje, 90);
   const pctIva = porcentajeUIMostrar(resultado.facturacion?.impuesto?.tasa, 19);
+  const nCuotas = resultado.nCuotas || 3;
+  const meses = mesesActivos(nCuotas);
+  const mesHeaders = meses.map(m => `<th class="text-right">Mes ${m}</th>`).join("");
+  const mesCells = (res: ResumenMeses) =>
+    meses.map(m => `<td class="text-right">${fmt(getMesValue(res, m))}</td>`).join("");
+  const ingresoRes = resumenToMeses(resultado.ingreso);
+  const gastosRes = resumenToMeses(resultado.gastos);
+  const resultadoRes = resumenToMeses(resultado.resultado);
 
   const bloqueFacturacion = mostrarDist
     ? `
@@ -797,10 +816,10 @@ function buildResultadoHTML(
   </div>
 
   <div class="kpi-grid">
-    <div class="kpi-card"><div class="kpi-label">Ingreso Total</div><div class="kpi-value">${fmt((resultado.ingreso?.mes1||0)+(resultado.ingreso?.mes2||0)+(resultado.ingreso?.mes3||0))}</div></div>
-    <div class="kpi-card"><div class="kpi-label">Total Gastos</div><div class="kpi-value">${fmt((resultado.gastos?.mes1||0)+(resultado.gastos?.mes2||0)+(resultado.gastos?.mes3||0))}</div></div>
-    <div class="kpi-card"><div class="kpi-label">Resultado Neto</div><div class="kpi-value">${fmt((resultado.resultado?.mes1||0)+(resultado.resultado?.mes2||0)+(resultado.resultado?.mes3||0))}</div></div>
-    <div class="kpi-card"><div class="kpi-label">N° Cuotas</div><div class="kpi-value">${resultado.nCuotas || 0}</div></div>
+    <div class="kpi-card"><div class="kpi-label">Ingreso Total</div><div class="kpi-value">${fmt(sumResumenMeses(ingresoRes, nCuotas))}</div></div>
+    <div class="kpi-card"><div class="kpi-label">Total Gastos</div><div class="kpi-value">${fmt(sumResumenMeses(gastosRes, nCuotas))}</div></div>
+    <div class="kpi-card"><div class="kpi-label">Resultado Neto</div><div class="kpi-value">${fmt(sumResumenMeses(resultadoRes, nCuotas))}</div></div>
+    <div class="kpi-card"><div class="kpi-label">N° Cuotas</div><div class="kpi-value">${nCuotas}</div></div>
   </div>
 
   <div class="section">
@@ -809,16 +828,14 @@ function buildResultadoHTML(
       <thead>
         <tr>
           <th>Concepto</th>
-          <th class="text-right">Mes 1</th>
-          <th class="text-right">Mes 2</th>
-          <th class="text-right">Mes 3</th>
+          ${mesHeaders}
           <th class="text-right">Total</th>
         </tr>
       </thead>
       <tbody>
-        <tr><td>Ingreso por Mes</td><td class="text-right">${fmt(resultado.ingreso?.mes1||0)}</td><td class="text-right">${fmt(resultado.ingreso?.mes2||0)}</td><td class="text-right">${fmt(resultado.ingreso?.mes3||0)}</td><td class="text-right">${fmt((resultado.ingreso?.mes1||0)+(resultado.ingreso?.mes2||0)+(resultado.ingreso?.mes3||0))}</td></tr>
-        <tr><td>Gastos</td><td class="text-right">${fmt(resultado.gastos?.mes1||0)}</td><td class="text-right">${fmt(resultado.gastos?.mes2||0)}</td><td class="text-right">${fmt(resultado.gastos?.mes3||0)}</td><td class="text-right">${fmt((resultado.gastos?.mes1||0)+(resultado.gastos?.mes2||0)+(resultado.gastos?.mes3||0))}</td></tr>
-        <tr class="total-row"><td>Resultado</td><td class="text-right">${fmt(resultado.resultado?.mes1||0)}</td><td class="text-right">${fmt(resultado.resultado?.mes2||0)}</td><td class="text-right">${fmt(resultado.resultado?.mes3||0)}</td><td class="text-right">${fmt((resultado.resultado?.mes1||0)+(resultado.resultado?.mes2||0)+(resultado.resultado?.mes3||0))}</td></tr>
+        <tr><td>Ingreso por Mes</td>${mesCells(ingresoRes)}<td class="text-right">${fmt(sumResumenMeses(ingresoRes, nCuotas))}</td></tr>
+        <tr><td>Gastos</td>${mesCells(gastosRes)}<td class="text-right">${fmt(sumResumenMeses(gastosRes, nCuotas))}</td></tr>
+        <tr class="total-row"><td>Resultado</td>${mesCells(resultadoRes)}<td class="text-right">${fmt(sumResumenMeses(resultadoRes, nCuotas))}</td></tr>
       </tbody>
     </table>
   </div>
