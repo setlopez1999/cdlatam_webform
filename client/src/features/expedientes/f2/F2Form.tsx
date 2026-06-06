@@ -208,16 +208,6 @@ export default function F2Form({ expedienteId, onVerResultado }: Props) {
   };
 
   // ── Guardar ────────────────────────────────────────────────────────────────
-  // Persiste las filas derivadas al store antes de guardar.
-  const flushDerived = useCallback(() => {
-    update({
-      hardware:    hardwareRows,
-      materiales:  materialesRows,
-      rrhh:        rrhhRows,
-      otrosGastos: otrosRows,
-    });
-  }, [hardwareRows, materialesRows, rrhhRows, otrosRows, update]);
-
   const validate = useCallback((): boolean => {
     if (!data.nombreCliente && !data.empresa) {
       toast.error("El nombre del cliente o empresa es requerido");
@@ -228,18 +218,28 @@ export default function F2Form({ expedienteId, onVerResultado }: Props) {
 
   const handleSave = useCallback(async () => {
     if (!validate()) return;
-    flushDerived();
-    const ok = await guardar();
+    // Pasamos las filas derivadas directamente a guardar() para evitar la race
+    // condition entre el setState de flushDerived() y la lectura del store en guardar().
+    const ok = await guardar({
+      hardware:    hardwareRows,
+      materiales:  materialesRows,
+      rrhh:        rrhhRows,
+      otrosGastos: otrosRows,
+    });
     if (ok) toast.success("F2 guardado correctamente");
-  }, [validate, flushDerived, guardar]);
+  }, [validate, guardar, hardwareRows, materialesRows, rrhhRows, otrosRows]);
 
   const handleNavSave = useCallback(async (): Promise<boolean> => {
     if (!validate()) return false;
-    flushDerived();
-    const ok = await guardar();
+    const ok = await guardar({
+      hardware:    hardwareRows,
+      materiales:  materialesRows,
+      rrhh:        rrhhRows,
+      otrosGastos: otrosRows,
+    });
     if (ok) { toast.success("F2 guardado correctamente"); confirmNav(); }
     return ok;
-  }, [validate, flushDerived, guardar, confirmNav]);
+  }, [validate, guardar, hardwareRows, materialesRows, rrhhRows, otrosRows, confirmNav]);
 
   const handleNavDiscard = useCallback(async () => {
     await descartar();
