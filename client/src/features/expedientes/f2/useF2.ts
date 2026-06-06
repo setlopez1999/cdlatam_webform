@@ -100,8 +100,14 @@ export function useF2(expedienteId: string) {
     [expedienteId, store]
   );
 
-  const guardar = useCallback(async (): Promise<boolean> => {
+  /**
+   * guardar(derivedOverride?) — persiste F2 en BD.
+   * Si se pasa `derivedOverride`, usa esos datos en lugar del store (evita el
+   * problema de race condition entre flushDerived() y el estado de React).
+   */
+  const guardar = useCallback(async (derivedOverride?: Partial<F2Data>): Promise<boolean> => {
     if (!data) return false;
+    const dataToSave: F2Data = derivedOverride ? { ...data, ...derivedOverride } : data;
     const savedIso = new Date().toISOString();
 
     try {
@@ -109,10 +115,10 @@ export function useF2(expedienteId: string) {
         expedienteUuid: expedienteId,
         f2FormStatus: "guardado",
         f2SavedAt: savedIso,
-        data: f2DataToEvalSyncData(data),
+        data: f2DataToEvalSyncData(dataToSave),
       });
-      // Server confirmó → marcar guardado (también marca F3 como sin_guardar)
-      store.guardarF2(expedienteId);
+      // Server confirmó → marcar guardado con los datos derivados (también marca F3 como sin_guardar)
+      store.guardarF2(expedienteId, derivedOverride);
       // Invalidar la cache de tRPC para que las próximas queries traigan v2.
       // Sin esto, al volver a Historial / Workspace el useQuery devuelve la
       // versión cacheada anterior y eso pisa el store via mergeLista.
@@ -124,7 +130,7 @@ export function useF2(expedienteId: string) {
     } catch {
       return false;
     }
-  }, [data, expedienteId, store, syncF2Mutation]);
+  }, [data, expedienteId, store, syncF2Mutation, utils]);
 
   /**
    * descartar() — descarta los cambios locales y vuelve al estado de la BD.
