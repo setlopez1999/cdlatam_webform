@@ -4,16 +4,25 @@
 
 /**
  * Formatea un número como moneda con símbolo.
+ * Para UF usa formato manual (Intl no soporta CLF en todos los browsers).
  */
-export function formatCurrency(value: number, monedaValue = "USD"): string { // <-- 1. Cambiamos el nombre del parámetro para ser claros
+export function formatCurrency(value: number, monedaValue = "USD"): string {
   if (isNaN(value)) return "$0.00";
 
-  // 2. Usamos tu función getCurrencyCode aquí para limpiar "USD-DÓLAR"
   const currency = getCurrencyCode(monedaValue);
+
+  // UF: formato manual "UF 1.234,56"
+  if (currency === "UF") {
+    const formatted = new Intl.NumberFormat("es-CL", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(value);
+    return `UF ${formatted}`;
+  }
 
   return new Intl.NumberFormat("es-CL", {
     style: "currency",
-    currency, // <-- 3. Usamos el código limpio (ISO)
+    currency,
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(value);
@@ -83,14 +92,15 @@ export function calcTotal(totalNeto: number, iva: number): number {
 }
 
 /**
- * Extrae el código ISO de moneda del valor del catálogo (ej: "USD-DÓLAR" → "USD").
+ * Extrae el código de moneda del valor del catálogo (ej: "USD-DÓLAR" → "USD", "UF-UF" → "UF").
+ * Retorna "UF" para UF (no CLF) para que formatCurrency lo maneje con formato manual.
  * Si no se puede extraer, retorna "USD" por defecto.
  */
 export function getCurrencyCode(monedaValue: string): string {
   if (!monedaValue) return "USD";
   const code = monedaValue.split("-")[0]?.toUpperCase();
-  // Mapear UF → CLF (código ISO de la UF chilena)
-  if (code === "UF") return "CLF";
+  // UF: devolver "UF" directamente (formatCurrency lo maneja con formato manual)
+  if (code === "UF") return "UF";
   // Mapear SOL → PEN
   if (code === "SOL") return "PEN";
   return code || "USD";

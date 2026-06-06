@@ -887,7 +887,8 @@ export function buildFeaturesResumidoPdfBytes(
   y += 6;
 
   // ── Tabla ───────────────────────────────────────────────────────────────
-  const tableRows = items.map((item) => [item.label, item.estado ? "SI" : "NO"]);
+  // Agregar número de orden al label: "1. ADMINISTRACIÓN DE CONTENIDO LINEAL"
+  const tableRows = items.map((item, idx) => [`${idx + 1}. ${item.label}`, item.estado ? "SI" : "NO"]);
 
   autoTable(doc, {
     startY: y,
