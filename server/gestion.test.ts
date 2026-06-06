@@ -13,6 +13,9 @@ import {
   CATALOG_CONSIDERACIONES_COMERCIALES_SEED,
   sqlSeedConsideracionesComerciales,
 } from "./seeds/consideracionesComercialesSeed";
+import { calcularResultadoF3 } from "@/features/expedientes/f3/calcularResultadoF3";
+import { F2_INITIAL } from "@/features/expedientes/types";
+import type { F2Data, FilaCosto, FilaOtros, FilaRRHH } from "@/features/expedientes/types";
 
 // ─── Mock Context ─────────────────────────────────────────────────────────────
 
@@ -124,47 +127,92 @@ describe("auth.logout", () => {
 
 // ─── Calculation Engine Tests (Formulario 3) ─────────────────────────────────
 
-/**
- * Inline calculation engine for testing (mirrors client-side logic).
- * These tests validate the core business logic independently of the UI.
- */
-
-const DISTRIBUCION_GIM = 0.1;
-const DISTRIBUCION_GP = 0.9;
-const TASA_IMPUESTO = 0.19;
-
 interface EPDataTest {
   montoProyecto: number;
-  hardware: Array<{ total: number }>;
-  materiales: Array<{ total: number }>;
-  rrhh: Array<{ total: number }>;
+  hardware: Array<{ total: number; cuota?: 1 | 2 | 3 | 4 }>;
+  materiales: Array<{ total: number; cuota?: 1 | 2 | 3 | 4 }>;
+  rrhh: Array<{ total: number; cuota?: 1 | 2 | 3 | 4 }>;
   otrosGastos: Array<{ total: number; mes: 1 | 2 | 3 }>;
 }
 
-function calcularResultadoTest(ep: EPDataTest) {
-  const otrosMes1 = ep.otrosGastos.filter(o => o.mes === 1).reduce((s, o) => s + o.total, 0);
-  const otrosMes2 = ep.otrosGastos.filter(o => o.mes === 2).reduce((s, o) => s + o.total, 0);
-  const otrosMes3 = ep.otrosGastos.filter(o => o.mes === 3).reduce((s, o) => s + o.total, 0);
-  const totalHardware = ep.hardware.reduce((s, h) => s + h.total, 0);
-  const totalMateriales = ep.materiales.reduce((s, m) => s + m.total, 0);
-  const totalRRHH = ep.rrhh.reduce((s, r) => s + r.total, 0);
-  const gastosMes1 = totalHardware + totalMateriales + totalRRHH + otrosMes1;
-  const gastosMes2 = otrosMes2;
-  const gastosMes3 = otrosMes3;
-  const nCuotas = 3;
-  const ingresoPorMes = ep.montoProyecto / nCuotas;
-  const resultadoMes1 = ingresoPorMes - gastosMes1;
-  const resultadoMes2 = ingresoPorMes - gastosMes2;
-  const resultadoMes3 = ingresoPorMes - gastosMes3;
+function mkCosto(total: number, cuota?: 1 | 2 | 3 | 4): FilaCosto {
   return {
-    ingresoPorMes,
-    gastosMes1, gastosMes2, gastosMes3,
-    resultadoMes1, resultadoMes2, resultadoMes3,
-    gimMes1: resultadoMes1 * DISTRIBUCION_GIM,
-    gpMes1: resultadoMes1 * DISTRIBUCION_GP,
-    facturacionBrutoMes1: resultadoMes1 * DISTRIBUCION_GP,
-    facturacionImpuestoMes1: resultadoMes1 * DISTRIBUCION_GP * TASA_IMPUESTO,
-    facturacionNetoMes1: resultadoMes1 * DISTRIBUCION_GP * (1 - TASA_IMPUESTO),
+    id: "t",
+    centroCosto: "",
+    descripcionGasto: "",
+    valorNeto: total,
+    cantidad: 1,
+    totalNeto: total,
+    iva: 0,
+    total,
+    tipoMoneda: "USD",
+    observacion: "",
+    cuota,
+  };
+}
+
+function mkRRHH(total: number, cuota?: 1 | 2 | 3 | 4): FilaRRHH {
+  return {
+    id: "t",
+    tipo: "tecnico_interno",
+    label: "",
+    centroCosto: "",
+    valorSinImpuesto: total,
+    tipoMoneda: "USD",
+    cantidad: 1,
+    totalNeto: total,
+    impuesto: 0,
+    total,
+    descripcionGasto: "",
+    observacion: "",
+    cuota,
+  };
+}
+
+function mkOtros(total: number, mes: 1 | 2 | 3): FilaOtros {
+  return {
+    id: "t",
+    tipo: "varios",
+    label: "",
+    centroCosto: "",
+    valorNeto: total,
+    cantidad: 1,
+    totalNeto: total,
+    iva: 0,
+    total,
+    tipoMoneda: "USD",
+    descripcionGasto: "",
+    observacion: "",
+    mes,
+  };
+}
+
+function epToF2(ep: EPDataTest): F2Data {
+  return {
+    ...F2_INITIAL,
+    montoProyecto: ep.montoProyecto,
+    hardware: ep.hardware.map(h => mkCosto(h.total, h.cuota)),
+    materiales: ep.materiales.map(m => mkCosto(m.total, m.cuota)),
+    rrhh: ep.rrhh.map(r => mkRRHH(r.total, r.cuota)),
+    otrosGastos: ep.otrosGastos.map(o => mkOtros(o.total, o.mes)),
+  };
+}
+
+function calcularResultadoTest(ep: EPDataTest) {
+  const r = calcularResultadoF3(epToF2(ep));
+  return {
+    ingresoPorMes: r.ingreso.mes1,
+    gastosMes1: r.gastos.mes1,
+    gastosMes2: r.gastos.mes2,
+    gastosMes3: r.gastos.mes3,
+    resultadoMes1: r.resultado.mes1,
+    resultadoMes2: r.resultado.mes2,
+    resultadoMes3: r.resultado.mes3,
+    gimMes1: r.distribucion.gim.mes1,
+    gpMes1: r.distribucion.gp.mes1,
+    facturacionBrutoMes1: r.facturacion.bruto.mes1,
+    facturacionImpuestoMes1: r.facturacion.impuesto.mes1,
+    facturacionNetoMes1: r.facturacion.neto.mes1,
   };
 }
 
@@ -289,6 +337,20 @@ describe("Formulario 3 - Motor de Cálculo", () => {
     };
     const r = calcularResultadoTest(ep);
     expect(r.resultadoMes1).toBeLessThan(0);
+  });
+
+  it("RRHH de cuota 2 no se imputa en mes 1 (gastos por cuota)", () => {
+    const ep: EPDataTest = {
+      montoProyecto: 36000,
+      hardware: [],
+      materiales: [],
+      rrhh: [{ total: 4000, cuota: 2 }],
+      otrosGastos: [{ total: 300, mes: 2 }],
+    };
+    const r = calcularResultadoTest(ep);
+    expect(r.gastosMes1).toBe(0);
+    expect(r.gastosMes2).toBe(4300);
+    expect(r.resultadoMes2).toBe(7700);
   });
 });
 

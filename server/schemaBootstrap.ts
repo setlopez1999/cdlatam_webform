@@ -168,6 +168,7 @@ CREATE TABLE IF NOT EXISTS evaluaciones (
   expedienteUuid TEXT,
   unidadNegocios TEXT,
   empresa TEXT,
+  centroCostoHeader TEXT,
   solucion TEXT,
   tipoMoneda TEXT,
   montoProyecto REAL,

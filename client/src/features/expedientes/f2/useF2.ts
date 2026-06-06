@@ -16,11 +16,18 @@
  * Pre-llenado desde F1:
  *   Una sola tabla `F1_TO_F2_HEADER_FIELDS` define qué copiar al banner y al botón.
  */
-import { useCallback } from "react";
+import { useCallback, useMemo } from "react";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
-import { useExpedienteStore, getExpedienteFromState } from "../store";
+import {
+  useExpedienteStore,
+  getExpedienteFromState,
+  storeUpdateF2,
+  storeGuardarF2,
+  storeMergeDetalleEnStore,
+} from "../store";
 import { f2DataToEvalSyncData, mapDetalleToExpediente } from "../fromServer";
+import { sanitizeF2Cuotas } from "../f1/f1ImplementacionCuotas";
 import type { F2Data, F1Data } from "../types";
 
 /** Mapeo F1 → campos de encabezado F2 (solo escalares; mismos que antes del refactor). */
@@ -73,9 +80,9 @@ function f1ImportSuggestions(f1: F1Data | null) {
 }
 
 export function useF2(expedienteId: string) {
-  const store = useExpedienteStore();
+  const { getExpediente } = useExpedienteStore();
   const utils = trpc.useUtils();
-  const expediente = store.getExpediente(expedienteId);
+  const expediente = getExpediente(expedienteId);
 
   const syncF2Mutation = trpc.evaluaciones.syncF2.useMutation({
     onError: (err) => {
@@ -93,11 +100,11 @@ export function useF2(expedienteId: string) {
   /** Datos de F1 del mismo expediente — disponibles para pre-llenado */
   const f1Data: F1Data | null = expediente?.f1.data ?? null;
 
-  const f1Suggestions = f1ImportSuggestions(f1Data);
+  const f1Suggestions = useMemo(() => f1ImportSuggestions(f1Data), [f1Data]);
 
   const update = useCallback(
-    (partial: Partial<F2Data>) => store.updateF2(expedienteId, partial),
-    [expedienteId, store]
+    (partial: Partial<F2Data>) => storeUpdateF2(expedienteId, partial),
+    [expedienteId],
   );
 
   /**
@@ -108,9 +115,11 @@ export function useF2(expedienteId: string) {
   const guardar = useCallback(async (derivedOverride?: Partial<F2Data>): Promise<boolean> => {
     // Leer del singleton directamente para evitar stale closure del snapshot de React.
     // El singleton se actualiza síncronamente cuando el usuario edita un campo.
-    const freshData = getExpedienteFromState(expedienteId)?.f2.data ?? data;
+    const freshExp = getExpedienteFromState(expedienteId);
+    const freshData = freshExp?.f2.data ?? data;
     if (!freshData) return false;
-    const dataToSave: F2Data = derivedOverride ? { ...freshData, ...derivedOverride } : freshData;
+    const merged: F2Data = derivedOverride ? { ...freshData, ...derivedOverride } : freshData;
+    const dataToSave = sanitizeF2Cuotas(merged, freshExp?.f1.data ?? f1Data);
     const savedIso = new Date().toISOString();
 
     try {
@@ -121,7 +130,7 @@ export function useF2(expedienteId: string) {
         data: f2DataToEvalSyncData(dataToSave),
       });
       // Server confirmó → marcar guardado con los datos derivados (también marca F3 como sin_guardar)
-      store.guardarF2(expedienteId, derivedOverride);
+      storeGuardarF2(expedienteId, dataToSave);
       // Invalidar la cache de tRPC para que las próximas queries traigan v2.
       // Sin esto, al volver a Historial / Workspace el useQuery devuelve la
       // versión cacheada anterior y eso pisa el store via mergeLista.
@@ -133,7 +142,7 @@ export function useF2(expedienteId: string) {
     } catch {
       return false;
     }
-  }, [data, expedienteId, store, syncF2Mutation, utils]);
+  }, [data, f1Data, expedienteId, syncF2Mutation, utils]);
 
   /**
    * descartar() — descarta los cambios locales y vuelve al estado de la BD.
@@ -144,13 +153,13 @@ export function useF2(expedienteId: string) {
       await utils.expediente.detalle.invalidate({ uuid: expedienteId });
       const fresh = await utils.expediente.detalle.fetch({ uuid: expedienteId });
       if (fresh) {
-        store.mergeDetalleEnStore(mapDetalleToExpediente(fresh));
+        storeMergeDetalleEnStore(mapDetalleToExpediente(fresh));
       }
     } catch (err) {
       console.warn("[useF2] No se pudo descartar y refrescar desde BD:", err);
       toast.error("No se pudo recuperar la versión guardada");
     }
-  }, [utils, expedienteId, store]);
+  }, [utils, expedienteId]);
 
   /** Importa al F2 los campos de encabezado definidos en F1_TO_F2_HEADER_FIELDS
    *  más solucion, unidadNegocios, plazoImplementacion y montoProyecto desde F1. */

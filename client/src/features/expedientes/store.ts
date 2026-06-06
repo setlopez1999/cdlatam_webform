@@ -37,6 +37,30 @@ function _persist(list: Expediente[]): void {
   }
 }
 
+const PERSIST_DEBOUNCE_MS = 400;
+let _persistTimer: ReturnType<typeof setTimeout> | null = null;
+
+function _schedulePersist(): void {
+  if (_persistTimer !== null) clearTimeout(_persistTimer);
+  _persistTimer = setTimeout(() => {
+    _persistTimer = null;
+    _persist(_state);
+  }, PERSIST_DEBOUNCE_MS);
+}
+
+/** Escribe localStorage de inmediato (p. ej. guardar, cerrar pestaña). */
+export function flushExpedientePersist(): void {
+  if (_persistTimer !== null) {
+    clearTimeout(_persistTimer);
+    _persistTimer = null;
+  }
+  _persist(_state);
+}
+
+if (typeof window !== "undefined") {
+  window.addEventListener("beforeunload", flushExpedientePersist);
+}
+
 function _loadActivo(): string | null {
   return localStorage.getItem(ACTIVE_KEY);
 }
@@ -80,12 +104,58 @@ function _crearExpediente(nombre?: string): Expediente {
 let _state: Expediente[] = _load();
 const _listeners = new Set<() => void>();
 
-function _setState(updater: (prev: Expediente[]) => Expediente[]): void {
+function _setState(
+  updater: (prev: Expediente[]) => Expediente[],
+  options?: { persistImmediate?: boolean },
+): void {
   const next = updater(_state);
   if (next === _state) return;
   _state = next;
-  _persist(_state);
+  if (options?.persistImmediate) {
+    flushExpedientePersist();
+  } else {
+    _schedulePersist();
+  }
   _listeners.forEach((l) => l());
+}
+
+function _updateExpediente(id: string, updater: (exp: Expediente) => Expediente, persistImmediate = false): void {
+  _setState(
+    prev => prev.map(e => (e.id === id ? updater({ ...e, updatedAt: new Date().toISOString() }) : e)),
+    { persistImmediate },
+  );
+}
+
+/** Acciones estables (referencia de módulo) para useCallback en hooks sin depender del objeto del hook. */
+export function storeUpdateF2(id: string, partial: Partial<F2Data>): void {
+  _updateExpediente(id, e => ({
+    ...e,
+    f2: {
+      ...e.f2,
+      data: { ...e.f2.data, ...partial },
+      status: e.f2.status === "guardado" ? "sin_guardar" : e.f2.status === "nuevo" ? "sin_guardar" : e.f2.status,
+    },
+  }));
+}
+
+export function storeGuardarF2(id: string, partial?: Partial<F2Data>): void {
+  _updateExpediente(id, e => ({
+    ...e,
+    f2: {
+      ...e.f2,
+      data: partial ? { ...e.f2.data, ...partial } : e.f2.data,
+      status: "guardado",
+      savedAt: new Date().toISOString(),
+    },
+    f3: { status: "sin_guardar" },
+  }), true);
+}
+
+export function storeMergeDetalleEnStore(exp: Expediente): void {
+  _setState(prev => {
+    const idx = prev.findIndex(e => e.id === exp.id);
+    return idx >= 0 ? prev.map(e => (e.id === exp.id ? exp : e)) : [...prev, exp];
+  }, { persistImmediate: true });
 }
 
 function _subscribe(listener: () => void): () => void {
@@ -122,10 +192,8 @@ export function useExpedienteStore() {
 
   // ── Helpers internos ──────────────────────────────────────────────────────
 
-  const _update = useCallback((id: string, updater: (exp: Expediente) => Expediente) => {
-    _setState(prev =>
-      prev.map(e => (e.id === id ? updater({ ...e, updatedAt: new Date().toISOString() }) : e)),
-    );
+  const _update = useCallback((id: string, updater: (exp: Expediente) => Expediente, persistImmediate = false) => {
+    _updateExpediente(id, updater, persistImmediate);
   }, []);
 
   // ── CRUD de expedientes ───────────────────────────────────────────────────
@@ -133,14 +201,14 @@ export function useExpedienteStore() {
   /** Crea un nuevo expediente y lo devuelve */
   const crear = useCallback((nombre?: string): Expediente => {
     const exp = _crearExpediente(nombre);
-    _setState(prev => [...prev, exp]);
+    _setState(prev => [...prev, exp], { persistImmediate: true });
     _persistActivo(exp.id);
     return exp;
   }, []);
 
   /** Elimina un expediente por id (solo cliente; el servidor debe borrarse aparte). */
   const eliminar = useCallback((id: string) => {
-    _setState(prev => prev.filter(e => e.id !== id));
+    _setState(prev => prev.filter(e => e.id !== id), { persistImmediate: true });
   }, []);
 
   /**
@@ -166,15 +234,12 @@ export function useExpedienteStore() {
           local.f1.status === "sin_guardar" || local.f2.status === "sin_guardar";
         return tieneCambiosPendientes ? local : serverExp;
       });
-    });
+    }, { persistImmediate: true });
   }, []);
 
   /** Inserta o actualiza un expediente desde `expediente.detalle`. */
   const mergeDetalleEnStore = useCallback((exp: Expediente) => {
-    _setState(prev => {
-      const idx = prev.findIndex(e => e.id === exp.id);
-      return idx >= 0 ? prev.map(e => (e.id === exp.id ? exp : e)) : [...prev, exp];
-    });
+    storeMergeDetalleEnStore(exp);
   }, []);
 
   /** Renombra un expediente */
@@ -220,22 +285,15 @@ export function useExpedienteStore() {
         status: "guardado",
         savedAt: new Date().toISOString(),
       },
-    }));
+    }), true);
   }, [_update]);
 
   // ── F2 ────────────────────────────────────────────────────────────────────
 
   /** Marca F2 como "sin_guardar" cuando el usuario modifica un campo. */
   const updateF2 = useCallback((id: string, partial: Partial<F2Data>) => {
-    _update(id, e => ({
-      ...e,
-      f2: {
-        ...e.f2,
-        data: { ...e.f2.data, ...partial },
-        status: e.f2.status === "guardado" ? "sin_guardar" : e.f2.status === "nuevo" ? "sin_guardar" : e.f2.status,
-      },
-    }));
-  }, [_update]);
+    storeUpdateF2(id, partial);
+  }, []);
 
   /**
    * Guarda F2 — cambia status a "guardado" y registra savedAt.
@@ -244,18 +302,8 @@ export function useExpedienteStore() {
    * `sin_guardar`).
    */
   const guardarF2 = useCallback((id: string, partial?: Partial<F2Data>) => {
-    _update(id, e => ({
-      ...e,
-      f2: {
-        ...e.f2,
-        data: partial ? { ...e.f2.data, ...partial } : e.f2.data,
-        status: "guardado",
-        savedAt: new Date().toISOString(),
-      },
-      // F3 pasa a sin_guardar porque sus cálculos cambiaron
-      f3: { status: "sin_guardar" },
-    }));
-  }, [_update]);
+    storeGuardarF2(id, partial);
+  }, []);
 
   // ── F3 ────────────────────────────────────────────────────────────────────
 
