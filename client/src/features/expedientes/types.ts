@@ -202,6 +202,7 @@ export interface F2Data {
   paisImplementacion: string;
   rut: string;
   nombreCliente: string;
+  nombreFantasia: string;
   // Costos
   hardware: FilaCosto[];
   materiales: FilaCosto[];
@@ -216,7 +217,7 @@ export const F2_INITIAL: F2Data = {
   montoProyecto: 0, tipoCambio: 1, totalClp: 0,
   descripcion: "", preventa: "", fechaEntrega: "",
   ejecutivoComercial: "", plazoImplementacion: "", propuestaNumero: "",
-  paisImplementacion: "", rut: "", nombreCliente: "",
+  paisImplementacion: "", rut: "", nombreCliente: "", nombreFantasia: "",
   hardware: [], materiales: [], rrhh: [], otrosGastos: [],
   firmaImagen: undefined,
 };

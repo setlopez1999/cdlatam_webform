@@ -107,6 +107,7 @@ export const evaluaciones = sqliteTable("evaluaciones", {
   paisImplementacion: text("paisImplementacion"),
   rut: text("rut"),
   nombreCliente: text("nombreCliente"),
+  nombreFantasia: text("nombreFantasia"),
 
   // Costos por categoría (JSON)
   hardware: text("hardware", { mode: "json" }),

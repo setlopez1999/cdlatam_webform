@@ -32,6 +32,7 @@ export const F2_SYNC_SCALAR_KEYS = [
   "paisImplementacion",
   "rut",
   "nombreCliente",
+  "nombreFantasia",
 ] as const satisfies readonly (keyof F2Data)[];
 
 function f2ScalarsFromDb(ev: Record<string, unknown>): Pick<F2Data, (typeof F2_SYNC_SCALAR_KEYS)[number]> {

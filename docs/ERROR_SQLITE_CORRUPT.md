@@ -26,9 +26,8 @@ Es decir: el import **terminó sin error HTTP**, pero el archivo resultante no e
 ## 2. Causas habituales
 
 | Causa | Detalle |
-|---|---|
+|---|---|---|
 | Archivo de backup incompleto o truncado | Descarga interrumpida, copia parcial entre PCs |
-| Import con conexión activa | [`server/_core/dbManagement.ts`](../server/_core/dbManagement.ts) sobrescribe `gestion.db` con `writeFileSync` mientras el servidor puede tener la BD abierta |
 | Archivo que no es SQLite | Se subió un `.db` que en realidad es otro formato o está vacío |
 | Mezcla de entornos | Backup de Docker (`data/gestion.db`) copiado sin parar el servidor local |
 
@@ -94,9 +93,10 @@ Debe mostrar `[ { integrity_check: 'ok' } ]`.
 
 ## 6. Prevención
 
-- Parar `pnpm dev` antes de importar una BD manualmente (copiar archivo a mano).
+- Usar el botón **Importar BD** de la UI (cierra/reabre la conexión automáticamente via `closeDb/initDb`).
+- Al copiar manualmente, parar el servidor primero.
 - Usar solo backups exportados desde *Exportar BD* o copias completas del archivo.
-- No mezclar archivos `.db` entre máquinas sin comprobar tamaño e integridad.
+- No mezclar archivos `.db` entre entornos sin comprobar tamaño e integridad.
 - Tras cambiar de versión de Node, reconstruir el nativo: ver [`ERROR_BETTER_SQLITE3_BINARY.md`](./ERROR_BETTER_SQLITE3_BINARY.md).
 
 ## 7. Documentos relacionados

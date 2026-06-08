@@ -1,26 +1,17 @@
 import express, { type Express, type Request, type Response } from "express";
-import { join, isAbsolute } from "path";
 import { existsSync, writeFileSync } from "fs";
+import { resolveDbPath } from "./dbConfig";
+import { closeDb, initDb, getRawDb } from "../db";
+import { ensureAllProjectTables } from "../schemaBootstrap";
 
 /**
  * Registra rutas para la gestión manual del archivo de base de datos SQLite.
  * Útil para copias de seguridad rápidas y restauración manual.
  */
 export function registerDbManagementRoutes(app: Express) {
-  // Misma lógica que db.ts: si DATABASE_URL es un path Docker/Linux (/app/...)
-  // y estamos en Windows, lo ignoramos para evitar el ENOENT en C:\app\data\...
-  const LOCAL_DB_PATH = join(process.cwd(), "gestion.db");
-  let dbPath = LOCAL_DB_PATH;
-  if (process.env.DATABASE_URL) {
-    const envPath = process.env.DATABASE_URL.replace(/^file:/, "");
-    const isLinuxPathOnWindows = process.platform === "win32" && envPath.startsWith("/app/");
-    if (!isLinuxPathOnWindows) {
-      dbPath = envPath;
-    }
-  }
-
-  // Exportar (Descargar) la base de dato
+  // Exportar (Descargar) la base de datos
   app.get("/api/db/export", (_req: Request, res: Response) => {
+    const dbPath = resolveDbPath();
     if (!existsSync(dbPath)) {
       return res.status(404).json({ error: "Archivo de base de datos no encontrado." });
     }
@@ -46,15 +37,24 @@ export function registerDbManagementRoutes(app: Express) {
         return res.status(400).json({ error: "No se recibieron datos." });
       }
 
-      // IMPORTANTE: Sobrescribir el archivo gestion.db
-      // Esto puede causar problemas si la conexión está activa, 
-      // pero SQLite suele manejarlo o el servidor se reiniciará por tsx watch.
-      writeFileSync(dbPath, req.body);
+      const dbPath = resolveDbPath();
 
-      console.log("[DB Mgmt] Database imported successfully.");
+      // Cerrar la conexión activa para liberar el bloqueo del archivo
+      closeDb();
+
+      // Sobrescribir el archivo de base de datos
+      writeFileSync(dbPath, Buffer.from(req.body));
+
+      // Reabrir conexión con el nuevo archivo y asegurar que todas las tablas existen
+      initDb();
+      ensureAllProjectTables(getRawDb());
+
+      console.log("[DB Mgmt] Database imported and reconnected successfully.");
       res.json({ success: true, message: "Base de datos importada correctamente. Se recomienda refrescar la página." });
     } catch (error) {
       console.error("[DB Mgmt] Error importing database:", error);
+      // Intentar reabrir la conexión incluso si falló la importación
+      try { initDb(); } catch { /* ignorar */ }
       res.status(500).json({ error: "Error al importar la base de datos." });
     }
   });

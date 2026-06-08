@@ -34,6 +34,7 @@ import type { F2Data, F1Data } from "../types";
 const F1_TO_F2_HEADER_FIELDS = [
   { f2: "nombreCliente" as const, f1: "razonSocial" as const },
   { f2: "empresa" as const, f1: "razonSocial" as const },
+  { f2: "nombreFantasia" as const, f1: "nombreFantasia" as const },
   { f2: "rut" as const, f1: "rucDniRut" as const },
   { f2: "paisImplementacion" as const, f1: "pais" as const },
   { f2: "tipoMoneda" as const, f1: "moneda" as const },
@@ -69,6 +70,7 @@ function f1ImportSuggestions(f1: F1Data | null) {
   return s as {
     nombreCliente: string;
     empresa: string;
+    nombreFantasia: string;
     rut: string;
     paisImplementacion: string;
     tipoMoneda: string;

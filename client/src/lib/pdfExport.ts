@@ -356,23 +356,34 @@ async function buildActaPdfBytes(acta: ActaData): Promise<Uint8Array> {
   ], margin, y, contentWidth);
 
   // ── 4. Datos de contacto ────────────────────────────────────────────────
-  y += 4; // espacio entre Información Legal e Información de Contacto
+  y += 4;
   y = drawSectionTitle(doc, "Información de Contacto", margin, y);
-  y = drawContactGroup(doc, "Representante Legal", [
-    { label: "Nombre", value: acta.representanteLegal },
-    { label: "DNI / Cédula", value: acta.representanteDni },
-    { label: "E-mail", value: acta.representanteEmail },
-    { label: "Teléfono", value: acta.representanteFono },
-  ], margin, y, contentWidth);
-  y = drawContactGroup(doc, "Contacto Técnico", [
-    { label: "Nombre", value: acta.contactoTecnico },
-    { label: "E-mail", value: acta.contactoTecnicoEmail },
-    { label: "Teléfono", value: acta.contactoTecnicoFono },
-  ], margin, y, contentWidth);
-  y = drawContactGroup(doc, "Contacto Facturación", [
-    { label: "Nombre", value: acta.contactoFacturacion },
-    { label: "E-mail", value: acta.contactoFacturacionEmail },
-    { label: "Teléfono", value: acta.contactoFacturacionFono },
+  y = drawContactGrid(doc, [
+    {
+      title: "Representante Legal",
+      fields: [
+        { label: "Nombre", value: acta.representanteLegal },
+        { label: "DNI / Cédula", value: acta.representanteDni },
+        { label: "E-mail", value: acta.representanteEmail },
+        { label: "Teléfono", value: acta.representanteFono },
+      ],
+    },
+    {
+      title: "Contacto Técnico",
+      fields: [
+        { label: "Nombre", value: acta.contactoTecnico },
+        { label: "E-mail", value: acta.contactoTecnicoEmail },
+        { label: "Teléfono", value: acta.contactoTecnicoFono },
+      ],
+    },
+    {
+      title: "Contacto Facturación",
+      fields: [
+        { label: "Nombre", value: acta.contactoFacturacion },
+        { label: "E-mail", value: acta.contactoFacturacionEmail },
+        { label: "Teléfono", value: acta.contactoFacturacionFono },
+      ],
+    },
   ], margin, y, contentWidth);
 
   // ── 5. Servicios contratados ────────────────────────────────────────────
@@ -445,7 +456,7 @@ async function buildActaPdfBytes(acta: ActaData): Promise<Uint8Array> {
   const consideracionesPdf = personalizadas.map(s => s.trim()).filter(Boolean);
   if (consideracionesPdf.length) {
     y += 1;
-    y = drawBulletList(doc, consideracionesPdf, margin, y, contentWidth);
+    y = drawBulletList2Col(doc, consideracionesPdf, margin, y, contentWidth);
   } else {
     y += 2;
     doc.setFontSize(8);
@@ -631,6 +642,62 @@ function drawContactGroup(
   return y + 2;
 }
 
+function drawContactGrid(
+  doc: jsPDF,
+  groups: { title: string; fields: FieldDef[] }[],
+  x: number,
+  y: number,
+  width: number,
+): number {
+  const colW = width / groups.length;
+  const maxFields = Math.max(...groups.map(g => g.fields.length));
+  const rowH = 4.5;
+  const gridH = 10 + maxFields * rowH + 2;
+
+  y = ensureSpace(doc, y, gridH);
+
+  groups.forEach((group, gi) => {
+    const cx = x + gi * colW;
+
+    doc.setFontSize(7.5);
+    doc.setTextColor(...COLOR_BRAND);
+    doc.setFont("helvetica", "bold");
+    doc.text(String(group.title), cx + 2, y + 4);
+
+    group.fields.forEach((f, fi) => {
+      const fy = y + 7 + fi * rowH;
+
+      doc.setFontSize(6.5);
+      doc.setTextColor(...COLOR_GRAY);
+      doc.setFont("helvetica", "normal");
+      doc.text(`${f.label}:`, cx + 2, fy);
+
+      doc.setFontSize(7.5);
+      doc.setTextColor(...COLOR_TEXT);
+      doc.setFont("helvetica", "normal");
+      const value = f.value == null || f.value === "" ? " " : String(f.value);
+      const labelW = 22;
+      const valueW = colW - labelW - 4;
+      if (valueW > 8) {
+        const lines = doc.splitTextToSize(value, Math.max(1, valueW));
+        doc.text(lines[0] ?? " ", cx + 2 + labelW, fy);
+      } else {
+        doc.text(value.length > 15 ? value.substring(0, 15) + "…" : value, cx + 2 + labelW, fy);
+      }
+    });
+  });
+
+  doc.setDrawColor(209, 213, 219);
+  doc.setLineWidth(0.2);
+  for (let gi = 1; gi < groups.length; gi++) {
+    const cx = x + gi * colW;
+    doc.line(cx, y + 2, cx, y + gridH - 1);
+  }
+  doc.line(x, y + gridH - 1, x + width, y + gridH - 1);
+
+  return y + gridH + 3;
+}
+
 function drawPagoTable(
   doc: jsPDF,
   formas: Array<{ tipoVenta: string; nCuotas: number; cuotas?: Array<{ monto: number; fecha: string }> }>,
@@ -693,6 +760,54 @@ function drawBulletList(
     y += needed;
   }
   return y;
+}
+
+function drawBulletList2Col(
+  doc: jsPDF,
+  items: string[],
+  x: number,
+  y: number,
+  width: number,
+): number {
+  if (items.length <= 1) return drawBulletList(doc, items, x, y, width);
+
+  const mid = Math.ceil(items.length / 2);
+  const gutter = 4;
+  const halfW = width / 2;
+  const colW = halfW - gutter / 2;
+
+  const wrapped = items.map(item => doc.splitTextToSize(item, colW - 6));
+  const heights = wrapped.map(lines => lines.length * 4 + 1);
+
+  const leftH = heights.slice(0, mid).reduce((a, b) => a + b, 0);
+  const rightH = heights.slice(mid).reduce((a, b) => a + b, 0);
+  const colH = Math.max(leftH, rightH);
+
+  y = ensureSpace(doc, y, colH);
+
+  doc.setFontSize(8.5);
+  doc.setTextColor(...COLOR_TEXT);
+  doc.setFont("helvetica", "normal");
+
+  let ly = y;
+  for (let i = 0; i < mid; i++) {
+    const lines = wrapped[i];
+    const needed = heights[i];
+    doc.text("–", x, ly);
+    doc.text(lines, x + 4, ly);
+    ly += needed;
+  }
+
+  let ry = y;
+  for (let i = mid; i < items.length; i++) {
+    const lines = wrapped[i];
+    const needed = heights[i];
+    doc.text("–", x + halfW + gutter / 2, ry);
+    doc.text(lines, x + halfW + gutter / 2 + 4, ry);
+    ry += needed;
+  }
+
+  return y + colH;
 }
 
 // ─── Resultado PDF (sin cambios estructurales) ────────────────────────────────

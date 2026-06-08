@@ -38,28 +38,9 @@ Al intentar importar la base de datos desde la UI (o cualquier operación de `db
 
 Node.js en Windows interpreta el path Linux `/app/data/gestion.db` como una ruta relativa a la raíz del drive actual → `C:\app\data\gestion.db`. Esa carpeta no existe en Windows.
 
-### ¿Por qué `db.ts` funciona pero `dbManagement.ts` no?
+### ¿Por qué fallaba en `dbManagement.ts` pero no en `db.ts`?
 
-**`server/db.ts`** tiene lógica defensiva:
-
-```ts
-const isLinuxPathOnWindows = process.platform === 'win32' && envPath.startsWith('/app/');
-if (!isLinuxPathOnWindows) {
-  dbPath = envPath; // Solo lo usa si es un path válido para el OS actual
-}
-// → En Windows: ignora DATABASE_URL y usa process.cwd()/gestion.db ✅
-```
-
-**`server/_core/dbManagement.ts`** (antes del fix) NO tenía ese check:
-
-```ts
-// ❌ Antes
-const dbPath = process.env.DATABASE_URL
-  ? process.env.DATABASE_URL.replace(/^file:/, "")  // Usa el path ciegamente
-  : join(process.cwd(), "gestion.db");
-// → En Windows con DATABASE_URL=file:/app/data/gestion.db
-// → dbPath = C:\app\data\gestion.db ← No existe
-```
+Ambos archivos tenían la misma lógica defensiva, pero **duplicada**. Cuando se agregó una nueva ruta (import/export) a `dbManagement.ts`, olvidaron copiar el mismo check que ya existía en `db.ts`.
 
 ### Resumen visual
 
@@ -70,27 +51,42 @@ const dbPath = process.env.DATABASE_URL
            │
            └─ Windows npm dev → C:\app\data\gestion.db       ❌ no existe
                                      ↑
-                              db.ts lo evitaba, dbManagement.ts no
+                              Sin el check, Node interpreta /app/ como C:\app\
 ```
 
 ---
 
 ## Solución Aplicada
 
-Se replicó en `dbManagement.ts` la misma lógica defensiva que ya existía en `db.ts`:
+Se creó **`server/_core/dbConfig.ts`** como fuente única de verdad para resolver la ruta de la BD:
 
 ```ts
-// server/_core/dbManagement.ts
-const LOCAL_DB_PATH = join(process.cwd(), "gestion.db");
-let dbPath = LOCAL_DB_PATH;
-if (process.env.DATABASE_URL) {
+import { join, dirname } from "path";
+import { existsSync, mkdirSync } from "fs";
+
+export function resolveDbPath(): string {
+  const LOCAL_DB_PATH = join(process.cwd(), "gestion.db");
+  if (!process.env.DATABASE_URL) return LOCAL_DB_PATH;
+
   const envPath = process.env.DATABASE_URL.replace(/^file:/, "");
-  const isLinuxPathOnWindows = process.platform === "win32" && envPath.startsWith("/app/");
+  const isLinuxPathOnWindows =
+    process.platform === "win32" && envPath.startsWith("/app/");
+
   if (!isLinuxPathOnWindows) {
-    dbPath = envPath;
+    const dbDir = dirname(envPath);
+    if (!existsSync(dbDir)) {
+      try { mkdirSync(dbDir, { recursive: true }); } catch {
+        console.warn(`[DB] No se pudo crear ${dbDir}, usando fallback local.`);
+        return LOCAL_DB_PATH;
+      }
+    }
+    return envPath;
   }
+  return LOCAL_DB_PATH;
 }
 ```
+
+`server/db.ts` y `server/_core/dbManagement.ts` importan `resolveDbPath()` desde este módulo compartido, eliminando duplicación y garantizando consistencia.
 
 **Resultado:**
 - **Windows (`npm run dev`):** ignora `DATABASE_URL`, usa `<proyecto>/gestion.db` ✅
@@ -100,23 +96,13 @@ if (process.env.DATABASE_URL) {
 
 ## Regla General
 
-> Cualquier archivo del servidor que resuelva un path de base de datos desde `DATABASE_URL` **debe** incluir el check de `isLinuxPathOnWindows` para ser compatible con ambos entornos.
+> Cualquier archivo del servidor que necesite la ruta de la BD **debe** usar `resolveDbPath()` desde `server/_core/dbConfig.ts`. No duplicar lógica inline.
 
-### Plantilla reutilizable
+### Uso correcto
 
 ```ts
-import { join } from "path";
-
-const LOCAL_DB_PATH = join(process.cwd(), "gestion.db");
-let dbPath = LOCAL_DB_PATH;
-
-if (process.env.DATABASE_URL) {
-  const envPath = process.env.DATABASE_URL.replace(/^file:/, "");
-  const isLinuxPathOnWindows = process.platform === "win32" && envPath.startsWith("/app/");
-  if (!isLinuxPathOnWindows) {
-    dbPath = envPath;
-  }
-}
+import { resolveDbPath } from "./dbConfig";
+const dbPath = resolveDbPath();
 ```
 
 ---
@@ -125,5 +111,6 @@ if (process.env.DATABASE_URL) {
 
 | Archivo | Estado |
 |---|---|
-| `server/db.ts` | ✅ Tenía el check — BD principal, siempre funcionó |
-| `server/_core/dbManagement.ts` | ✅ Corregido en Abril 2026 — rutas import/export |
+| `server/_core/dbConfig.ts` | ✅ Creado — fuente única de verdad |
+| `server/db.ts` | ✅ Refactorizado para usar `dbConfig` |
+| `server/_core/dbManagement.ts` | ✅ Refactorizado para usar `dbConfig` |

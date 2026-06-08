@@ -7,6 +7,7 @@ import { join, dirname } from 'path';
 import { existsSync, mkdirSync } from 'fs';
 import { buildActaCodigo, buildExpedienteCodigo } from "./documentCodes";
 import { ensureAllProjectTables } from "./schemaBootstrap";
+import { resolveDbPath } from "./_core/dbConfig";
 // Importamos los esquemas (asegúrate de que esta ruta sea correcta)
 import {
   InsertUser, users, roles, type Role, type InsertRole,
@@ -32,39 +33,29 @@ import {
   catalogClausulas, type CatalogClausula, type InsertCatalogClausula,
 } from "../drizzle/schema";
 
-// 1. Inicializar conexión al archivo local "gestion.db"
-const LOCAL_DB_PATH = join(process.cwd(), 'gestion.db');
+// Variables de conexión (módulo-level, se reasignan en initDb/closeDb)
+let dbPath: string;
+let sqlite: Database.Database;
+let _db: ReturnType<typeof drizzle>;
 
-// Soporte para variables de entorno para Docker
-let dbPath = LOCAL_DB_PATH;
-
-// Solo usamos DATABASE_URL si existe y no estamos en un entorno donde sea peligroso (ej: path de linux en windows)
-if (process.env.DATABASE_URL) {
-  const envPath = process.env.DATABASE_URL.replace("file:", "");
-  
-  // Si estamos en Windows y el path empieza con /app/ (Linux path de Docker), lo ignoramos para desarrollo local
-  const isLinuxPathOnWindows = process.platform === 'win32' && envPath.startsWith('/app/');
-  
-  if (!isLinuxPathOnWindows) {
-    dbPath = envPath;
-    
-    // Asegurar que el directorio existe (útil para Docker con volúmenes)
-    const dbDir = dirname(dbPath);
-    if (!existsSync(dbDir)) {
-      try {
-        mkdirSync(dbDir, { recursive: true });
-      } catch (err) {
-        console.warn(`[DB] No se pudo crear el directorio ${dbDir}, usando gestion.db local.`);
-        dbPath = LOCAL_DB_PATH;
-      }
-    }
+/** Inicializa o reinicia la conexión a la base de datos. Idempotente. */
+export function initDb(): void {
+  if (sqlite) {
+    try { sqlite.close(); } catch { /* ignorar */ }
   }
+  dbPath = resolveDbPath();
+  console.log(`[DB] Conectando a base de datos en: ${dbPath}`);
+  sqlite = new Database.default(dbPath);
+  sqlite.pragma("foreign_keys = ON");
+  _db = drizzle(sqlite);
 }
 
-console.log(`[DB] Conectando a base de datos en: ${dbPath}`);
-const sqlite = new Database.default(dbPath);
-sqlite.pragma("foreign_keys = ON");
-const _db = drizzle(sqlite);
+/** Cierra la conexión actual a la base de datos. */
+export function closeDb(): void {
+  if (sqlite) {
+    try { sqlite.close(); } catch { /* ignorar */ }
+  }
+}
 
 /** Ruta efectiva del archivo SQLite (diagnóstico / integridad). */
 export function getSqliteDbPath(): string {
@@ -74,6 +65,14 @@ export function getSqliteDbPath(): string {
 export async function getDb() {
   return _db;
 }
+
+/** Retorna la instancia raw de better-sqlite3 (para operaciones directas). */
+export function getRawDb(): Database.Database {
+  return sqlite;
+}
+
+// Inicialización al cargar el módulo
+initDb();
 
 // --- METADATOS DE CATÁLOGOS --------------------------------------------------
 

@@ -34,6 +34,7 @@ interface Props {
   /** Sugerencias de F1 para pre-llenado */
   f1Suggestions?: {
     nombreCliente?: string;
+    nombreFantasia?: string;
     rut?: string;
     paisImplementacion?: string;
     tipoMoneda?: string;
@@ -47,7 +48,7 @@ interface Props {
 
 /** Campos de encabezado — ignorar arrays de costos al comparar props para memo. */
 const F2_INFO_FIELDS: (keyof F2Data)[] = [
-  "unidadNegocios", "empresa", "centroCostoHeader", "solucion", "tipoMoneda",
+  "unidadNegocios", "empresa", "nombreFantasia", "centroCostoHeader", "solucion", "tipoMoneda",
   "montoProyecto", "tipoCambio", "totalClp", "descripcion", "preventa",
   "fechaEntrega", "ejecutivoComercial", "plazoImplementacion", "propuestaNumero",
   "paisImplementacion", "rut", "nombreCliente", "firmaImagen",
@@ -79,6 +80,7 @@ function F2InfoGeneralInner({ data, onUpdate, catalogs, f1Suggestions, onImporta
           <div className="text-xs text-indigo-700">
             <span className="font-semibold">F1 disponible:</span>{" "}
             {f1Suggestions.nombreCliente && <span>Cliente: <b>{f1Suggestions.nombreCliente}</b></span>}
+            {f1Suggestions.nombreFantasia && <span className="ml-2">· Marca: <b>{f1Suggestions.nombreFantasia}</b></span>}
             {f1Suggestions.tipoMoneda && <span className="ml-2">· Moneda: <b>{f1Suggestions.tipoMoneda}</b></span>}
             {f1Suggestions.unidadNegocios && <span className="ml-2">· UN: <b>{f1Suggestions.unidadNegocios}</b></span>}
             {f1Suggestions.solucion && <span className="ml-2">· Sol: <b>{f1Suggestions.solucion}</b></span>}
@@ -104,6 +106,11 @@ function F2InfoGeneralInner({ data, onUpdate, catalogs, f1Suggestions, onImporta
         <FieldGroup label="Razón Social">
           <Input placeholder="Razón social de la empresa" value={data.empresa}
             onChange={e => onUpdate({ empresa: e.target.value })} />
+        </FieldGroup>
+
+        <FieldGroup label="Nombre de Fantasía o Marca">
+          <Input placeholder="Nombre comercial o marca" value={data.nombreFantasia}
+            onChange={e => onUpdate({ nombreFantasia: e.target.value })} />
         </FieldGroup>
 
         <FieldGroup label="Unidad de Negocio">
