@@ -4,9 +4,8 @@
  * Sección de Información General del Proyecto (F2).
  * Incluye botón "Importar desde F1" para pre-llenar campos comunes.
  *
- * Preventa y Ejecutivo Comercial se cargan desde la lista de usuarios activos
- * del sistema (trpc.localAuth.listUsersForSelect), con fallback a Input de texto
- * si la lista no está disponible.
+ * Preventa y Ejecutivo Comercial se cargan desde catalog_nombres (misma fuente
+ * que el campo "Atención" de F1), pasado via props.catalogs.nombres.
  */
 import { memo } from "react";
 import { Input } from "@/components/ui/input";
@@ -16,7 +15,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { FormSection, FieldGroup } from "@/components/FormSection";
 import { Info, Download } from "lucide-react";
 import { formatCurrency, parseNumeric } from "@/lib/formatters";
-import { trpc } from "@/lib/trpc";
 import type { F2Data } from "../../types";
 
 interface CatalogItem { value: string; label: string; }
@@ -30,6 +28,7 @@ interface Props {
     plazos?: CatalogItem[];
     cecos?: CatalogItem[];
     areas?: CatalogItem[];
+    nombres?: CatalogItem[];
   };
   /** Sugerencias de F1 para pre-llenado */
   f1Suggestions?: {
@@ -69,8 +68,8 @@ function f2InfoGeneralPropsEqual(prev: Props, next: Props): boolean {
 function F2InfoGeneralInner({ data, onUpdate, catalogs, f1Suggestions, onImportarDesdeF1 }: Props) {
   const totalClp = data.montoProyecto * (data.tipoCambio || 1);
 
-  // Lista de usuarios activos para selects de Preventa y Ejecutivo Comercial
-  const { data: usersForSelect } = trpc.localAuth.listUsersForSelect.useQuery();
+  // Nombres para selects de Preventa y Ejecutivo Comercial (catalog_nombres, misma fuente que F1 Atención)
+  const nombresForSelect = catalogs?.nombres;
 
   return (
     <FormSection title="Información General del Proyecto" icon={Info} accent="violet">
@@ -197,14 +196,14 @@ function F2InfoGeneralInner({ data, onUpdate, catalogs, f1Suggestions, onImporta
           )}
         </FieldGroup>
 
-        {/* Ejecutivo Comercial — select desde usuarios del sistema, fallback a Input */}
+        {/* Ejecutivo Comercial — select desde catalog_nombres (misma fuente que F1 Atención) */}
         <FieldGroup label="Ejecutivo Comercial">
-          {usersForSelect?.length ? (
+          {nombresForSelect?.length ? (
             <Select value={data.ejecutivoComercial} onValueChange={v => onUpdate({ ejecutivoComercial: v })}>
               <SelectTrigger><SelectValue placeholder="Ejecutivo comercial..." /></SelectTrigger>
               <SelectContent position="popper" sideOffset={4} className="z-[200]">
-                {usersForSelect.map(u => (
-                  <SelectItem key={u.value} value={u.value}>{u.label}</SelectItem>
+                {nombresForSelect.map(n => (
+                  <SelectItem key={n.value} value={n.value}>{n.label}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -214,14 +213,14 @@ function F2InfoGeneralInner({ data, onUpdate, catalogs, f1Suggestions, onImporta
           )}
         </FieldGroup>
 
-        {/* Preventa — select desde usuarios del sistema, fallback a Input */}
+        {/* Preventa — select desde catalog_nombres (misma fuente que F1 Atención) */}
         <FieldGroup label="Preventa">
-          {usersForSelect?.length ? (
+          {nombresForSelect?.length ? (
             <Select value={data.preventa} onValueChange={v => onUpdate({ preventa: v })}>
               <SelectTrigger><SelectValue placeholder="Responsable de preventa..." /></SelectTrigger>
               <SelectContent position="popper" sideOffset={4} className="z-[200]">
-                {usersForSelect.map(u => (
-                  <SelectItem key={u.value} value={u.value}>{u.label}</SelectItem>
+                {nombresForSelect.map(n => (
+                  <SelectItem key={n.value} value={n.value}>{n.label}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
