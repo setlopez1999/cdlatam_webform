@@ -356,21 +356,32 @@ async function buildActaPdfBytes(acta: ActaData): Promise<Uint8Array> {
   // ── 4. Datos de contacto ────────────────────────────────────────────────
   y += 4; // espacio entre Información Legal e Información de Contacto
   y = drawSectionTitle(doc, "Información de Contacto", margin, y);
-  y = drawContactGroup(doc, "Representante Legal", [
-    { label: "Nombre", value: acta.representanteLegal },
-    { label: "DNI / Cédula", value: acta.representanteDni },
-    { label: "E-mail", value: acta.representanteEmail },
-    { label: "Teléfono", value: acta.representanteFono },
-  ], margin, y, contentWidth);
-  y = drawContactGroup(doc, "Contacto Técnico", [
-    { label: "Nombre", value: acta.contactoTecnico },
-    { label: "E-mail", value: acta.contactoTecnicoEmail },
-    { label: "Teléfono", value: acta.contactoTecnicoFono },
-  ], margin, y, contentWidth);
-  y = drawContactGroup(doc, "Contacto Facturación", [
-    { label: "Nombre", value: acta.contactoFacturacion },
-    { label: "E-mail", value: acta.contactoFacturacionEmail },
-    { label: "Teléfono", value: acta.contactoFacturacionFono },
+  y = drawContactGrid(doc, [
+    {
+      title: "Representante Legal",
+      fields: [
+        { label: "Nombre", value: acta.representanteLegal },
+        { label: "DNI / Cédula", value: acta.representanteDni },
+        { label: "E-mail", value: acta.representanteEmail },
+        { label: "Teléfono", value: acta.representanteFono },
+      ],
+    },
+    {
+      title: "Contacto Técnico",
+      fields: [
+        { label: "Nombre", value: acta.contactoTecnico },
+        { label: "E-mail", value: acta.contactoTecnicoEmail },
+        { label: "Teléfono", value: acta.contactoTecnicoFono },
+      ],
+    },
+    {
+      title: "Contacto Facturación",
+      fields: [
+        { label: "Nombre", value: acta.contactoFacturacion },
+        { label: "E-mail", value: acta.contactoFacturacionEmail },
+        { label: "Teléfono", value: acta.contactoFacturacionFono },
+      ],
+    },
   ], margin, y, contentWidth);
 
   // ── 5. Servicios contratados ────────────────────────────────────────────
@@ -583,33 +594,52 @@ function drawFieldRow(
   return y + 9;
 }
 
-function drawContactGroup(
+function drawContactGrid(
   doc: jsPDF,
-  title: string,
-  fields: FieldDef[],
+  groups: { title: string; fields: FieldDef[] }[],
   x: number,
   y: number,
   width: number,
 ): number {
-  y = ensureSpace(doc, y, fields.length * 6 + 6);
-  doc.setFontSize(7.5);
-  doc.setTextColor(...COLOR_BRAND);
-  doc.setFont("helvetica", "bold");
-  doc.text(title, x, y);
-  y += 3.5;
-  doc.setFont("helvetica", "normal");
-  for (const f of fields) {
-    doc.setFontSize(6.5);
-    doc.setTextColor(...COLOR_GRAY);
-    doc.text(`${f.label}:`, x, y);
-    doc.setFontSize(8);
-    doc.setTextColor(...COLOR_TEXT);
-    const value = f.value == null || f.value === "" ? " " : String(f.value);
-    const lines = doc.splitTextToSize(value, width - 30);
-    doc.text(lines[0] ?? " ", x + 25, y);
-    y += 4;
+  const colW = width / groups.length;
+  const maxFields = Math.max(...groups.map(g => g.fields.length));
+  const rowH = 4.5;
+  const gridH = 10 + maxFields * rowH + 2;
+  y = ensureSpace(doc, y, gridH);
+  groups.forEach((group, gi) => {
+    const cx = x + gi * colW;
+    doc.setFontSize(7.5);
+    doc.setTextColor(...COLOR_BRAND);
+    doc.setFont("helvetica", "bold");
+    doc.text(String(group.title), cx + 2, y + 4);
+    group.fields.forEach((f, fi) => {
+      const fy = y + 7 + fi * rowH;
+      doc.setFontSize(6.5);
+      doc.setTextColor(...COLOR_GRAY);
+      doc.setFont("helvetica", "normal");
+      doc.text(`${f.label}:`, cx + 2, fy);
+      doc.setFontSize(7.5);
+      doc.setTextColor(...COLOR_TEXT);
+      doc.setFont("helvetica", "normal");
+      const value = f.value == null || f.value === "" ? " " : String(f.value);
+      const labelW = 22;
+      const valueW = colW - labelW - 4;
+      if (valueW > 8) {
+        const lines = doc.splitTextToSize(value, Math.max(1, valueW));
+        doc.text(lines[0] ?? " ", cx + 2 + labelW, fy);
+      } else {
+        doc.text(value.length > 15 ? value.substring(0, 15) + "…" : value, cx + 2 + labelW, fy);
+      }
+    });
+  });
+  doc.setDrawColor(209, 213, 219);
+  doc.setLineWidth(0.2);
+  for (let gi = 1; gi < groups.length; gi++) {
+    const cx = x + gi * colW;
+    doc.line(cx, y + 2, cx, y + gridH - 1);
   }
-  return y + 2;
+  doc.line(x, y + gridH - 1, x + width, y + gridH - 1);
+  return y + gridH + 3;
 }
 
 function drawPagoTable(
