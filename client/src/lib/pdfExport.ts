@@ -621,9 +621,9 @@ function drawPagoTable(
   variant: "implementacion" | "mantencion" = "implementacion",
 ): number {
   const maxCuotas = Math.min(4, Math.max(1, ...formas.map(i => i.nCuotas || 0)));
-  const head = ["#", "Tipo Venta", variant === "mantencion" ? "N° Cuotas de Gracia" : "N° Cuotas"];
+  const head = ["#", "Tipo Venta", variant === "mantencion" ? "N° Cuotas" : "N° Cuotas"];
   for (let i = 0; i < maxCuotas; i++) {
-    const cuotaLabel = variant === "mantencion" ? `Gracia ${i + 1}` : `${i + 1}ª Cuota`;
+    const cuotaLabel = variant === "mantencion" ? `Cuota ${i + 1}` : `${i + 1}ª Cuota`;
     head.push(cuotaLabel, "Fecha");
   }
 
