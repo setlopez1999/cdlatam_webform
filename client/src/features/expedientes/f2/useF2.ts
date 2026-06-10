@@ -84,7 +84,7 @@ function f1ImportSuggestions(f1: F1Data | null) {
   };
 }
 
-export function useF2(expedienteId: string) {
+export function useF2(expedienteId: number) {
   const { getExpediente } = useExpedienteStore();
   const utils = trpc.useUtils();
   const expediente = getExpediente(expedienteId);
@@ -129,7 +129,7 @@ export function useF2(expedienteId: string) {
 
     try {
       await syncF2Mutation.mutateAsync({
-        expedienteUuid: expedienteId,
+        expedienteId,
         f2FormStatus: "guardado",
         f2SavedAt: savedIso,
         data: f2DataToEvalSyncData(dataToSave),
@@ -140,7 +140,7 @@ export function useF2(expedienteId: string) {
       // Sin esto, al volver a Historial / Workspace el useQuery devuelve la
       // versión cacheada anterior y eso pisa el store via mergeLista.
       // No await: el store local ya está al día, no demoramos el toast.
-      void utils.expediente.detalle.invalidate({ uuid: expedienteId });
+      void utils.expediente.detalle.invalidate({ id: expedienteId });
       void utils.expediente.listarResumen.invalidate();
       void utils.expediente.listarResumenWorkspace.invalidate();
       return true;
@@ -155,8 +155,8 @@ export function useF2(expedienteId: string) {
    */
   const descartar = useCallback(async (): Promise<void> => {
     try {
-      await utils.expediente.detalle.invalidate({ uuid: expedienteId });
-      const fresh = await utils.expediente.detalle.fetch({ uuid: expedienteId });
+      await utils.expediente.detalle.invalidate({ id: expedienteId });
+      const fresh = await utils.expediente.detalle.fetch({ id: expedienteId });
       if (fresh) {
         storeMergeDetalleEnStore(mapDetalleToExpediente(fresh));
       }

@@ -9,7 +9,7 @@ import ImplementacionView from "@/features/expedientes/implementacion/Implementa
 
 export default function ExpedienteImplementacion() {
   const params = useParams<{ id: string }>();
-  const expedienteId = params.id ?? "";
+  const expedienteId = Number(params.id);
 
   return (
     <ExpedienteLayout expedienteId={expedienteId} activeTab="implementacion">

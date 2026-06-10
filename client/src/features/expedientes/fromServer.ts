@@ -212,9 +212,6 @@ export function mapDbResultadoToF3Slot(res: Record<string, unknown> | null): {
 export type ExpedienteResumenRow = {
   expediente: Record<string, unknown> & {
     id: number;
-    uuid: string;
-    codigo?: string | null;
-    nroActa?: number | null;
     nombre: string;
     creadorId: number;
   };
@@ -271,14 +268,15 @@ export function mapResumenRowToExpediente(row: ExpedienteResumenRow): Expediente
   const createdAt = cAt ? new Date(cAt).toISOString() : new Date().toISOString();
   const updatedAt = uAt ? new Date(uAt).toISOString() : createdAt;
   return {
-    id: e.uuid,
-    codigo: e.codigo ? String(e.codigo) : undefined,
-    nroActa: typeof e.nroActa === "number" ? e.nroActa : null,
+    id: e.id,
     nombre: e.nombre,
+    creadorId: e.creadorId,
+    status: "nuevo",
+    createdAt,
+    updatedAt,
+    deletedAt: null,
     f1,
     f2,
     f3: { status: f3.status },
-    createdAt,
-    updatedAt,
   };
 }

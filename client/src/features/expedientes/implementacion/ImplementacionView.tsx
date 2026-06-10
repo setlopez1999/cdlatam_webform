@@ -10,19 +10,19 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
 interface Props {
-  expedienteId: string;
+  expedienteId: number;
 }
 
 export default function ImplementacionView({ expedienteId }: Props) {
   const utils = trpc.useUtils();
   const listQuery = trpc.expediente.implementacion.listar.useQuery(
-    { uuid: expedienteId },
-    { enabled: !!expedienteId },
+    { id: expedienteId },
+    { enabled: expedienteId > 0 },
   );
 
   const setEstado = trpc.expediente.implementacion.setEstado.useMutation({
     onSuccess: () => {
-      void utils.expediente.implementacion.listar.invalidate({ uuid: expedienteId });
+      void utils.expediente.implementacion.listar.invalidate({ id: expedienteId });
     },
     onError: err => {
       toast.error(err.message || "No se pudo guardar el ítem");
@@ -77,7 +77,7 @@ export default function ImplementacionView({ expedienteId }: Props) {
                 disabled={setEstado.isPending && setEstado.variables?.checkKey === row.key}
                 onCheckedChange={next => {
                   setEstado.mutate({
-                    uuid: expedienteId,
+                    id: expedienteId,
                     checkKey: row.key,
                     estado: next,
                   });

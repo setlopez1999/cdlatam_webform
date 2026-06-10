@@ -46,7 +46,7 @@ import { F2InfoGeneral, F2CostTable, F2RRHHTable, F2OtrosTable } from "./section
 // ─── Componente ───────────────────────────────────────────────────────────────
 
 interface Props {
-  expedienteId: string;
+  expedienteId: number;
   onVerResultado?: () => void;
 }
 

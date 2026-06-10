@@ -1,0 +1,35 @@
+---
+description: F1 — servicios contratados y formas de pago (cuotas e hitos)
+globs: client/src/features/expedientes/f1/**/*
+alwaysApply: false
+---
+
+# F1 — Servicios ↔ Formas de Pago
+
+## Tres flujos de pago (secciones separadas en UI)
+1. **Implementación** (`formasPagoImplementacion`) — cuotas 1-4, auto-sync con total del servicio
+2. **Mantención** (`formasPagoMantencion`) — cuotas de gracia vs precio unitario
+3. **Implementación Hitos** (`formasPagoImplementacionHitos`) — hitos dinámicos por servicio
+
+## Clasificación tipo venta
+- `f1TipoVenta.ts`: `impl_hitos` tiene prioridad sobre `impl`; no mezclar hitos con cuotas
+- Cada servicio enlazado usa `linkedServicioId` en su fila de pago
+
+## Reconciliación (`reconcileFormasPago.ts`)
+- `reconcileFormasPago(data)` alinea filas con `serviciosContratados`
+- **Impl**: si cambia total del servicio → redistribuir cuotas (`distributeTotalAcrossCuotas`); si no cambió → respetar edición manual
+- **Mant**: si cambia `precioUnitario` → resetear montos de gracia
+- **Impl hitos**: reconciliar arreglo separado; validar suma hitos vs total servicio (warning, sin auto-distribución)
+- Preservar filas manuales sin `linkedServicioId`
+
+## Archivos principales
+- `F1Form.tsx` — handlers `updateFormaPago`, `updateFormaPagoHitos`, `applyWithReconcile`
+- `sections/F1FormasPago.tsx` — `PagoTable` (cuotas) + `PagoTableHitos`
+- `useF1.ts` / `fromServer.ts` — persistencia y hidratación
+- `server/routers.ts` — `ActaInputSchema` con campos opcionales para compatibilidad
+- `reconcileFormasPago.test.ts` — tests de regresión obligatorios al tocar lógica
+
+## Reglas de negocio
+- Máximo 4 cuotas; redondeo en centavos, remanente en última cuota
+- Override manual de montos permitido hasta nuevo cambio en servicio enlazado
+- No romper expedientes antiguos: campos nuevos opcionales con fallback `[]`

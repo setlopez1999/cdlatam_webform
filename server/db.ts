@@ -5,7 +5,7 @@ import { migrate } from "drizzle-orm/better-sqlite3/migrator";
 import * as Database from 'better-sqlite3';
 import { join, dirname } from 'path';
 import { existsSync, mkdirSync } from 'fs';
-import { buildActaCodigo, buildExpedienteCodigo } from "./documentCodes";
+import { buildActaCodigo } from "./documentCodes";
 import { ensureAllProjectTables } from "./schemaBootstrap";
 import { resolveDbPath } from "./_core/dbConfig";
 // Importamos los esquemas (asegúrate de que esta ruta sea correcta)
@@ -489,15 +489,7 @@ export async function runMigrations() {
     console.warn("[DB] schemaBootstrap after migrate:", e instanceof Error ? e.message : e);
   }
 
-  // Paso 2 (post-migración): garantizar columnas nuevas en BDs existentes
-  // ALTER TABLE ADD COLUMN IF NOT EXISTS no existe en SQLite, usamos try/catch
-  try {
-    sqlite.exec(`ALTER TABLE actas ADD COLUMN expedienteUuid TEXT`);
-    console.log("[DB] Column expedienteUuid added to actas");
-  } catch {
-    // La columna ya existe — ignorar
-  }
-
+  // Indices de audit_log
   const tryAlter = (sql: string, label: string) => {
     try {
       sqlite.exec(sql);
@@ -506,142 +498,10 @@ export async function runMigrations() {
       /* ya aplicado */
     }
   };
-  tryAlter(`ALTER TABLE actas ADD COLUMN codigo TEXT`, "Column codigo added to actas");
-  tryAlter(`ALTER TABLE actas ADD COLUMN f1Datos TEXT`, "Column f1Datos added to actas");
-  tryAlter(`ALTER TABLE actas ADD COLUMN f1FormStatus TEXT DEFAULT 'nuevo'`, "Column f1FormStatus added to actas");
-  tryAlter(`ALTER TABLE actas ADD COLUMN f1SavedAt INTEGER`, "Column f1SavedAt added to actas");
-  tryAlter(`ALTER TABLE evaluaciones ADD COLUMN expedienteUuid TEXT`, "Column expedienteUuid added to evaluaciones");
-  tryAlter(`ALTER TABLE evaluaciones ADD COLUMN firmaImagen TEXT`, "Column firmaImagen added to evaluaciones");
-  tryAlter(`ALTER TABLE evaluaciones ADD COLUMN f2FormStatus TEXT DEFAULT 'nuevo'`, "Column f2FormStatus added to evaluaciones");
-  tryAlter(`ALTER TABLE evaluaciones ADD COLUMN f2SavedAt INTEGER`, "Column f2SavedAt added to evaluaciones");
-  tryAlter(`ALTER TABLE evaluaciones ADD COLUMN centroCostoHeader TEXT`, "Column centroCostoHeader added to evaluaciones");
-  tryAlter(`ALTER TABLE expedientes ADD COLUMN codigo TEXT`, "Column codigo added to expedientes");
-  tryAlter(`ALTER TABLE expedientes ADD COLUMN nro_acta INTEGER`, "Column nro_acta added to expedientes");
-  // Schema drizzle/schema.ts — migraciones 0000/0001 no añadieron esta FK; necesaria para ds_getCatalogSummary / summary UI
-  tryAlter(
-    `ALTER TABLE catalog_soluciones ADD COLUMN unidadNegocioId INTEGER`,
-    "Column unidadNegocioId added to catalog_soluciones"
-  );
-  tryAlter(
-    `ALTER TABLE catalog_detalle_servicio ADD COLUMN solucionId INTEGER`,
-    "Column solucionId added to catalog_detalle_servicio"
-  );
-  tryAlter(`
-    CREATE TABLE IF NOT EXISTS resultados_expediente (
-      id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
-      expedienteUuid TEXT NOT NULL UNIQUE,
-      payload TEXT NOT NULL,
-      f3FormStatus TEXT DEFAULT 'nuevo' NOT NULL,
-      f3SavedAt INTEGER,
-      createdAt INTEGER DEFAULT (strftime('%s', 'now')) NOT NULL,
-      updatedAt INTEGER DEFAULT (strftime('%s', 'now')) NOT NULL
-    )
-  `, "Table resultados_expediente ensured");
-
-  tryAlter(`
-    CREATE TABLE IF NOT EXISTS catalog_clausulas (
-      id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
-      valor TEXT NOT NULL,
-      unidadNegocioId INTEGER,
-      filePath TEXT NOT NULL,
-      fileName TEXT NOT NULL,
-      fileSize INTEGER,
-      activo INTEGER DEFAULT 1 NOT NULL,
-      createdAt INTEGER DEFAULT (strftime('%s', 'now')) NOT NULL
-    )
-  `, "Table catalog_clausulas ensured");
-
-  tryAlter(`ALTER TABLE audit_log ADD COLUMN expedienteUuid TEXT`, "Column expedienteUuid on audit_log");
-  tryAlter(`ALTER TABLE audit_log ADD COLUMN expedienteCodigo TEXT`, "Column expedienteCodigo on audit_log");
   tryAlter(`CREATE INDEX IF NOT EXISTS idx_audit_log_created_at ON audit_log(createdAt)`, "Index audit_log createdAt");
   tryAlter(`CREATE INDEX IF NOT EXISTS idx_audit_log_user_created ON audit_log(userId, createdAt)`, "Index audit_log userId+createdAt");
-  tryAlter(`CREATE INDEX IF NOT EXISTS idx_audit_log_expediente_uuid ON audit_log(expedienteUuid)`, "Index audit_log expedienteUuid");
-  // Campo persistente en consideraciones: 1 = siempre marcado, no desmarcable por comerciales
-  tryAlter(
-    `ALTER TABLE catalog_consideraciones_comerciales ADD COLUMN persistente INTEGER DEFAULT 0 NOT NULL`,
-    "Column persistente added to catalog_consideraciones_comerciales"
-  );
-  // Papelera de expedientes: soft-delete con timestamp Unix (NULL = activo, valor = fecha de borrado)
-  tryAlter(
-    `ALTER TABLE expedientes ADD COLUMN deleted_at INTEGER DEFAULT NULL`,
-    "Column deleted_at added to expedientes (papelera)"
-  );
-  // Cláusulas: siempre_incluir=1 → se adjunta siempre al Acta sin importar unidad de negocio
-  tryAlter(
-    `ALTER TABLE catalog_clausulas ADD COLUMN siempre_incluir INTEGER DEFAULT 0 NOT NULL`,
-    "Column siempre_incluir added to catalog_clausulas"
-  );
-  // Cláusulas: tipo — clasifica el documento en el PDF final ('clausula' | 'features' | 'anexo_soporte')
-  tryAlter(
-    `ALTER TABLE catalog_clausulas ADD COLUMN tipo TEXT DEFAULT 'clausula' NOT NULL`,
-    "Column tipo added to catalog_clausulas"
-  );
-  // Cláusulas: orden_global — número editable que define el orden de aparición en el PDF final
-  tryAlter(
-    `ALTER TABLE catalog_clausulas ADD COLUMN orden_global INTEGER DEFAULT 50 NOT NULL`,
-    "Column orden_global added to catalog_clausulas"
-  );
 
-  try {
-    const db = await getDb();
-    const expRows = await db
-      .select({ id: expedientes.id, uuid: expedientes.uuid, codigo: expedientes.codigo })
-      .from(expedientes);
-    for (const row of expRows) {
-      if (!row.codigo) {
-        await db.update(expedientes)
-          .set({ codigo: buildExpedienteCodigo(row.uuid), updatedAt: new Date() })
-          .where(eq(expedientes.id, row.id));
-      }
-    }
-
-    const actaRows = await db
-      .select({
-        id: actas.id,
-        expedienteUuid: actas.expedienteUuid,
-        codigo: actas.codigo,
-        noActa: actas.noActa,
-      })
-      .from(actas);
-    for (const row of actaRows) {
-      if (!row.expedienteUuid) continue;
-      // Buscar el nroActa del expediente para generar el código correcto
-      const expRow = await db
-        .select({ nroActa: expedientes.nroActa })
-        .from(expedientes)
-        .where(eq(expedientes.uuid, row.expedienteUuid))
-        .limit(1);
-      const nroActa = expRow[0]?.nroActa ?? null;
-      const codigo = buildActaCodigo(row.expedienteUuid, nroActa);
-      if (!row.codigo || row.noActa !== codigo) {
-        await db.update(actas)
-          .set({ codigo, noActa: codigo, updatedAt: new Date() })
-          .where(eq(actas.id, row.id));
-      }
-    }
-    console.log("[DB] Compact code backfill completed");
-
-    // Backfill nro_acta: asignar consecutivo desde 1000 a expedientes sin número, en orden de creación
-    const expSinNro = await db
-      .select({ id: expedientes.id, nroActa: expedientes.nroActa })
-      .from(expedientes)
-      .orderBy(expedientes.createdAt);
-    const maxNro = expSinNro.reduce((m, r) => Math.max(m, r.nroActa ?? 0), 0);
-    let nextNro = Math.max(maxNro + 1, 1000);
-    for (const row of expSinNro) {
-      if (!row.nroActa) {
-        await db.update(expedientes)
-          .set({ nroActa: nextNro, updatedAt: new Date() })
-          .where(eq(expedientes.id, row.id));
-        nextNro++;
-      }
-    }
-    console.log("[DB] nro_acta backfill completed, last assigned:", nextNro - 1);
-  } catch (codeBackfillErr: any) {
-    console.warn("[DB] Could not backfill compact codes:", codeBackfillErr?.message ?? codeBackfillErr);
-  }
-
-  // Paso 3 (post-migración): garantizar roles nuevos en BDs ya migradas
+  // Garantizar roles nuevos en BDs ya migradas
   // INSERT OR IGNORE es idempotente — seguro de correr siempre al arrancar
   try {
     sqlite.exec(`
@@ -883,10 +743,10 @@ export async function deleteActa(id: number) {
   return db.delete(actas).where(eq(actas.id, id));
 }
 
-/** Busca un acta por el uuid del expediente de Zustand. */
-export async function getActaByExpedienteUuid(expedienteUuid: string) {
+/** Busca un acta por el id del expediente. */
+export async function getActaByExpedienteId(expedienteId: number) {
   const db = await getDb();
-  const result = await db.select().from(actas).where(eq(actas.expedienteUuid, expedienteUuid)).limit(1);
+  const result = await db.select().from(actas).where(eq(actas.expedienteId, expedienteId)).limit(1);
   return result[0] ?? null;
 }
 
@@ -918,20 +778,20 @@ export async function deleteEvaluacion(id: number) {
   return db.delete(evaluaciones).where(eq(evaluaciones.id, id));
 }
 
-export async function getEvaluacionByExpedienteUuid(expedienteUuid: string) {
+export async function getEvaluacionByExpedienteId(expedienteId: number) {
   const db = await getDb();
-  const r = await db.select().from(evaluaciones).where(eq(evaluaciones.expedienteUuid, expedienteUuid)).limit(1);
+  const r = await db.select().from(evaluaciones).where(eq(evaluaciones.expedienteId, expedienteId)).limit(1);
   return r[0] ?? null;
 }
 
-export async function getResultadoByExpedienteUuid(expedienteUuid: string) {
+export async function getResultadoByExpedienteId(expedienteId: number) {
   const db = await getDb();
-  const r = await db.select().from(resultadosExpediente).where(eq(resultadosExpediente.expedienteUuid, expedienteUuid)).limit(1);
+  const r = await db.select().from(resultadosExpediente).where(eq(resultadosExpediente.expedienteId, expedienteId)).limit(1);
   return r[0] ?? null;
 }
 
 export async function upsertResultadoExpediente(data: {
-  expedienteUuid: string;
+  expedienteId: number;
   payload: unknown;
   f3FormStatus: string;
 }) {
@@ -940,7 +800,7 @@ export async function upsertResultadoExpediente(data: {
   await db
     .insert(resultadosExpediente)
     .values({
-      expedienteUuid: data.expedienteUuid,
+      expedienteId: data.expedienteId,
       payload: data.payload as InsertResultadoExpediente["payload"],
       f3FormStatus: data.f3FormStatus,
       f3SavedAt: now,
@@ -948,7 +808,7 @@ export async function upsertResultadoExpediente(data: {
       updatedAt: now,
     })
     .onConflictDoUpdate({
-      target: resultadosExpediente.expedienteUuid,
+      target: resultadosExpediente.expedienteId,
       set: {
         payload: data.payload as InsertResultadoExpediente["payload"],
         f3FormStatus: data.f3FormStatus,
@@ -956,7 +816,7 @@ export async function upsertResultadoExpediente(data: {
         updatedAt: now,
       },
     });
-  return getResultadoByExpedienteUuid(data.expedienteUuid);
+  return getResultadoByExpedienteId(data.expedienteId);
 }
 
 export async function listImplementacionesByExpedienteId(expedienteId: number) {
@@ -1016,25 +876,15 @@ export async function isActiveImplementacionCatalogKey(key: string) {
 }
 
 /**
- * Elimina expediente y todos los hijos vinculados por expedienteUuid.
- *
- * Orden importante: hijos antes que padre, para que una interrupción no
- * deje al expediente colgando con referencias rotas. No se usa
- * `db.transaction(async ...)` porque el driver `better-sqlite3` exige un
- * callback síncrono y rechaza Promises ("Transaction function cannot
- * return a promise"). Mantener `await db.delete(...)` secuenciales hace
- * el código portable a `mysql2`/`postgres-js`/`libsql` sin cambios.
+ * Elimina expediente y todo su contenido vinculado por expedienteId.
  */
-export async function deleteExpedienteCascadeByUuid(uuid: string) {
+export async function deleteExpedienteCascadeById(id: number) {
   const db = await getDb();
-  const ex = await db.select({ id: expedientes.id }).from(expedientes).where(eq(expedientes.uuid, uuid)).limit(1);
-  if (ex[0]) {
-    await db.delete(implementaciones).where(eq(implementaciones.expedienteId, ex[0].id));
-  }
-  await db.delete(resultadosExpediente).where(eq(resultadosExpediente.expedienteUuid, uuid));
-  await db.delete(evaluaciones).where(eq(evaluaciones.expedienteUuid, uuid));
-  await db.delete(actas).where(eq(actas.expedienteUuid, uuid));
-  await db.delete(expedientes).where(eq(expedientes.uuid, uuid));
+  await db.delete(implementaciones).where(eq(implementaciones.expedienteId, id));
+  await db.delete(resultadosExpediente).where(eq(resultadosExpediente.expedienteId, id));
+  await db.delete(evaluaciones).where(eq(evaluaciones.expedienteId, id));
+  await db.delete(actas).where(eq(actas.expedienteId, id));
+  await db.delete(expedientes).where(eq(expedientes.id, id));
 }
 
 export async function searchRegistros(userId: number, query: string) {
@@ -1199,26 +1049,48 @@ export async function getBloquesSemanales(): Promise<Array<SchBloqueHorario & { 
 // ─── MÓDULO: EXPEDIENTES ──────────────────────────────────────────────────────
 
 /**
- * Crea un expediente en BD con su metadata.
- * Los datos de formulario (F1/F2) siguen en localStorage por ahora.
+ * Crea un expediente en BD.
+ * Ya no genera uuid ni nro_acta — el id auto-increment es el único identificador.
  */
-export async function createExpediente(data: { uuid: string; nombre: string; creadorId: number; codigo?: string }) {
+export async function createExpediente(data: { nombre: string; creadorId: number }) {
   const db = await getDb();
-  // Calcular el siguiente nro_acta consecutivo (MAX + 1, mínimo 1000)
-  const maxRow = await db
-    .select({ max: sql<number>`MAX(nro_acta)` })
-    .from(expedientes)
-    .limit(1);
-  const nextNroActa = Math.max((maxRow[0]?.max ?? 999) + 1, 1000);
   const result = await db.insert(expedientes).values({
-    uuid: data.uuid,
-    codigo: data.codigo ?? buildExpedienteCodigo(data.uuid),
-    nroActa: nextNroActa,
     nombre: data.nombre,
     creadorId: data.creadorId,
     status: "borrador",
   }).returning();
   return result[0];
+}
+
+/**
+ * Crea un expediente con su acta (F1) en una misma operación.
+ * El N° de Acta se asigna automáticamente como consecutivo (MAX+1).
+ */
+export async function crearExpedienteConActa(data: { nombre: string; creadorId: number }) {
+  const db = await getDb();
+  const now = new Date();
+  // 1. Crear expediente
+  const exp = await createExpediente(data);
+  // 2. Calcular nro_acta consecutivo
+  const maxRow = await db
+    .select({ max: sql<number>`MAX(nro_acta)` })
+    .from(actas)
+    .limit(1);
+  const nextNroActa = (maxRow[0]?.max ?? 0) + 1;
+  const codigo = buildActaCodigo("", nextNroActa);
+  // 3. Crear acta (F1) vinculada
+  const acta = await db.insert(actas).values({
+    userId: data.creadorId,
+    expedienteId: exp.id,
+    nroActa: nextNroActa,
+    codigo,
+    noActa: codigo,
+    status: "borrador",
+    f1FormStatus: "nuevo",
+    createdAt: now,
+    updatedAt: now,
+  }).returning();
+  return { expediente: exp, acta: acta[0] };
 }
 
 /** Obtiene todos los expedientes (para admin/full). */
@@ -1244,30 +1116,23 @@ export async function getExpedientesEnPapelera(userId: number) {
 }
 
 /** Mueve un expediente a la papelera (soft-delete). */
-export async function moverExpedienteAPapelera(uuid: string) {
+export async function moverExpedienteAPapelera(id: number) {
   const db = await getDb();
   const now = Math.floor(Date.now() / 1000);
   const result = await db.update(expedientes)
     .set({ deletedAt: now, updatedAt: new Date() })
-    .where(eq(expedientes.uuid, uuid))
+    .where(eq(expedientes.id, id))
     .returning();
   return result[0] ?? null;
 }
 
 /** Restaura un expediente desde la papelera. */
-export async function restaurarExpedienteDePapelera(uuid: string) {
+export async function restaurarExpedienteDePapelera(id: number) {
   const db = await getDb();
   const result = await db.update(expedientes)
     .set({ deletedAt: null, updatedAt: new Date() })
-    .where(eq(expedientes.uuid, uuid))
+    .where(eq(expedientes.id, id))
     .returning();
-  return result[0] ?? null;
-}
-
-/** Busca un expediente por su uuid (nanoid del store de Zustand). */
-export async function getExpedienteByUuid(uuid: string) {
-  const db = await getDb();
-  const result = await db.select().from(expedientes).where(eq(expedientes.uuid, uuid)).limit(1);
   return result[0] ?? null;
 }
 
@@ -1278,7 +1143,7 @@ export async function getExpedienteById(id: number) {
 }
 
 /** Actualiza el nombre o status de un expediente. */
-export async function updateExpediente(id: number, data: Partial<Pick<Expediente, "nombre" | "status" | "actaId" | "evaluacionId" | "codigo">>) {
+export async function updateExpediente(id: number, data: Partial<Pick<Expediente, "nombre" | "status">>) {
   const db = await getDb();
   const result = await db.update(expedientes)
     .set({ ...data, updatedAt: new Date() })
@@ -1287,13 +1152,13 @@ export async function updateExpediente(id: number, data: Partial<Pick<Expediente
   return result[0] ?? null;
 }
 
-/** Elimina un expediente por id (solo la fila expedientes; preferir deleteExpedienteCascadeByUuid). */
+/** Elimina un expediente por id (solo la fila expedientes; preferir deleteExpedienteCascadeById). */
 export async function deleteExpediente(id: number) {
   const db = await getDb();
   await db.delete(expedientes).where(eq(expedientes.id, id));
 }
 
-/** Lista expedientes del usuario con acta/eval/resultado (solo expedientes creados por userId; N consultas por fila). */
+/** Lista expedientes del usuario con acta/eval/resultado (N consultas por fila). */
 export async function listExpedientesResumen(userId: number) {
   const list = await getExpedientesByUser(userId);
   const rows: Array<{
@@ -1303,31 +1168,31 @@ export async function listExpedientesResumen(userId: number) {
     resultado: ResultadoExpediente | null;
   }> = [];
   for (const e of list) {
-    const acta = await getActaByExpedienteUuid(e.uuid);
-    const evaluacion = await getEvaluacionByExpedienteUuid(e.uuid);
-    const resultado = await getResultadoByExpedienteUuid(e.uuid);
+    const acta = await getActaByExpedienteId(e.id);
+    const evaluacion = await getEvaluacionByExpedienteId(e.id);
+    const resultado = await getResultadoByExpedienteId(e.id);
     rows.push({ expediente: e, acta, evaluacion, resultado });
   }
   return rows;
 }
 
-/** Detalle solo si el expediente pertenece al usuario (creadorId). Sin listados globales. */
-export async function getExpedienteDetalle(uuid: string, userId: number) {
-  const exp = await getExpedienteByUuid(uuid);
+/** Detalle solo si el expediente pertenece al usuario (creadorId). */
+export async function getExpedienteDetalle(id: number, userId: number) {
+  const exp = await getExpedienteById(id);
   if (!exp || exp.creadorId !== userId) return null;
-  const acta = await getActaByExpedienteUuid(uuid);
-  const evaluacion = await getEvaluacionByExpedienteUuid(uuid);
-  const resultado = await getResultadoByExpedienteUuid(uuid);
+  const acta = await getActaByExpedienteId(id);
+  const evaluacion = await getEvaluacionByExpedienteId(id);
+  const resultado = await getResultadoByExpedienteId(id);
   return { expediente: exp, acta, evaluacion, resultado };
 }
 
 /** Detalle sin filtrar por dueño (solo uso con autorización workspace global en routers). */
-export async function getExpedienteDetalleGlobal(uuid: string) {
-  const exp = await getExpedienteByUuid(uuid);
+export async function getExpedienteDetalleGlobal(id: number) {
+  const exp = await getExpedienteById(id);
   if (!exp) return null;
-  const acta = await getActaByExpedienteUuid(uuid);
-  const evaluacion = await getEvaluacionByExpedienteUuid(uuid);
-  const resultado = await getResultadoByExpedienteUuid(uuid);
+  const acta = await getActaByExpedienteId(id);
+  const evaluacion = await getEvaluacionByExpedienteId(id);
+  const resultado = await getResultadoByExpedienteId(id);
   return { expediente: exp, acta, evaluacion, resultado };
 }
 
@@ -1341,9 +1206,9 @@ export async function listExpedientesResumenGlobal() {
     resultado: ResultadoExpediente | null;
   }> = [];
   for (const e of list) {
-    const acta = await getActaByExpedienteUuid(e.uuid);
-    const evaluacion = await getEvaluacionByExpedienteUuid(e.uuid);
-    const resultado = await getResultadoByExpedienteUuid(e.uuid);
+    const acta = await getActaByExpedienteId(e.id);
+    const evaluacion = await getEvaluacionByExpedienteId(e.id);
+    const resultado = await getResultadoByExpedienteId(e.id);
     rows.push({ expediente: e, acta, evaluacion, resultado });
   }
   return rows;
@@ -1361,7 +1226,7 @@ export async function createAuditLog(data: {
   action: string;
   entity: string;
   entityId?: number;
-  expedienteUuid?: string | null;
+  expedienteId?: number | null;
   expedienteCodigo?: string | null;
   changes?: { before?: unknown; after?: unknown };
   ip?: string;
@@ -1373,7 +1238,7 @@ export async function createAuditLog(data: {
     action: data.action,
     entity: data.entity,
     entityId: data.entityId ?? null,
-    expedienteUuid: data.expedienteUuid ?? null,
+    expedienteId: data.expedienteId ?? null,
     expedienteCodigo: data.expedienteCodigo ?? null,
     changes: data.changes ?? null,
     ip: data.ip ?? null,
@@ -1387,7 +1252,7 @@ export type AuditLogQueryFilter = {
   entities?: string[];
   userId?: number;
   usernameContains?: string;
-  expedienteUuidContains?: string;
+  expedienteId?: number;
   limit: number;
   cursor?: { id: number; createdAt: Date };
 };
@@ -1410,8 +1275,8 @@ export async function getAuditLogFiltered(f: AuditLogQueryFilter) {
   if (f.usernameContains?.trim()) {
     conditions.push(like(auditLog.username, likeFragment(f.usernameContains.trim())));
   }
-  if (f.expedienteUuidContains?.trim()) {
-    conditions.push(like(auditLog.expedienteUuid, likeFragment(f.expedienteUuidContains.trim())));
+  if (f.expedienteId != null) {
+    conditions.push(eq(auditLog.expedienteId, f.expedienteId));
   }
 
   if (f.cursor) {

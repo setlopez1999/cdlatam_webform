@@ -119,10 +119,35 @@ function createHitoPago(): HitoPago {
   };
 }
 
+// ─── Toggle modo export PDF ───────────────────────────────────────────────────
+// Cambiar a true para usar el diálogo nativo del navegador (imprimir/guardar como PDF)
+// en vez del modal de vista previa.
+const PDF_USE_NATIVE_PRINT = true;
+
+/** Abre el diálogo nativo de imprimir/guardar como PDF con el blob dado. */
+function printBlobNative(blob: Blob, _filename: string) {
+  const url = URL.createObjectURL(blob);
+  const iframe = document.createElement("iframe");
+  iframe.style.cssText = "position:fixed;top:-9999px;left:-9999px;width:210mm;height:297mm;border:none;";
+  document.body.appendChild(iframe);
+  const cleanup = () => {
+    try { document.body.removeChild(iframe); } catch {}
+    URL.revokeObjectURL(url);
+  };
+  iframe.onload = () => {
+    const win = iframe.contentWindow;
+    if (!win) { cleanup(); return; }
+    win.addEventListener("afterprint", cleanup, { once: true });
+    setTimeout(cleanup, 120000);
+    setTimeout(() => { win.focus(); win.print(); }, 100);
+  };
+  iframe.src = url;
+}
+
 // ─── Componente ───────────────────────────────────────────────────────────────
 
 interface Props {
-  expedienteId: string;
+  expedienteId: number;
 }
 
 export default function F1Form({ expedienteId }: Props) {
@@ -169,11 +194,12 @@ export default function F1Form({ expedienteId }: Props) {
 
   // Query de implementación para el PDF de Features Resumido (dinámico)
   const implementacionQuery = trpc.expediente.implementacion.listar.useQuery(
-    { uuid: expedienteId ?? "" },
-    { enabled: !!expedienteId },
+    { id: expedienteId },
+    { enabled: expedienteId > 0 },
   );
 
   const [actaPdfPreview, setActaPdfPreview] = useState<{ blob: Blob; filename: string } | null>(null);
+  const printIframeRef = useRef<HTMLIFrameElement | null>(null);
 
   // Bloqueo de navegación cuando hay cambios sin guardar.
   // Activa beforeunload (cerrar tab/F5) y modal en navegación SPA.
@@ -481,19 +507,24 @@ export default function F1Form({ expedienteId }: Props) {
           ordenGlobal: c.ordenGlobal,
         })),
         {
-          expedienteUuid: expedienteId,
+          expedienteUuid: String(expedienteId),
           onClausulaError: (c) => failed.push(c.fileName),
           featuresResumidoBytes,
+          singlePage: true,
         },
       );
-      setActaPdfPreview({ blob, filename });
+      if (PDF_USE_NATIVE_PRINT) {
+        printBlobNative(blob, filename);
+      } else {
+        setActaPdfPreview({ blob, filename });
+      }
       if (failed.length > 0) {
-        toast.warning(`Vista previa lista; ${failed.length} cláusula(s) no se anexaron`, {
+        toast.warning(`PDF generado; ${failed.length} cláusula(s) no se anexaron`, {
           id: "pdf-f1",
           description: failed.join(", "),
         });
       } else {
-        toast.success("Vista previa lista — revisa el documento y descarga si corresponde", { id: "pdf-f1" });
+        toast.success("PDF generado correctamente", { id: "pdf-f1" });
       }
     } catch {
       toast.error("Error al generar PDF", { id: "pdf-f1" });

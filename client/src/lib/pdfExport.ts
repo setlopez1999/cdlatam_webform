@@ -4,8 +4,7 @@
  * Acta (F1):
  *   - Genera PDF con jsPDF + jspdf-autotable.
  *   - Fusiona PDFs de cláusulas con `pdf-lib`.
- *   - Vista previa en UI con `createActaPdfBlob` + `ActaPdfPreviewDialog`;
- *     `generateActaPDF` descarga al momento (compat).
+ *   - Soporta modo compacto y forzado a 1 página vía `ActaPdfExportOpts`.
  *
  * Resultado EP (F2):
  *   - Sigue usando window.print() del HTML estilizado (no se ha pedido cambio).
@@ -41,6 +40,13 @@ export interface ClausulaParaPdf {
   ordenGlobal?: number;
 }
 
+/** Flags para secciones omitibles del Acta. */
+export type SectionFlags = {
+  formasPago?: boolean;
+  consideraciones?: boolean;
+  clausulasLegales?: boolean;
+};
+
 /** Opciones de export del Acta (PDF). */
 export type ActaPdfExportOpts = {
   onClausulaError?: (c: ClausulaParaPdf, err: unknown) => void;
@@ -48,12 +54,149 @@ export type ActaPdfExportOpts = {
   expedienteUuid?: string;
   /**
    * Bytes del PDF de Features Resumido generado dinámicamente.
-   * Se inserta en el orden correcto según `ordenGlobal` de las cláusulas
-   * (entre el PDF de Features estático y las cláusulas legales).
-   * El orden del features_resumido es 20 (entre features=10 y cláusulas=30+).
+   * Se inserta en el orden correcto según `ordenGlobal` de las cláusulas.
    */
   featuresResumidoBytes?: Uint8Array;
+  /** Escala global de fuente (0.6 – 1.0). Default 1.0. */
+  fontSizeScale?: number;
+  /** Modo compacto: reduce espaciados, cellPadding, márgenes y fuente. */
+  compact?: boolean;
+  /**
+   * Fuerza el contenido base del Acta en 1 página A4.
+   * Aplica compact + reduce fontSizeScale progresivamente hasta que quepa.
+   * Las cláusulas anexas (pdf-lib) van en páginas separadas siempre.
+   */
+  singlePage?: boolean;
+  /** Secciones a incluir/omitir. Todas true por defecto. */
+  sections?: SectionFlags;
 };
+
+// ─── Layout resuelto (interno) ────────────────────────────────────────────────
+
+interface PdfLayout {
+  scale: number;
+  margin: number;
+  contentWidth: number;
+  pageWidth: number;
+  pageHeight: number;
+  fontSize: {
+    title: number;
+    subtitle: number;
+    sectionTitle: number;
+    body: number;
+    small: number;
+    tiny: number;
+  };
+  /** Altura por línea de texto (mm). */
+  lineHeight: number;
+  /** Espaciado entre secciones (mm). */
+  spacing: number;
+  /** Padding interno de celdas autoTable. */
+  cellPadding: number;
+  compact: boolean;
+  singlePage: boolean;
+  /** true cuando ya estamos comprimiendo — suprime saltos de página. */
+  noPageBreaks: boolean;
+  sections: Required<SectionFlags>;
+}
+
+function resolveLayout(doc: jsPDF, opts: ActaPdfExportOpts): PdfLayout {
+  const scale = opts.fontSizeScale ?? (opts.singlePage || opts.compact ? 0.82 : 1.0);
+  const margin = opts.compact || opts.singlePage ? 12 : 15;
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const contentWidth = pageWidth - margin * 2;
+  const compact = !!(opts.compact || opts.singlePage);
+
+  return {
+    scale,
+    margin,
+    contentWidth,
+    pageWidth,
+    pageHeight,
+    fontSize: {
+      title: roundSize(13 * scale),
+      subtitle: roundSize(10 * scale),
+      sectionTitle: roundSize(8 * scale),
+      body: roundSize(8.5 * scale),
+      small: roundSize(7 * scale),
+      tiny: roundSize(6.5 * scale),
+    },
+    lineHeight: compact ? 3.2 : 4,
+    spacing: compact ? 2 : 4,
+    cellPadding: compact ? 0.8 : 1.5,
+    compact,
+    singlePage: !!opts.singlePage,
+    noPageBreaks: !!opts.singlePage,
+    sections: {
+      formasPago: opts.sections?.formasPago ?? true,
+      consideraciones: opts.sections?.consideraciones ?? true,
+      clausulasLegales: opts.sections?.clausulasLegales ?? true,
+    },
+  };
+}
+
+function roundSize(v: number): number {
+  return Math.round(v * 10) / 10;
+}
+
+/**
+ * Estima la altura total del contenido del Acta para una escala dada.
+ * Permite iterar hasta encontrar la escala que quepa en 1 página.
+ */
+function estimateTotalHeight(acta: ActaData, layout: Pick<PdfLayout, 'scale' | 'margin' | 'contentWidth' | 'fontSize' | 'lineHeight' | 'spacing' | 'cellPadding' | 'sections'>): number {
+  const { margin, contentWidth, fontSize, lineHeight, spacing, cellPadding, sections } = layout;
+  let y = margin;
+
+  // Header: logo + title + divider
+  y += 16 + 5;
+
+  // Sres / Atención / Fecha (fieldRow)
+  y += 9;
+
+  // Intro box (1 línea ~= 12mm)
+  y += 12;
+
+  // Espacio extra
+  y += 3;
+
+  // Section: Información Legal + 3 fieldRows
+  y += 5 + 9 * 3;
+
+  // Section: Contactos
+  y += 4 + 5 + 10 + 4 * 4.5 * layout.scale + 2 + 3;
+
+  // Section: Servicios
+  y += 5;
+  // Tabla: header + (n filas + 1 total) * (fontSize * 0.35 + cellPadding * 2)
+  const filas = acta.serviciosContratados.length + 1;
+  const rowH = fontSize.body * 0.35 + cellPadding * 2 + 0.5;
+  y += filas * rowH + 6;
+
+  // Formas de Pago
+  if (sections.formasPago) {
+    if (acta.formasPagoImplementacion?.length) y += 5 + (acta.formasPagoImplementacion.length + 1) * rowH + 6;
+    if (acta.formasPagoMantencion?.length) y += 5 + (acta.formasPagoMantencion.length + 1) * rowH + 6;
+  }
+
+  // Consideraciones
+  if (sections.consideraciones) {
+    y += 5;
+    const cons = (acta as { consideracionesPersonalizadas?: string[] }).consideracionesPersonalizadas ?? [];
+    y += cons.length ? cons.length * (lineHeight + 1) + 2 : 5;
+  }
+
+  // Cláusulas Legales
+  if (sections.clausulasLegales) {
+    const cl = (acta as { clausulasLegales?: string }).clausulasLegales ?? "";
+    if (cl.trim()) {
+      const lineCount = Math.ceil(cl.length / 80) + 1;
+      y += 5 + lineCount * lineHeight + 2;
+    }
+  }
+
+  return y - margin;
+}
 
 function effectiveNoActaForPdf(acta: ActaData, expedienteUuid?: string): string {
   const t = acta.noActa?.trim();
@@ -62,6 +205,53 @@ function effectiveNoActaForPdf(acta: ActaData, expedienteUuid?: string): string 
   if (ex) return buildActaCodigo(ex);
   return "";
 }
+
+/**
+ * Busca la escala óptima para que el contenido quepa en 1 página.
+ * Comienza en 1.0 y baja hasta 0.6.
+ */
+function findBestScale(acta: ActaData, doc: jsPDF, opts: ActaPdfExportOpts): number {
+  const pageHeight = 297;
+  const SIG_HEIGHT = 14;
+  const usableHeight = pageHeight - 12 * 2 - 10 - SIG_HEIGHT;
+  for (let s = 1.0; s >= 0.6; s -= 0.04) {
+    const testLayout = buildTestLayout(doc, s);
+    const estimated = estimateTotalHeight(acta, testLayout);
+    if (estimated <= usableHeight) return s;
+  }
+  return 0.6;
+}
+
+function buildTestLayout(doc: jsPDF, scale: number) {
+  const margin = 12;
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const contentWidth = pageWidth - margin * 2;
+  return {
+    scale,
+    margin,
+    contentWidth,
+    fontSize: {
+      title: roundSize(13 * scale),
+      subtitle: roundSize(10 * scale),
+      sectionTitle: roundSize(8 * scale),
+      body: roundSize(8.5 * scale),
+      small: roundSize(7 * scale),
+      tiny: roundSize(6.5 * scale),
+    },
+    lineHeight: 3.2,
+    spacing: 2,
+    cellPadding: 0.8,
+    sections: {
+      formasPago: _optsForScale?.sections?.formasPago ?? true,
+      consideraciones: _optsForScale?.sections?.consideraciones ?? true,
+      clausulasLegales: _optsForScale?.sections?.clausulasLegales ?? true,
+    } as Required<SectionFlags>,
+  };
+}
+
+// Variable compartida para acceder a opts en buildTestLayout
+let _optsForScale: ActaPdfExportOpts = {};
+
 /**
  * Genera el PDF del Acta (con anexos de cláusulas) como Blob, sin descargar.
  */
@@ -72,7 +262,8 @@ export async function createActaPdfBlob(
 ): Promise<{ blob: Blob; filename: string }> {
   const noActa = effectiveNoActaForPdf(acta, opts.expedienteUuid);
   const actaForPdf: ActaData = { ...acta, noActa };
-  const baseBytes = await buildActaPdfBytes(actaForPdf);
+  _optsForScale = opts;
+  const baseBytes = await buildActaPdfBytes(actaForPdf, opts);
   const merged = await PDFDocument.load(baseBytes);
 
   // Ordenar cláusulas por ordenGlobal (menor = antes). Default 50.
@@ -81,11 +272,8 @@ export async function createActaPdfBlob(
   );
 
   // El PDF de Features Resumido dinámico tiene ordenGlobal=20
-  // (entre features=10 y cláusulas legales=21+).
-  // Se inserta como un ítem virtual en la posición correcta del array.
   const FEATURES_RESUMIDO_ORDEN = 20;
 
-  // Construir lista final de documentos a anexar, incluyendo el Features Resumido dinámico
   type DocEntry =
     | { kind: "static"; clausula: ClausulaParaPdf }
     | { kind: "dynamic_features_resumido" };
@@ -94,7 +282,6 @@ export async function createActaPdfBlob(
   let featuresResumidoInsertado = false;
 
   for (const c of clausulasOrdenadas) {
-    // Insertar el Features Resumido dinámico antes del primer documento con ordenGlobal > 20
     if (
       !featuresResumidoInsertado &&
       opts.featuresResumidoBytes &&
@@ -106,12 +293,10 @@ export async function createActaPdfBlob(
     docsEnOrden.push({ kind: "static", clausula: c });
   }
 
-  // Si no hubo ningún documento con ordenGlobal > 20, insertar al final
   if (!featuresResumidoInsertado && opts.featuresResumidoBytes) {
     docsEnOrden.push({ kind: "dynamic_features_resumido" });
   }
 
-  // Procesar cada documento en orden
   for (const entry of docsEnOrden) {
     if (entry.kind === "dynamic_features_resumido") {
       try {
@@ -158,11 +343,6 @@ export function downloadPdfBlob(blob: Blob, filename: string) {
 
 /**
  * Genera y descarga el PDF del Acta de Aceptación de Servicios.
- * Si se pasan `clausulas`, sus PDFs se anexan al final en un solo archivo.
- *
- * Si una cláusula falla al cargar (PDF inválido, encriptado, 404), se omite y
- * se sigue con el resto. El acta siempre se descarga; los errores parciales
- * se pueden propagar al caller via la callback `onClausulaError`.
  */
 export async function generateActaPDF(
   acta: ActaData,
@@ -180,7 +360,6 @@ export async function generateResultadoPDF(
   ep: EPData,
   resultado: ResultadoCalculado,
   pdfOpts?: {
-    /** Si es false, omite distribución GIM/GP y facturación inter-empresa (p. ej. Acta no guardada). Por defecto true. */
     mostrarDistribucionYFacturacion?: boolean;
     etiquetaBloqueGim?: string;
   },
@@ -254,29 +433,24 @@ function fitImagePreserveAspectMm(
 
 /**
  * Construye los bytes del PDF base del Acta usando jsPDF + autotable.
- * Estructura:
- *   1. Header con logo + título + N° + fecha
- *   2. Sres / Atención / Fecha + texto introductorio
- *   3. Datos de la empresa
- *   4. Datos de contacto (representante legal, técnico, facturación)
- *   5. Servicios contratados (autoTable)
- *   6. Formas de pago — Implementación (autoTable, opcional)
- *   7. Formas de pago — Mantención (autoTable, opcional)
- *   8. Consideraciones del acta (lista en F1)
- *   9. Cláusulas legales texto libre (si las hay)
- *  10. Firma del Representante Legal
- *  11. Footer en cada página
+ * Acepta opciones de escala/compresión.
  */
-async function buildActaPdfBytes(acta: ActaData): Promise<Uint8Array> {
+async function buildActaPdfBytes(acta: ActaData, opts: ActaPdfExportOpts = {}): Promise<Uint8Array> {
   const doc = new jsPDF({ unit: "mm", format: "a4" });
-  const pageWidth = doc.internal.pageSize.getWidth();
-  const pageHeight = doc.internal.pageSize.getHeight();
-  const margin = 15;
-  const contentWidth = pageWidth - margin * 2;
+
+  // Si singlePage, encontrar la mejor escala automáticamente
+  let resolvedOpts = { ...opts };
+  if (opts.singlePage && !opts.fontSizeScale) {
+    const bestScale = findBestScale(acta, doc, opts);
+    resolvedOpts.fontSizeScale = bestScale;
+    resolvedOpts.compact = true;
+  }
+
+  const lo = resolveLayout(doc, resolvedOpts);
+  const { margin, contentWidth, pageWidth, pageHeight, fontSize, lineHeight, spacing, cellPadding } = lo;
 
   const currencyCode = getCurrencyCode(acta.moneda ?? "");
   const fmt = (v: number) => formatCurrency(v, currencyCode);
-  /** F1 (expedientes) usa `precioUnitario`; legado ActaData usa `valorUnitario`. */
   const precioUnitarioServicio = (s: { precioUnitario?: number; valorUnitario?: number }) =>
     Number(s.precioUnitario ?? s.valorUnitario ?? 0);
   const totalServicios = acta.serviciosContratados.reduce((sum, s) => sum + s.total, 0);
@@ -284,7 +458,6 @@ async function buildActaPdfBytes(acta: ActaData): Promise<Uint8Array> {
   let y = margin;
 
   // ── 1. Header ───────────────────────────────────────────────────────────
-  // Logo importado estáticamente por Vite: siempre disponible, sin fetch en runtime
   const logo: string | null = cdlatamLogoDataUrl ?? null;
   if (logo) {
     doc.setFillColor(...COLOR_TEXT);
@@ -310,13 +483,13 @@ async function buildActaPdfBytes(acta: ActaData): Promise<Uint8Array> {
 
   doc.setTextColor(...COLOR_TEXT);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(13);
+  doc.setFontSize(fontSize.title);
   doc.text("Acta de Aceptación de Servicios", pageWidth - margin, y + 5, { align: "right" });
   doc.setTextColor(...COLOR_BRAND_DARK);
-  doc.setFontSize(10);
+  doc.setFontSize(fontSize.subtitle);
   doc.text(`N° ${acta.noActa || "S/N"}`, pageWidth - margin, y + 10, { align: "right" });
   doc.setTextColor(...COLOR_GRAY);
-  doc.setFontSize(8);
+  doc.setFontSize(fontSize.small);
   doc.setFont("helvetica", "normal");
   doc.text(`Fecha: ${formatDate(acta.fecha)}`, pageWidth - margin, y + 14, { align: "right" });
   y += 16;
@@ -327,7 +500,7 @@ async function buildActaPdfBytes(acta: ActaData): Promise<Uint8Array> {
   y += 5;
 
   // ── 2. Encabezado: Sres / Atención / Fecha + intro ──────────────────────
-  y = drawFieldRow(doc, [
+  y = drawFieldRow(doc, lo, [
     { label: "Sres.", value: acta.sres },
     { label: "Atención", value: acta.atencion },
     { label: "Fecha", value: formatDate(acta.fecha) },
@@ -336,27 +509,27 @@ async function buildActaPdfBytes(acta: ActaData): Promise<Uint8Array> {
   const textoIntro =
     (acta as { textoIntroductorio?: string }).textoIntroductorio ||
     "Por medio de la presente, confirmo la recepción y aprobación de la propuesta comercial, en los términos y condiciones aquí expresados (indicado en mail que precede).";
-  y = drawIntroBox(doc, textoIntro, margin, y, contentWidth);
+  y = drawIntroBox(doc, lo, textoIntro, margin, y, contentWidth);
 
   // ── 3. Datos de la empresa ──────────────────────────────────────────────
-  y += 3; // espacio extra entre glosa legal e Información Legal
-  y = drawSectionTitle(doc, "Información Legal de Cliente", margin, y);
-  y = drawFieldRow(doc, [
+  y += spacing - 1;
+  y = drawSectionTitle(doc, lo, "Información Legal de Cliente", margin, y);
+  y = drawFieldRow(doc, lo, [
     { label: "Razón Social", value: acta.razonSocial },
     { label: "Nombre de Fantasía", value: acta.nombreFantasia },
   ], margin, y, contentWidth);
-  y = drawFieldRow(doc, [
+  y = drawFieldRow(doc, lo, [
     { label: acta.tipoDocumento || "RUT", value: acta.rucDniRut },
     { label: "Moneda", value: acta.moneda },
   ], margin, y, contentWidth);
-  y = drawFieldRow(doc, [
+  y = drawFieldRow(doc, lo, [
     { label: "Dirección Comercial", value: acta.direccionComercial },
   ], margin, y, contentWidth);
 
   // ── 4. Datos de contacto ────────────────────────────────────────────────
-  y += 4; // espacio entre Información Legal e Información de Contacto
-  y = drawSectionTitle(doc, "Información de Contacto", margin, y);
-  y = drawContactGrid(doc, [
+  y += spacing;
+  y = drawSectionTitle(doc, lo, "Información de Contacto", margin, y);
+  y = drawContactGrid(doc, lo, [
     {
       title: "Representante Legal",
       fields: [
@@ -385,7 +558,7 @@ async function buildActaPdfBytes(acta: ActaData): Promise<Uint8Array> {
   ], margin, y, contentWidth);
 
   // ── 5. Servicios contratados ────────────────────────────────────────────
-  y = drawSectionTitle(doc, "Servicios Contratados", margin, y);
+  y = drawSectionTitle(doc, lo, "Servicios Contratados", margin, y);
   const servicioRows = acta.serviciosContratados.map((s, i) => [
     String(i + 1),
     s.unidadNegocio || "",
@@ -405,7 +578,7 @@ async function buildActaPdfBytes(acta: ActaData): Promise<Uint8Array> {
     margin: { left: margin, right: margin },
     head: [["#", "Unidad Negocio", "Solución", "Detalle Servicio", "Tipo Venta", "Valor Unit.", "Cant.", "Total", "Plazo"]],
     body: servicioRows,
-    styles: { fontSize: 7, cellPadding: 1.5, textColor: COLOR_TEXT },
+    styles: { fontSize: fontSize.small, cellPadding, textColor: COLOR_TEXT },
     headStyles: { fillColor: COLOR_BRAND, textColor: [255, 255, 255], fontStyle: "bold" },
     alternateRowStyles: { fillColor: [249, 250, 251] },
     columnStyles: {
@@ -422,84 +595,86 @@ async function buildActaPdfBytes(acta: ActaData): Promise<Uint8Array> {
     },
   });
   y = (doc as unknown as { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY ?? y;
-  y += 4;
+  y += spacing;
 
   // ── 6. Formas de pago — Implementación ──────────────────────────────────
-  if (acta.formasPagoImplementacion?.length) {
-    y = ensureSpace(doc, y, 30);
-    y = drawSectionTitle(doc, "Formas de Pago — Implementación", margin, y);
-    y = drawPagoTable(doc, acta.formasPagoImplementacion, margin, y, fmt);
+  if (acta.formasPagoImplementacion?.length && lo.sections.formasPago) {
+    y = ensureSpace(doc, y, 30, lo);
+    y = drawSectionTitle(doc, lo, "Formas de Pago — Implementación", margin, y);
+    y = drawPagoTable(doc, lo, acta.formasPagoImplementacion, margin, y, fmt);
   }
 
   // ── 7. Formas de pago — Mantención ──────────────────────────────────────
-  if (acta.formasPagoMantencion?.length) {
-    y = ensureSpace(doc, y, 30);
-    y = drawSectionTitle(doc, "Formas de Pago — Mantención", margin, y);
-    y = drawPagoTable(doc, acta.formasPagoMantencion, margin, y, fmt, "mantencion");
+  if (acta.formasPagoMantencion?.length && lo.sections.formasPago) {
+    y = ensureSpace(doc, y, 30, lo);
+    y = drawSectionTitle(doc, lo, "Formas de Pago — Mantención", margin, y);
+    y = drawPagoTable(doc, lo, acta.formasPagoMantencion, margin, y, fmt, "mantencion");
     const ahorroMant = (acta as { total_descuento_mantencion?: number }).total_descuento_mantencion;
     if (typeof ahorroMant === "number" && ahorroMant > 0) {
-      doc.setFontSize(7);
+      doc.setFontSize(fontSize.small);
       doc.setFont("helvetica", "normal");
       doc.setTextColor(...COLOR_GRAY);
       doc.text(`Ahorro total acumulado (cuotas de gracia): ${fmt(ahorroMant)}`, margin, y);
-      y += 5;
+      y += spacing + 1;
       doc.setTextColor(...COLOR_TEXT);
     }
   }
 
-  // ── 8. Consideraciones (solo ítems incluidos en el acta — F1) ─────────────
-  y = ensureSpace(doc, y, 30);
-  y = drawSectionTitle(doc, "Consideraciones y Alcances Comerciales", margin, y);
-  const personalizadas = (acta as { consideracionesPersonalizadas?: string[] }).consideracionesPersonalizadas ?? [];
-  const consideracionesPdf = personalizadas.map(s => s.trim()).filter(Boolean);
-  if (consideracionesPdf.length) {
-    y += 1;
-    y = drawBulletList(doc, consideracionesPdf, margin, y, contentWidth);
-  } else {
-    y += 2;
-    doc.setFontSize(8);
-    doc.setTextColor(...COLOR_GRAY);
-    doc.setFont("helvetica", "italic");
-    doc.text("(Sin consideraciones agregadas al acta.)", margin, y);
-    doc.setFont("helvetica", "normal");
-    doc.setTextColor(...COLOR_TEXT);
-    y += 5;
+  // ── 8. Consideraciones ──────────────────────────────────────────────────
+  if (lo.sections.consideraciones) {
+    y = ensureSpace(doc, y, 30, lo);
+    y = drawSectionTitle(doc, lo, "Consideraciones y Alcances Comerciales", margin, y);
+    const personalizadas = (acta as { consideracionesPersonalizadas?: string[] }).consideracionesPersonalizadas ?? [];
+    const consideracionesPdf = personalizadas.map(s => s.trim()).filter(Boolean);
+    if (consideracionesPdf.length) {
+      y += 1;
+      y = drawBulletList(doc, lo, consideracionesPdf, margin, y, contentWidth);
+    } else {
+      y += 2;
+      doc.setFontSize(fontSize.small);
+      doc.setTextColor(...COLOR_GRAY);
+      doc.setFont("helvetica", "italic");
+      doc.text("(Sin consideraciones agregadas al acta.)", margin, y);
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(...COLOR_TEXT);
+      y += spacing + 1;
+    }
   }
 
   // ── 9. Cláusulas legales texto libre ───────────────────────────────────
-  const clausulasLegales = (acta as { clausulasLegales?: string }).clausulasLegales ?? "";
-  if (clausulasLegales.trim()) {
-    y = ensureSpace(doc, y, 25);
-    y = drawSectionTitle(doc, "Cláusulas Legales", margin, y);
-    doc.setFontSize(8.5);
-    doc.setTextColor(...COLOR_TEXT);
-    doc.setFont("helvetica", "normal");
-    const lines = doc.splitTextToSize(clausulasLegales.trim(), contentWidth);
-    for (const line of lines) {
-      y = ensureSpace(doc, y, 5);
-      doc.text(line, margin, y);
-      y += 4;
+  if (lo.sections.clausulasLegales) {
+    const clausulasLegales = (acta as { clausulasLegales?: string }).clausulasLegales ?? "";
+    if (clausulasLegales.trim()) {
+      y = ensureSpace(doc, y, 25, lo);
+      y = drawSectionTitle(doc, lo, "Cláusulas Legales", margin, y);
+      doc.setFontSize(fontSize.body);
+      doc.setTextColor(...COLOR_TEXT);
+      doc.setFont("helvetica", "normal");
+      const lines = doc.splitTextToSize(clausulasLegales.trim(), contentWidth);
+      for (const line of lines) {
+        y = ensureSpace(doc, y, lineHeight, lo);
+        doc.text(line, margin, y);
+        y += lineHeight;
+      }
     }
   }
 
   // ── 10. Firma del Representante Legal ───────────────────────────────────
-  // Solo línea de firma + nombre + label (sin imagen ni marco)
+  // Dibujada al final de la página (posicion fija)
   const firmaW = 70;
-  y = ensureSpace(doc, y, 22);
-  y += 6;
+  const firmaHeight = Math.max(4, spacing) + lineHeight + lineHeight + 1;
+  const firmaY = pageHeight - margin - 10 - firmaHeight;
   doc.setDrawColor(...COLOR_TEXT);
   doc.setLineWidth(0.3);
-  doc.line(margin, y, margin + firmaW, y);
-  y += 4;
-  doc.setFontSize(9);
+  doc.line(margin, firmaY, margin + firmaW, firmaY);
+  doc.setFontSize(fontSize.body);
   doc.setFont("helvetica", "bold");
   doc.setTextColor(...COLOR_TEXT);
-  doc.text(acta.representanteLegal || "___________________________", margin + firmaW / 2, y, { align: "center" });
-  y += 4;
+  doc.text(acta.representanteLegal || "___________________________", margin + firmaW / 2, firmaY + lineHeight, { align: "center" });
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(7.5);
+  doc.setFontSize(fontSize.small);
   doc.setTextColor(...COLOR_GRAY);
-  doc.text("Representante Legal", margin + firmaW / 2, y, { align: "center" });
+  doc.text("Representante Legal", margin + firmaW / 2, firmaY + lineHeight + lineHeight, { align: "center" });
 
   // ── 11. Footer en cada página ───────────────────────────────────────────
   const totalPages = doc.getNumberOfPages();
@@ -509,7 +684,7 @@ async function buildActaPdfBytes(acta: ActaData): Promise<Uint8Array> {
     doc.setDrawColor(...COLOR_LIGHT);
     doc.setLineWidth(0.2);
     doc.line(margin, fy - 3, pageWidth - margin, fy - 3);
-    doc.setFontSize(7);
+    doc.setFontSize(fontSize.tiny * 0.9);
     doc.setTextColor(...COLOR_GRAY);
     doc.setFont("helvetica", "normal");
     doc.text("CDLatam — Transformación Digital en Latinoamérica", margin, fy);
@@ -528,74 +703,79 @@ async function buildActaPdfBytes(acta: ActaData): Promise<Uint8Array> {
 
 interface FieldDef { label: string; value: string | number | undefined | null; }
 
-function ensureSpace(doc: jsPDF, y: number, needed: number): number {
-  const pageHeight = doc.internal.pageSize.getHeight();
+function ensureSpace(doc: jsPDF, y: number, needed: number, lo: PdfLayout): number {
+  if (lo.noPageBreaks) return y;
+  const pageHeight = lo.pageHeight;
   if (y + needed > pageHeight - 14) {
     doc.addPage();
-    return 15;
+    return lo.margin;
   }
   return y;
 }
 
-function drawSectionTitle(doc: jsPDF, title: string, x: number, y: number): number {
-  y = ensureSpace(doc, y, 8);
-  doc.setFontSize(8);
+function drawSectionTitle(doc: jsPDF, lo: PdfLayout, title: string, x: number, y: number): number {
+  y = ensureSpace(doc, y, 8, lo);
+  doc.setFontSize(lo.fontSize.sectionTitle);
   doc.setFont("helvetica", "bold");
   doc.setTextColor(...COLOR_BRAND_DARK);
   doc.text(title.toUpperCase(), x, y);
   doc.setDrawColor(...COLOR_BRAND);
   doc.setLineWidth(0.4);
   doc.line(x, y + 1.2, x + 100, y + 1.2);
-  return y + 5;
+  return y + (lo.compact ? 4 : 5);
 }
 
-function drawIntroBox(doc: jsPDF, text: string, x: number, y: number, width: number): number {
-  doc.setFontSize(8.5);
+function drawIntroBox(doc: jsPDF, lo: PdfLayout, text: string, x: number, y: number, width: number): number {
+  doc.setFontSize(lo.fontSize.body);
   doc.setFont("helvetica", "italic");
   doc.setTextColor(...COLOR_TEXT);
   const lines = doc.splitTextToSize(text, width - 8);
-  const boxHeight = lines.length * 4 + 4;
-  y = ensureSpace(doc, y, boxHeight + 2);
+  const lineH = lo.lineHeight;
+  const boxHeight = lines.length * lineH + (lo.compact ? 2 : 4);
+  y = ensureSpace(doc, y, boxHeight + 2, lo);
   doc.setFillColor(240, 253, 251);
   doc.rect(x, y, width, boxHeight, "F");
   doc.setDrawColor(...COLOR_BRAND);
   doc.setLineWidth(0.8);
   doc.line(x, y, x, y + boxHeight);
-  doc.text(lines, x + 4, y + 4.5);
+  doc.text(lines, x + 4, y + (lo.compact ? 3.5 : 4.5));
   doc.setFont("helvetica", "normal");
-  return y + boxHeight + 3;
+  return y + boxHeight + (lo.compact ? 2 : 3);
 }
 
 function drawFieldRow(
   doc: jsPDF,
+  lo: PdfLayout,
   fields: FieldDef[],
   x: number,
   y: number,
   width: number,
 ): number {
-  y = ensureSpace(doc, y, 12);
+  const rowHeight = lo.compact ? 9 : 12;
+  y = ensureSpace(doc, y, rowHeight, lo);
   const colW = width / fields.length;
   fields.forEach((f, i) => {
     const cx = x + i * colW;
-    doc.setFontSize(6.5);
+    doc.setFontSize(lo.fontSize.tiny);
     doc.setTextColor(...COLOR_GRAY);
     doc.setFont("helvetica", "normal");
     doc.text(String(f.label).toUpperCase(), cx, y);
-    doc.setFontSize(8.5);
+    doc.setFontSize(lo.fontSize.body);
     doc.setTextColor(...COLOR_TEXT);
     doc.setFont("helvetica", "normal");
     const value = f.value == null || f.value === "" ? " " : String(f.value);
     const lines = doc.splitTextToSize(value, colW - 4);
-    doc.text(lines[0] ?? " ", cx, y + 4);
+    doc.text(lines[0] ?? " ", cx, y + (lo.compact ? 3.5 : 4));
     doc.setDrawColor(209, 213, 219);
     doc.setLineWidth(0.2);
-    doc.line(cx, y + 5.5, cx + colW - 4, y + 5.5);
+    doc.line(cx, y + (lo.compact ? 4.5 : 5.5), cx + colW - 4, y + (lo.compact ? 4.5 : 5.5));
   });
-  return y + 9;
+  return y + (lo.compact ? 7 : 9);
 }
 
 function drawContactGrid(
   doc: jsPDF,
+  lo: PdfLayout,
   groups: { title: string; fields: FieldDef[] }[],
   x: number,
   y: number,
@@ -603,22 +783,23 @@ function drawContactGrid(
 ): number {
   const colW = width / groups.length;
   const maxFields = Math.max(...groups.map(g => g.fields.length));
-  const rowH = 4.5;
-  const gridH = 10 + maxFields * rowH + 2;
-  y = ensureSpace(doc, y, gridH);
+  const rowH = lo.compact ? 3.8 : 4.5;
+  const headerH = lo.compact ? 8 : 10;
+  const gridH = headerH + maxFields * rowH + 2;
+  y = ensureSpace(doc, y, gridH, lo);
   groups.forEach((group, gi) => {
     const cx = x + gi * colW;
-    doc.setFontSize(7.5);
+    doc.setFontSize(lo.fontSize.small);
     doc.setTextColor(...COLOR_BRAND);
     doc.setFont("helvetica", "bold");
-    doc.text(String(group.title), cx + 2, y + 4);
+    doc.text(String(group.title), cx + 2, y + (lo.compact ? 3 : 4));
     group.fields.forEach((f, fi) => {
-      const fy = y + 7 + fi * rowH;
-      doc.setFontSize(6.5);
+      const fy = y + (lo.compact ? 6 : 7) + fi * rowH;
+      doc.setFontSize(lo.fontSize.tiny);
       doc.setTextColor(...COLOR_GRAY);
       doc.setFont("helvetica", "normal");
       doc.text(`${f.label}:`, cx + 2, fy);
-      doc.setFontSize(7.5);
+      doc.setFontSize(lo.fontSize.small);
       doc.setTextColor(...COLOR_TEXT);
       doc.setFont("helvetica", "normal");
       const value = f.value == null || f.value === "" ? " " : String(f.value);
@@ -628,7 +809,7 @@ function drawContactGrid(
         const lines = doc.splitTextToSize(value, Math.max(1, valueW));
         doc.text(lines[0] ?? " ", cx + 2 + labelW, fy);
       } else {
-        doc.text(value.length > 15 ? value.substring(0, 15) + "…" : value, cx + 2 + labelW, fy);
+        doc.text(value.length > 15 ? value.substring(0, 15) + "\u2026" : value, cx + 2 + labelW, fy);
       }
     });
   });
@@ -639,11 +820,12 @@ function drawContactGrid(
     doc.line(cx, y + 2, cx, y + gridH - 1);
   }
   doc.line(x, y + gridH - 1, x + width, y + gridH - 1);
-  return y + gridH + 3;
+  return y + gridH + (lo.compact ? 2 : 3);
 }
 
 function drawPagoTable(
   doc: jsPDF,
+  lo: PdfLayout,
   formas: Array<{ tipoVenta: string; nCuotas: number; cuotas?: Array<{ monto: number; fecha: string }> }>,
   x: number,
   y: number,
@@ -653,7 +835,7 @@ function drawPagoTable(
   const maxCuotas = Math.min(4, Math.max(1, ...formas.map(i => i.nCuotas || 0)));
   const head = ["#", "Tipo Venta", variant === "mantencion" ? "N° Cuotas" : "N° Cuotas"];
   for (let i = 0; i < maxCuotas; i++) {
-    const cuotaLabel = variant === "mantencion" ? `Cuota ${i + 1}` : `${i + 1}ª Cuota`;
+    const cuotaLabel = variant === "mantencion" ? `Cuota ${i + 1}` : `${i + 1}\u00aa Cuota`;
     head.push(cuotaLabel, "Fecha");
   }
 
@@ -677,29 +859,30 @@ function drawPagoTable(
     margin: { left: x, right: x },
     head: [head],
     body,
-    styles: { fontSize: 7, cellPadding: 1.4, textColor: COLOR_TEXT },
+    styles: { fontSize: lo.fontSize.small, cellPadding: lo.cellPadding, textColor: COLOR_TEXT },
     headStyles: { fillColor: COLOR_BRAND, textColor: [255, 255, 255], fontStyle: "bold" },
     alternateRowStyles: { fillColor: [249, 250, 251] },
   });
   const finalY = (doc as unknown as { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY ?? y;
-  return finalY + 4;
+  return finalY + (lo.compact ? 2 : 4);
 }
 
 function drawBulletList(
   doc: jsPDF,
+  lo: PdfLayout,
   items: string[],
   x: number,
   y: number,
   width: number,
 ): number {
-  doc.setFontSize(8.5);
+  doc.setFontSize(lo.fontSize.body);
   doc.setTextColor(...COLOR_TEXT);
   doc.setFont("helvetica", "normal");
   for (const item of items) {
     const lines = doc.splitTextToSize(item, width - 6);
-    const needed = lines.length * 4 + 1;
-    y = ensureSpace(doc, y, needed);
-    doc.text("–", x, y);
+    const needed = lines.length * lo.lineHeight + 1;
+    y = ensureSpace(doc, y, needed, lo);
+    doc.text("\u2013", x, y);
     doc.text(lines, x + 4, y);
     y += needed;
   }
@@ -735,22 +918,22 @@ function buildResultadoHTML(
   const bloqueFacturacion = mostrarDist
     ? `
   <div class="section">
-    <div class="section-title">Facturación Inter-Empresa (Mes 1)</div>
+    <div class="section-title">Facturaci\u00f3n Inter-Empresa (Mes 1)</div>
     <table>
       <thead><tr><th>Concepto</th><th class="text-right">Monto</th></tr></thead>
       <tbody>
-        <tr><td>Distribución ${etiquetaGim} (${pctGim}%)</td><td class="text-right">${fmt(resultado.distribucion?.gim?.mes1||0)}</td></tr>
+        <tr><td>Distribuci\u00f3n ${etiquetaGim} (${pctGim}%)</td><td class="text-right">${fmt(resultado.distribucion?.gim?.mes1||0)}</td></tr>
         <tr><td>Groupalnet SpA (${pctGp}%)</td><td class="text-right">${fmt(resultado.distribucion?.gp?.mes1||0)}</td></tr>
-        <tr><td>Facturación Bruto</td><td class="text-right">${fmt(resultado.facturacion?.bruto?.mes1||0)}</td></tr>
+        <tr><td>Facturaci\u00f3n Bruto</td><td class="text-right">${fmt(resultado.facturacion?.bruto?.mes1||0)}</td></tr>
         <tr><td>IVA (${pctIva}%)</td><td class="text-right">${fmt(resultado.facturacion?.impuesto?.mes1||0)}</td></tr>
-        <tr class="total-row"><td>Facturación Neto</td><td class="text-right">${fmt(resultado.facturacion?.neto?.mes1||0)}</td></tr>
+        <tr class="total-row"><td>Facturaci\u00f3n Neto</td><td class="text-right">${fmt(resultado.facturacion?.neto?.mes1||0)}</td></tr>
       </tbody>
     </table>
   </div>`
     : `
   <div class="section">
-    <div class="section-title">Facturación Inter-Empresa</div>
-    <p style="font-size:9pt;color:#6b7280;">Disponible cuando el Acta de Aceptación (F1) esté guardada.</p>
+    <div class="section-title">Facturaci\u00f3n Inter-Empresa</div>
+    <p style="font-size:9pt;color:#6b7280;">Disponible cuando el Acta de Aceptaci\u00f3n (F1) est\u00e9 guardada.</p>
   </div>`;
 
   return `<!DOCTYPE html>
@@ -794,13 +977,13 @@ function buildResultadoHTML(
   <div class="header">
     <div><img src="${logoUrl}" alt="CDLatam" style="height:38px;object-fit:contain;" /></div>
     <div style="text-align:right;">
-      <div class="doc-title">Resultado Evaluación de Proyecto</div>
+      <div class="doc-title">Resultado Evaluaci\u00f3n de Proyecto</div>
       <div class="doc-num">EP N° ${ep.propuestaNumero || "S/N"}</div>
     </div>
   </div>
 
   <div class="section">
-    <div class="section-title">Información del Proyecto</div>
+    <div class="section-title">Informaci\u00f3n del Proyecto</div>
     <div class="grid-2">
       <div class="field"><div class="field-label">Cliente</div><div class="field-value">${ep.nombreCliente || "&nbsp;"}</div></div>
       <div class="field"><div class="field-label">Propuesta N°</div><div class="field-value">${ep.propuestaNumero || "&nbsp;"}</div></div>
@@ -817,7 +1000,7 @@ function buildResultadoHTML(
   </div>
 
   <div class="section">
-    <div class="section-title">Distribución por Mes</div>
+    <div class="section-title">Distribuci\u00f3n por Mes</div>
     <table>
       <thead>
         <tr>
@@ -839,7 +1022,7 @@ function buildResultadoHTML(
   ${bloqueFacturacion}
 
   <div class="page-footer">
-    <span>CDLatam — Transformación Digital en Latinoamérica</span>
+    <span>CDLatam — Transformaci\u00f3n Digital en Latinoam\u00e9rica</span>
     <span>Generado el ${new Date().toLocaleDateString("es-CL")}</span>
   </div>
 </div>
@@ -852,10 +1035,6 @@ function buildResultadoHTML(
 /**
  * Genera un PDF de una página con la tabla de Features Resumido (SI/NO)
  * basado en el estado de implementación del expediente.
- *
- * @param items  Array de ImplementacionItemVM con { key, label, estado }
- * @param razonSocial  Nombre del cliente para el encabezado
- * @returns Uint8Array con los bytes del PDF generado
  */
 export function buildFeaturesResumidoPdfBytes(
   items: Array<{ key: string; label: string; estado: boolean }>,
@@ -867,7 +1046,6 @@ export function buildFeaturesResumidoPdfBytes(
   const contentWidth = pageWidth - margin * 2;
   let y = margin;
 
-  // ── Encabezado ──────────────────────────────────────────────────────────
   const logo: string | null = cdlatamLogoDataUrl ?? null;
   if (logo) {
     doc.setFillColor(...COLOR_TEXT);
@@ -891,7 +1069,7 @@ export function buildFeaturesResumidoPdfBytes(
   doc.setTextColor(...COLOR_GRAY);
   doc.setFontSize(9);
   doc.setFont("helvetica", "normal");
-  doc.text(razonSocial || "—", pageWidth - margin, y + 11, { align: "right" });
+  doc.text(razonSocial || "\u2014", pageWidth - margin, y + 11, { align: "right" });
   y += 16;
 
   doc.setDrawColor(...COLOR_BRAND);
@@ -899,13 +1077,11 @@ export function buildFeaturesResumidoPdfBytes(
   doc.line(margin, y, pageWidth - margin, y);
   y += 6;
 
-  // ── Tabla ───────────────────────────────────────────────────────────────
-  // Agregar número de orden al label: "1. ADMINISTRACIÓN DE CONTENIDO LINEAL"
   const tableRows = items.map((item, idx) => [`${idx + 1}. ${item.label}`, item.estado ? "SI" : "NO"]);
 
   autoTable(doc, {
     startY: y,
-    head: [["Feature / Módulo", "Incluido"]],
+    head: [["Feature / M\u00f3dulo", "Incluido"]],
     body: tableRows,
     margin: { left: margin, right: margin },
     tableWidth: contentWidth,
@@ -919,8 +1095,8 @@ export function buildFeaturesResumidoPdfBytes(
       if (data.section === "body" && data.column.index === 1) {
         const val = data.cell.raw as string;
         data.cell.styles.textColor = val === "SI"
-          ? ([16, 185, 129] as [number, number, number])  // emerald-500
-          : ([239, 68, 68] as [number, number, number]);  // red-500
+          ? ([16, 185, 129] as [number, number, number])
+          : ([239, 68, 68] as [number, number, number]);
       }
     },
   });

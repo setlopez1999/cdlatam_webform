@@ -280,20 +280,17 @@ export interface FormSlot<T> {
 // ─── Expediente ───────────────────────────────────────────────────────────────
 
 export interface Expediente {
-  /** nanoid único — será el id en BD cuando se conecte */
-  id: string;
-  /** Codigo compacto autogenerado del expediente (solo backend) */
-  codigo?: string;
-  /** N° de Acta consecutivo real (de BD, 6 dígitos, desde 1000) */
-  nroActa?: number | null;
-  /** Nombre editable por el usuario */
+  id: number;
   nombre: string;
+  creadorId: number;
+  status: string;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt: number | null;
   /** F1 — Acta */
   f1: FormSlot<F1Data>;
   /** F2 — Evaluación de Proyecto */
   f2: FormSlot<F2Data>;
   /** F3 — Resultados (solo estado, sin data: se calcula desde f2.data) */
   f3: { status: FormStatus };
-  createdAt: string;
-  updatedAt: string;
 }

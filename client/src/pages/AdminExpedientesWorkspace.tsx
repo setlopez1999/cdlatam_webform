@@ -20,7 +20,7 @@ const FEATURE_BULK_DELETE = true;
 
 export default function AdminExpedientesWorkspace() {
   const [search, setSearch] = useState("");
-  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [selected, setSelected] = useState<Set<number>>(new Set());
   const [deletingBulk, setDeletingBulk] = useState(false);
 
   const resumenQuery = trpc.expediente.listarResumenWorkspace.useQuery(undefined, {
@@ -50,8 +50,7 @@ export default function AdminExpedientesWorkspace() {
       exp.nombre.toLowerCase().includes(q) ||
       exp.f1.data?.razonSocial?.toLowerCase().includes(q) ||
       exp.f1.data?.nombreFantasia?.toLowerCase().includes(q) ||
-      (creadorDisplay?.toLowerCase().includes(q) ?? false) ||
-      (exp.codigo?.toLowerCase().includes(q) ?? false)
+      (creadorDisplay?.toLowerCase().includes(q) ?? false)
     );
   }, [items, search]);
 
@@ -68,7 +67,7 @@ export default function AdminExpedientesWorkspace() {
   const utils = trpc.useUtils();
 
   /** Alterna la selección de un expediente. */
-  const toggleSelect = (id: string) => {
+  const toggleSelect = (id: number) => {
     setSelected(prev => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
@@ -96,9 +95,9 @@ export default function AdminExpedientesWorkspace() {
     setDeletingBulk(true);
     let ok = 0;
     let fail = 0;
-    for (const uuid of Array.from(selected)) {
+    for (const id of Array.from(selected)) {
       try {
-        await utils.client.expediente.eliminar.mutate({ uuid });
+        await utils.client.expediente.eliminar.mutate({ id });
         ok++;
       } catch {
         fail++;
@@ -217,7 +216,7 @@ export default function AdminExpedientesWorkspace() {
                   exp={exp}
                   creadorDisplay={creadorDisplay}
                   creadorEliminado={creadorEliminado}
-                  onEliminar={() => eliminarSrv.mutate({ uuid: exp.id })}
+                  onEliminar={() => eliminarSrv.mutate({ id: exp.id })}
                 />
               </div>
             </div>

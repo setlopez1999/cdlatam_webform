@@ -69,7 +69,7 @@ type AuditRow = {
   action: string;
   entity: string;
   entityId: number | null;
-  expedienteUuid: string | null;
+  expedienteId: number | null;
   expedienteCodigo: string | null;
   changes: unknown;
   ip: string | null;
@@ -82,7 +82,7 @@ export default function AuditLog() {
   const [customTo, setCustomTo] = useState("");
   const [search, setSearch] = useState("");
   const [usernameContains, setUsernameContains] = useState("");
-  const [expedienteUuidContains, setExpedienteUuidContains] = useState("");
+  const [expedienteIdStr, setExpedienteIdStr] = useState("");
   const [userIdStr, setUserIdStr] = useState("");
   const [limit] = useState(150);
   const [pageCursor, setPageCursor] = useState<{ id: number; createdAtSec: number } | undefined>();
@@ -101,6 +101,10 @@ export default function AuditLog() {
 
   const userId = userIdStr.trim() ? parseInt(userIdStr.trim(), 10) : undefined;
   const userIdQuery = userId != null && !Number.isNaN(userId) ? userId : undefined;
+  const expedienteIdValue = expedienteIdStr.trim()
+    ? parseInt(expedienteIdStr.trim(), 10)
+    : undefined;
+  const expedienteIdQuery = expedienteIdValue != null && !Number.isNaN(expedienteIdValue) ? expedienteIdValue : undefined;
 
   const customReady = preset !== "custom" || (Boolean(customFrom) && Boolean(customTo));
 
@@ -109,17 +113,17 @@ export default function AuditLog() {
       ...range,
       limit,
       usernameContains: usernameContains.trim() || undefined,
-      expedienteUuidContains: expedienteUuidContains.trim() || undefined,
+      expedienteId: expedienteIdQuery,
       userId: userIdQuery,
       cursor: pageCursor,
     }),
-    [range, limit, usernameContains, expedienteUuidContains, userIdQuery, pageCursor]
+    [range, limit, usernameContains, expedienteIdQuery, userIdQuery, pageCursor]
   );
 
   useEffect(() => {
     setPageCursor(undefined);
     if (!customReady) setAllItems([]);
-  }, [preset, customFrom, customTo, usernameContains, expedienteUuidContains, userIdStr, limit, customReady]);
+  }, [preset, customFrom, customTo, usernameContains, expedienteIdStr, userIdStr, limit, customReady]);
   const { data, isLoading, isFetching } = trpc.audit.list.useQuery(queryInput, {
     enabled: customReady,
   });
@@ -140,7 +144,7 @@ export default function AuditLog() {
       log.action.toLowerCase().includes(q) ||
       log.entity.toLowerCase().includes(q) ||
       String(log.userId ?? "").includes(q) ||
-      (log.expedienteUuid?.toLowerCase().includes(q) ?? false) ||
+      String(log.expedienteId ?? "").includes(q) ||
       (log.expedienteCodigo?.toLowerCase().includes(q) ?? false)
     );
   });
@@ -211,10 +215,10 @@ export default function AuditLog() {
             onChange={(e) => setUserIdStr(e.target.value.replace(/\D/g, ""))}
           />
           <Input
-            placeholder="UUID expediente contiene…"
-            className="h-8 min-w-[200px] flex-1 text-xs font-mono"
-            value={expedienteUuidContains}
-            onChange={(e) => setExpedienteUuidContains(e.target.value)}
+            placeholder="ID expediente"
+            className="h-8 w-24 text-xs font-mono"
+            value={expedienteIdStr}
+            onChange={(e) => setExpedienteIdStr(e.target.value.replace(/\D/g, ""))}
           />
         </div>
 
@@ -228,7 +232,7 @@ export default function AuditLog() {
                 <TableHead>Acción</TableHead>
                 <TableHead>Entidad</TableHead>
                 <TableHead className="w-[72px]">Ent. ID</TableHead>
-                <TableHead className="min-w-[120px]">Exp. UUID</TableHead>
+                <TableHead className="w-[72px]">Exp. ID</TableHead>
                 <TableHead className="w-[100px]">Exp. código</TableHead>
                 <TableHead className="w-[120px]">IP</TableHead>
                 <TableHead className="text-right w-[80px]">Detalles</TableHead>
@@ -286,8 +290,8 @@ export default function AuditLog() {
                     <TableCell className="text-xs text-muted-foreground font-mono">
                       {log.entityId ?? "—"}
                     </TableCell>
-                    <TableCell className="text-[10px] font-mono text-muted-foreground max-w-[200px] truncate" title={log.expedienteUuid ?? ""}>
-                      {log.expedienteUuid || "—"}
+                    <TableCell className="text-xs text-muted-foreground font-mono">
+                      {log.expedienteId ?? "—"}
                     </TableCell>
                     <TableCell className="text-xs text-muted-foreground font-mono">
                       {log.expedienteCodigo || "—"}

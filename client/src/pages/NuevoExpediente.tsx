@@ -3,52 +3,45 @@
  * Genera un nombre automático (Expediente #N), permite cambiarlo,
  * y al confirmar redirige al F1 (Acta) del expediente creado.
  *
- * Al crear, sincroniza el expediente con la BD via trpc.expediente.sync.
+ * Al crear, sincroniza el expediente con la BD via trpc.expediente.crear.
  */
 
 import { useState } from "react";
 import { useLocation } from "wouter";
-import { FolderPlus, ArrowRight } from "lucide-react";
+import { FolderPlus, ArrowRight, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { trpc } from "@/lib/trpc";
 import { useExpedienteStore } from "@/features/expedientes/store";
+import { toast } from "sonner";
 
 export default function NuevoExpediente() {
   const [, navigate] = useLocation();
-  const { expedientes, crear } = useExpedienteStore();
+  const { expedientes } = useExpedienteStore();
   const [isCreating, setIsCreating] = useState(false);
 
   // Calcular nombre sugerido
   const num = expedientes.length + 1;
   const [nombre, setNombre] = useState(`Expediente #${num}`);
 
-  const utils = trpc.useUtils();
-  const syncExpediente = trpc.expediente.sync.useMutation({
-    onSuccess: () => void utils.expediente.listarResumen.invalidate(),
+  const crearExpediente = trpc.expediente.crear.useMutation({
+    onSuccess: () => void trpc.useUtils().expediente.listarResumen.invalidate(),
+    onError: (err) => {
+      toast.error(err.message || "Error al crear expediente");
+    },
   });
 
   const handleCrear = async () => {
     if (isCreating) return;
     setIsCreating(true);
     try {
-      // 1. Crear en localStorage (store de Zustand)
-      const exp = crear(nombre.trim() || `Expediente #${num}`);
-
-      // 2. Sincronizar con BD (fire-and-forget: si falla, el expediente sigue en localStorage)
-      syncExpediente.mutate(
-        { uuid: exp.id, nombre: exp.nombre },
-        {
-          onError: (err) => {
-            console.warn("[NuevoExpediente] No se pudo sincronizar con BD:", err.message);
-          },
-        }
-      );
-
-      // 3. Navegar al F1 del expediente creado
-      navigate(`/expediente/${exp.id}/acta`);
+      const result = await crearExpediente.mutateAsync({ nombre: nombre.trim() || `Expediente #${num}` });
+      toast.success("Expediente creado correctamente");
+      navigate(`/expediente/${result.expediente.id}/acta`);
+    } catch {
+      // Error ya manejado por onError del useMutation
     } finally {
       setIsCreating(false);
     }
@@ -86,8 +79,11 @@ export default function NuevoExpediente() {
 
           <div className="flex flex-col gap-2">
             <Button className="w-full gap-2" onClick={handleCrear} disabled={isCreating}>
-              Crear y completar F1 — Acta
-              <ArrowRight className="w-4 h-4" />
+              {isCreating ? (
+                <><Loader2 className="w-4 h-4 animate-spin" /> Creando...</>
+              ) : (
+                <>Crear y completar F1 — Acta <ArrowRight className="w-4 h-4" /></>
+              )}
             </Button>
             <Button
               variant="ghost"

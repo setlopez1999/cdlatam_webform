@@ -9,7 +9,7 @@ import F1Form from "@/features/expedientes/f1/F1Form";
 
 export default function ExpedienteActa() {
   const params = useParams<{ id: string }>();
-  const expedienteId = params.id;
+  const expedienteId = Number(params.id);
 
   return (
     <ExpedienteLayout expedienteId={expedienteId} activeTab="acta">
