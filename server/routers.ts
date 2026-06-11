@@ -21,7 +21,7 @@ import {
   getBloquesByContrato, setBloques, getBloquesSemanales,
   // Expedientes y Audit Log
   getExpedientesByUser, getExpedienteById,
-  updateExpediente, getAuditLog, getAuditLogFiltered,
+  updateExpediente, getAuditLogFiltered,
   crearExpedienteConActa,
   // Actas por expediente
   getActaByExpedienteId,
@@ -1360,7 +1360,7 @@ export const appRouter = router({
           action: "CREATE",
           entity: "expediente",
           entityId: result.expediente.id,
-          expedienteCodigo: result.acta.codigo ?? null,
+          actaCodigo: result.acta.codigo ?? null,
           changes: { after: { id: result.expediente.id, nombre: input.nombre } },
         });
         return result;
@@ -1477,7 +1477,7 @@ export const appRouter = router({
             action: "UPDATE",
             entity: "implementacion",
             entityId: det.expediente.id,
-            expedienteCodigo: null,
+            actaCodigo: null,
             changes: { after: { checkKey: input.checkKey, estado: input.estado } },
           });
           return { success: true as const };
@@ -1506,7 +1506,7 @@ export const appRouter = router({
           action: "UPDATE",
           entity: "expediente",
           entityId: det.expediente.id,
-          expedienteCodigo: null,
+          actaCodigo: null,
           changes: { after: { resultado: true, f3FormStatus: input.f3FormStatus } },
         });
         return { success: true as const };
@@ -1530,7 +1530,7 @@ export const appRouter = router({
           action: "UPDATE",
           entity: "expediente",
           entityId: row.id,
-          expedienteCodigo: null,
+          actaCodigo: null,
           changes: { after: { nombre: input.nombre } },
         });
         return updated;
@@ -1551,7 +1551,7 @@ export const appRouter = router({
           action: "DELETE",
           entity: "expediente",
           entityId: row.id,
-          expedienteCodigo: null,
+          actaCodigo: null,
         });
         return { success: true as const };
       }),
@@ -1571,7 +1571,7 @@ export const appRouter = router({
           action: "UPDATE",
           entity: "expediente",
           entityId: row.id,
-          expedienteCodigo: null,
+          actaCodigo: null,
           changes: { after: { papelera: true } },
         });
         return { success: true as const };
@@ -1592,7 +1592,7 @@ export const appRouter = router({
           action: "UPDATE",
           entity: "expediente",
           entityId: row.id,
-          expedienteCodigo: null,
+          actaCodigo: null,
           changes: { after: { papelera: false } },
         });
         return { success: true as const };
@@ -1604,13 +1604,6 @@ export const appRouter = router({
       return getExpedientesEnPapelera(ctx.user.id);
     }),
 
-    /** Obtiene el audit log. Solo admin. */
-    auditLog: protectedProcedure
-      .input(z.object({ limit: z.number().min(1).max(1000).default(200) }))
-      .query(async ({ ctx, input }) => {
-        await requireAnyRole(ctx, ["admin"]);
-        return await getAuditLog(input.limit);
-      }),
   }),
 
   // ─── Cláusulas Legales (PDFs) ────────────────────────────────

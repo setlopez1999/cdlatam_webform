@@ -1227,7 +1227,7 @@ export async function createAuditLog(data: {
   entity: string;
   entityId?: number;
   expedienteId?: number | null;
-  expedienteCodigo?: string | null;
+  actaCodigo?: string | null;
   changes?: { before?: unknown; after?: unknown };
   ip?: string;
 }) {
@@ -1239,7 +1239,7 @@ export async function createAuditLog(data: {
     entity: data.entity,
     entityId: data.entityId ?? null,
     expedienteId: data.expedienteId ?? null,
-    expedienteCodigo: data.expedienteCodigo ?? null,
+    actaCodigo: data.actaCodigo ?? null,
     changes: data.changes ?? null,
     ip: data.ip ?? null,
   });
@@ -1308,8 +1308,4 @@ export async function getAuditLogFiltered(f: AuditLogQueryFilter) {
   return { items, nextCursor };
 }
 
-/** Obtiene el audit log completo, ordenado por más reciente (sin paginación +1). */
-export async function getAuditLog(limit = 200) {
-  const db = await getDb();
-  return db.select().from(auditLog).orderBy(desc(auditLog.createdAt), desc(auditLog.id)).limit(limit);
-}
+

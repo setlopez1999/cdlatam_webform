@@ -70,7 +70,7 @@ type AuditRow = {
   entity: string;
   entityId: number | null;
   expedienteId: number | null;
-  expedienteCodigo: string | null;
+  actaCodigo: string | null;
   changes: unknown;
   ip: string | null;
   createdAt: Date;
@@ -145,7 +145,7 @@ export default function AuditLog() {
       log.entity.toLowerCase().includes(q) ||
       String(log.userId ?? "").includes(q) ||
       String(log.expedienteId ?? "").includes(q) ||
-      (log.expedienteCodigo?.toLowerCase().includes(q) ?? false)
+      (log.actaCodigo?.toLowerCase().includes(q) ?? false)
     );
   });
 
@@ -233,7 +233,7 @@ export default function AuditLog() {
                 <TableHead>Entidad</TableHead>
                 <TableHead className="w-[72px]">Ent. ID</TableHead>
                 <TableHead className="w-[72px]">Exp. ID</TableHead>
-                <TableHead className="w-[100px]">Exp. código</TableHead>
+                <TableHead className="w-[100px]">Acta N°</TableHead>
                 <TableHead className="w-[120px]">IP</TableHead>
                 <TableHead className="text-right w-[80px]">Detalles</TableHead>
               </TableRow>
@@ -294,7 +294,7 @@ export default function AuditLog() {
                       {log.expedienteId ?? "—"}
                     </TableCell>
                     <TableCell className="text-xs text-muted-foreground font-mono">
-                      {log.expedienteCodigo || "—"}
+                      {log.actaCodigo || "—"}
                     </TableCell>
                     <TableCell className="text-[10px] font-mono text-muted-foreground truncate max-w-[120px]" title={log.ip ?? ""}>
                       {log.ip || "—"}

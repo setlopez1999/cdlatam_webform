@@ -271,7 +271,7 @@ CREATE TABLE IF NOT EXISTS audit_log (
   entity TEXT NOT NULL,
   entityId INTEGER,
   expedienteId INTEGER,
-  expedienteCodigo TEXT,
+  actaCodigo TEXT,
   changes TEXT,
   ip TEXT,
   createdAt INTEGER DEFAULT (strftime('%s', 'now')) NOT NULL

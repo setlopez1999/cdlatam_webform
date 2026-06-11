@@ -10,7 +10,7 @@ export type AuditRecordInput = {
   entity: string;
   entityId?: number | null;
   expedienteId?: number | null;
-  expedienteCodigo?: string | null;
+  actaCodigo?: string | null;
   changes?: { before?: unknown; after?: unknown } | null;
   /** Si no se pasan, se toman de ctx.user / ctx.localUser */
   userId?: number | null;
@@ -50,7 +50,7 @@ export async function recordAuditFromTrpc(ctx: TrpcContext, data: AuditRecordInp
     entity: data.entity,
     entityId: data.entityId ?? undefined,
     expedienteId: data.expedienteId ?? undefined,
-    expedienteCodigo: data.expedienteCodigo ?? undefined,
+    actaCodigo: data.actaCodigo ?? undefined,
     changes: data.changes ?? undefined,
     ip,
   });
@@ -67,7 +67,7 @@ export async function recordAuditDirect(
     entity: data.entity,
     entityId: data.entityId ?? undefined,
     expedienteId: data.expedienteId ?? undefined,
-    expedienteCodigo: data.expedienteCodigo ?? undefined,
+    actaCodigo: data.actaCodigo ?? undefined,
     changes: data.changes ?? undefined,
     ip: data.ip ?? undefined,
   });

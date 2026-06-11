@@ -498,7 +498,7 @@ export const auditLog = sqliteTable("audit_log", {
   entity: text("entity").notNull(),
   entityId: integer("entityId"),                   // null p. ej. LOGIN
   expedienteId: integer("expedienteId"),         // denormalizado para filtros / UI
-  expedienteCodigo: text("expedienteCodigo"),
+  actaCodigo: text("actaCodigo"),
   changes: text("changes", { mode: "json" }),      // { before, after } o null
   ip: text("ip"),
   createdAt: integer("createdAt", { mode: "timestamp" }).default(sql`(strftime('%s', 'now'))`).notNull(),
