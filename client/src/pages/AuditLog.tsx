@@ -68,7 +68,6 @@ type AuditRow = {
   username: string;
   action: string;
   entity: string;
-  entityId: number | null;
   expedienteId: number | null;
   changes: unknown;
   ip: string | null;
@@ -229,7 +228,6 @@ export default function AuditLog() {
                 <TableHead>Usuario</TableHead>
                 <TableHead>Acción</TableHead>
                 <TableHead>Entidad</TableHead>
-                <TableHead className="w-[72px]">Ent. ID</TableHead>
                 <TableHead className="w-[72px]">Exp. ID</TableHead>
                 <TableHead className="w-[120px]">IP</TableHead>
                 <TableHead className="text-right w-[80px]">Detalles</TableHead>
@@ -238,13 +236,13 @@ export default function AuditLog() {
             <TableBody>
               {isLoading && !data ? (
                 <TableRow>
-                  <TableCell colSpan={9} className="h-32 text-center text-muted-foreground">
+                  <TableCell colSpan={8} className="h-32 text-center text-muted-foreground">
                     Cargando registros…
                   </TableCell>
                 </TableRow>
               ) : filteredLogs.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={9} className="h-32 text-center text-muted-foreground">
+                  <TableCell colSpan={8} className="h-32 text-center text-muted-foreground">
                     No se encontraron registros en este rango.
                   </TableCell>
                 </TableRow>
@@ -285,9 +283,6 @@ export default function AuditLog() {
                       </span>
                     </TableCell>
                     <TableCell className="text-xs text-muted-foreground font-mono">
-                      {log.entityId ?? "—"}
-                    </TableCell>
-                    <TableCell className="text-xs text-muted-foreground font-mono">
                       {log.expedienteId ?? "—"}
                     </TableCell>
                     <TableCell className="text-[10px] font-mono text-muted-foreground truncate max-w-[120px]" title={log.ip ?? ""}>
@@ -304,7 +299,7 @@ export default function AuditLog() {
                           <DialogContent className="max-w-2xl max-h-[80vh] flex flex-col">
                             <DialogHeader>
                               <DialogTitle className="flex items-center gap-2">
-                                Cambios — {log.entity} #{log.entityId ?? "—"}
+                                Cambios — {log.entity}
                               </DialogTitle>
                             </DialogHeader>
                             <ScrollArea className="flex-1 mt-4 p-4 rounded-lg bg-muted/50 border border-border">
