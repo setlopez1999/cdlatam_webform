@@ -35,7 +35,7 @@ import {
 import { useLocalAuth } from "@/hooks/useLocalAuth";
 import { toast } from "sonner";
 import { ROUTE_PERMISSIONS, evaluatePermission, ROLE_ADMIN, ROLE_ANY } from "@/config/permissions";
-import { CDLATAM_LOGO_PATH } from "@/lib/cdlatamBrand";
+import { CDLATAM_LOGO_PATH, CDLATAM_LOGO_COLLAPSE_PATH } from "@/lib/cdlatamBrand";
 
 // ─── Resolución de iconos ─────────────────────────────────────────────────────
 /**
@@ -213,7 +213,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
         collapsed && "justify-center px-2"
       )}>
         <img
-          src={CDLATAM_LOGO_PATH}
+          src={collapsed ? CDLATAM_LOGO_COLLAPSE_PATH : CDLATAM_LOGO_PATH}
           alt=""
           className={cn("object-contain flex-shrink-0", collapsed ? "w-8 h-8" : "h-8 w-auto")}
         />
