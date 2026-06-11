@@ -18,11 +18,12 @@
 import { useCallback } from "react";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
+import { joinPhonePair } from "@/lib/formatters";
 import { useExpedienteStore } from "../store";
 import { mapDetalleToExpediente } from "../fromServer";
 import type { F1Data } from "../types";
 
-export function useF1(expedienteId: string) {
+export function useF1(expedienteId: number) {
   const store = useExpedienteStore();
   const utils = trpc.useUtils();
   const expediente = store.getExpediente(expedienteId);
@@ -57,7 +58,7 @@ export function useF1(expedienteId: string) {
 
     try {
       const acta = await syncF1Mutation.mutateAsync({
-        expedienteUuid: expedienteId,
+        expedienteId,
         noActa: data.noActa,
         atencion: data.atencion,
         fecha: data.fecha,
@@ -68,13 +69,13 @@ export function useF1(expedienteId: string) {
         representanteLegal: data.representanteLegal,
         representanteDni: data.representanteDni,
         representanteEmail: data.representanteEmail,
-        representanteFono: data.representanteTelefonoFijo,
+        representanteFono: joinPhonePair(data.representanteTelefonoFijo, data.representanteTelefonoMovil),
         contactoTecnico: data.contactoTecnico,
         contactoTecnicoEmail: data.contactoTecnicoEmail,
-        contactoTecnicoFono: data.contactoTecnicoTelefonoFijo,
+        contactoTecnicoFono: joinPhonePair(data.contactoTecnicoTelefonoFijo, data.contactoTecnicoTelefonoMovil),
         contactoFacturacion: data.contactoFacturacion,
         contactoFacturacionEmail: data.contactoFacturacionEmail,
-        contactoFacturacionFono: data.contactoFacturacionTelefonoFijo,
+        contactoFacturacionFono: joinPhonePair(data.contactoFacturacionTelefonoFijo, data.contactoFacturacionTelefonoMovil),
         serviciosContratados: data.serviciosContratados,
         formasPagoImplementacion: data.formasPagoImplementacion,
         formasPagoMantencion: data.formasPagoMantencion,
@@ -98,7 +99,7 @@ export function useF1(expedienteId: string) {
       // Sin esto, al volver a Historial / Workspace el useQuery devuelve la
       // versión cacheada anterior y eso pisa el store via mergeLista.
       // No await: el store local ya está al día, no demoramos el toast.
-      void utils.expediente.detalle.invalidate({ uuid: expedienteId });
+      void utils.expediente.detalle.invalidate({ id: expedienteId });
       void utils.expediente.listarResumen.invalidate();
       void utils.expediente.listarResumenWorkspace.invalidate();
       return true;
@@ -114,8 +115,8 @@ export function useF1(expedienteId: string) {
    */
   const descartar = useCallback(async (): Promise<void> => {
     try {
-      await utils.expediente.detalle.invalidate({ uuid: expedienteId });
-      const fresh = await utils.expediente.detalle.fetch({ uuid: expedienteId });
+      await utils.expediente.detalle.invalidate({ id: expedienteId });
+      const fresh = await utils.expediente.detalle.fetch({ id: expedienteId });
       if (fresh) {
         store.mergeDetalleEnStore(mapDetalleToExpediente(fresh));
       }

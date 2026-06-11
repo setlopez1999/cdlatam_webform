@@ -32,6 +32,7 @@ export const F2_SYNC_SCALAR_KEYS = [
   "paisImplementacion",
   "rut",
   "nombreCliente",
+  "nombreFantasia",
 ] as const satisfies readonly (keyof F2Data)[];
 
 function f2ScalarsFromDb(ev: Record<string, unknown>): Pick<F2Data, (typeof F2_SYNC_SCALAR_KEYS)[number]> {
@@ -108,13 +109,13 @@ export function mapDbActaToF1(acta: Record<string, unknown> | null): {
     representanteLegal: String(acta.representanteLegal ?? ""),
     representanteDni: String(acta.representanteDni ?? ""),
     representanteEmail: String(acta.representanteEmail ?? ""),
-    representanteTelefonoFijo: String(acta.representanteFono ?? ""),
+    ...splitPhone(String(acta.representanteFono ?? "")),
     contactoTecnico: String(acta.contactoTecnico ?? ""),
     contactoTecnicoEmail: String(acta.contactoTecnicoEmail ?? ""),
-    contactoTecnicoTelefonoFijo: String(acta.contactoTecnicoFono ?? ""),
+    ...splitPhone(String(acta.contactoTecnicoFono ?? ""), "contactoTecnico"),
     contactoFacturacion: String(acta.contactoFacturacion ?? ""),
     contactoFacturacionEmail: String(acta.contactoFacturacionEmail ?? ""),
-    contactoFacturacionTelefonoFijo: String(acta.contactoFacturacionFono ?? ""),
+    ...splitPhone(String(acta.contactoFacturacionFono ?? ""), "contactoFacturacion"),
     serviciosContratados: Array.isArray(acta.serviciosContratados)
       ? (acta.serviciosContratados as F1Data["serviciosContratados"])
       : [],
@@ -211,9 +212,6 @@ export function mapDbResultadoToF3Slot(res: Record<string, unknown> | null): {
 export type ExpedienteResumenRow = {
   expediente: Record<string, unknown> & {
     id: number;
-    uuid: string;
-    codigo?: string | null;
-    nroActa?: number | null;
     nombre: string;
     creadorId: number;
   };
@@ -270,14 +268,27 @@ export function mapResumenRowToExpediente(row: ExpedienteResumenRow): Expediente
   const createdAt = cAt ? new Date(cAt).toISOString() : new Date().toISOString();
   const updatedAt = uAt ? new Date(uAt).toISOString() : createdAt;
   return {
-    id: e.uuid,
-    codigo: e.codigo ? String(e.codigo) : undefined,
-    nroActa: typeof e.nroActa === "number" ? e.nroActa : null,
+    id: e.id,
     nombre: e.nombre,
+    creadorId: e.creadorId,
+    status: "nuevo",
+    createdAt,
+    updatedAt,
+    deletedAt: null,
     f1,
     f2,
     f3: { status: f3.status },
-    createdAt,
-    updatedAt,
   };
+}
+
+/** Parte un string "fijo / móvil" en los campos TelefonoFijo y TelefonoMovil. */
+function splitPhone(val: string, prefix = "representante"): Partial<F1Data> {
+  const idx = val.indexOf(" / ");
+  if (idx === -1) {
+    return { [`${prefix}TelefonoFijo`]: val } as unknown as Partial<F1Data>;
+  }
+  return {
+    [`${prefix}TelefonoFijo`]: val.slice(0, idx),
+    [`${prefix}TelefonoMovil`]: val.slice(idx + 3),
+  } as unknown as Partial<F1Data>;
 }

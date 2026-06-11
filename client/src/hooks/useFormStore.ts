@@ -59,6 +59,7 @@ export interface ActaData {
   pais: string;             // Combobox: país (de BD)
   moneda: string;           // Combobox: moneda (de BD)
   representanteLegal: string;
+  representanteTipoDoc: string;   // RUT, RUC, DNI, NIT, CUIT, OTRO
   representanteDni: string;
   representanteEmail: string;
   representanteFono: string;
@@ -271,6 +272,7 @@ export function createDefaultActa(): ActaData {
     pais: "",
     moneda: "",
     representanteLegal: "",
+    representanteTipoDoc: "",
     representanteDni: "",
     representanteEmail: "",
     representanteFono: "",

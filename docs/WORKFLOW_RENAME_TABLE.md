@@ -2,7 +2,7 @@
 
 Este documento describe el proceso seguro y estructurado para renombrar una tabla existente en el proyecto, asegurando que no se rompan referencias en el backend ni en el frontend.
 
-> Nota de vigencia: el orden de modificacion por capas de esta guia sigue vigente. Para la parte de migracion fisica, priorizar el flujo actual con Drizzle documentado en [`DATABASE_SCHEMA.md`](./DATABASE_SCHEMA.md). El ejemplo con script Python se conserva como referencia legacy.
+> **Vigencia:** El orden de capas sigue vigente. Para migración física usar Drizzle (ver [`DATABASE_SCHEMA.md`](./DATABASE_SCHEMA.md)). Code snippets con Python son referencia legacy. La ruta de BD local es `./gestion.db` (Windows) o `./data/gestion.db` (Docker) — resuelta por `server/_core/dbConfig.ts`.
 
 ## 1. Orden de Modificación
 

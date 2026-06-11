@@ -107,6 +107,13 @@ export function getCurrencyCode(monedaValue: string): string {
 }
 
 /**
+ * Concatena teléfono fijo y móvil separados por " / ".
+ */
+export function joinPhonePair(fijo?: string | null, movil?: string | null): string {
+  return [fijo, movil].filter(Boolean).join(" / ");
+}
+
+/**
  * Retorna el color de estado para badges.
  */
 export function getStatusColor(status: string): string {

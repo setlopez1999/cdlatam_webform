@@ -24,6 +24,7 @@ import type { ResumenMeses } from "@/features/expedientes/types";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { PageLayout } from "@/components/PageLayout";
+import { formatCurrency, getCurrencyCode } from "@/lib/formatters";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -65,13 +66,11 @@ function EstadoBadge({ estado, label }: { estado: EstadoDoc; label: string }) {
   );
 }
 
-function fmtCell(value: number) {
+function fmtCell(value: number, currencyCode = "USD") {
   if (value === 0) return <span className="text-muted-foreground">–</span>;
-  const abs = Math.abs(value);
-  const sign = value < 0 ? "-" : "";
   return (
     <span className={value < 0 ? "text-red-400" : ""}>
-      {sign}$ {abs.toLocaleString("es-CL", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+      {formatCurrency(value, currencyCode)}
     </span>
   );
 }
@@ -84,6 +83,7 @@ function ResultadosExpandidos({ exp }: { exp: Expediente }) {
 
   const f1Guardado = exp.f1.status === "guardado";
   const etiquetaGim = exp.f1.data.sres?.trim() || "GIM";
+  const currencyCode = exp.f1.data.moneda || "USD";
 
   const r = useMemo(
     () => calcularResultadoF3(exp.f2.data, exp.f1.data),
@@ -136,7 +136,7 @@ function ResultadosExpandidos({ exp }: { exp: Expediente }) {
                 <tr key={row.label} className={cn("border-b border-border/30", i % 2 !== 0 && "bg-muted/10")}>
                   <td className="px-3 py-1.5 font-medium">{row.label}</td>
                   {meses.map(mes => (
-                    <td key={mes} className="px-3 py-1.5 text-center">{fmtCell(getMesValue(row.values, mes))}</td>
+                    <td key={mes} className="px-3 py-1.5 text-center">{fmtCell(getMesValue(row.values, mes), currencyCode)}</td>
                   ))}
                 </tr>
               ))}
@@ -181,7 +181,7 @@ function ResultadosExpandidos({ exp }: { exp: Expediente }) {
                   <td />
                   {meses.map(mes => (
                     <td key={mes} className={cn("px-3 py-1.5 text-center", row.bold && "font-bold")}>
-                      {fmtCell(getMesValue(row.values, mes))}
+                      {fmtCell(getMesValue(row.values, mes), currencyCode)}
                     </td>
                   ))}
                 </tr>
@@ -311,8 +311,7 @@ export function ExpedienteCard({
         <div className="flex-1 min-w-0">
           <p className="text-sm font-semibold truncate">{exp.nombre}</p>
           <p className="text-xs text-muted-foreground">
-            {exp.nroActa ? <span className="font-mono text-cyan-400/80 font-medium">N° {String(exp.nroActa).padStart(6, "0")} · </span> : null}
-            {exp.codigo ? <span className="font-mono text-primary/60">{exp.codigo} · </span> : null}
+            {exp.f1.data.noActa ? <span className="font-mono text-cyan-400/80 font-medium">{exp.f1.data.noActa} · </span> : null}
             {creadorDisplay ? (
               <span className="text-foreground/80">Creador: {creadorDisplay} · </span>
             ) : creadorEliminado ? (
@@ -423,7 +422,7 @@ export default function Historial() {
   // Mover a papelera (soft-delete)
   const moverAPapeleraSrv = trpc.expediente.moverAPapelera.useMutation({
     onSuccess: (_data, input) => {
-      eliminar(input.uuid);
+      eliminar(input.id);
       void resumenQuery.refetch();
       void papeleraQuery.refetch();
       toast.success("Expediente movido a la papelera");
@@ -444,7 +443,7 @@ export default function Historial() {
   // Eliminar definitivamente
   const eliminarSrv = trpc.expediente.eliminar.useMutation({
     onSuccess: (_data, input) => {
-      eliminar(input.uuid);
+      eliminar(input.id);
       void papeleraQuery.refetch();
       toast.success("Expediente eliminado definitivamente");
     },
@@ -513,12 +512,12 @@ export default function Historial() {
             </div>
           ) : (
             papelera.map(exp => (
-              <div key={exp.uuid} className="rounded-xl border border-border/60 bg-muted/10 p-4 flex items-center gap-3">
+              <div key={exp.id} className="rounded-xl border border-border/60 bg-muted/10 p-4 flex items-center gap-3">
                 <ArchiveX className="w-5 h-5 text-muted-foreground/60 shrink-0" />
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium truncate text-muted-foreground">{exp.nombre}</p>
                   <p className="text-xs text-muted-foreground/60">
-                    {exp.codigo ?? exp.uuid.slice(0, 8)} · Borrado el{" "}
+                    #{exp.id} · Borrado el{" "}
                     {exp.deletedAt ? new Date(exp.deletedAt * 1000).toLocaleDateString("es-CL") : "—"}
                   </p>
                 </div>
@@ -527,7 +526,7 @@ export default function Historial() {
                     size="sm"
                     variant="outline"
                     className="h-7 text-xs gap-1"
-                    onClick={() => restaurarSrv.mutate({ uuid: exp.uuid })}
+                    onClick={() => restaurarSrv.mutate({ id: exp.id })}
                     disabled={restaurarSrv.isPending}
                   >
                     <RotateCcw className="w-3 h-3" />Restaurar
@@ -539,7 +538,7 @@ export default function Historial() {
                     title="Eliminar definitivamente"
                     onClick={() => {
                       if (!confirm(`¿Eliminar definitivamente "${exp.nombre}"? Esta acción no se puede deshacer.`)) return;
-                      eliminarSrv.mutate({ uuid: exp.uuid });
+                      eliminarSrv.mutate({ id: exp.id });
                     }}
                     disabled={eliminarSrv.isPending}
                   >
@@ -573,7 +572,7 @@ export default function Historial() {
               <ExpedienteCard
                 key={exp.id}
                 exp={exp}
-                onEliminar={() => moverAPapeleraSrv.mutate({ uuid: exp.id })}
+                onEliminar={() => moverAPapeleraSrv.mutate({ id: exp.id })}
               />
             ))}
           </div>

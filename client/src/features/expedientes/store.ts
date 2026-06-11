@@ -9,7 +9,7 @@
  *   - El shape de Expediente ya mapea 1:1 con los schemas del servidor
  */
 import { useCallback, useSyncExternalStore } from "react";
-import { nanoid } from "nanoid";
+import { trpc } from "@/lib/trpc";
 import type { Expediente, F1Data, F2Data, FormStatus } from "./types";
 import { F1_INITIAL, F2_INITIAL } from "./types";
 
@@ -61,29 +61,33 @@ if (typeof window !== "undefined") {
   window.addEventListener("beforeunload", flushExpedientePersist);
 }
 
-function _loadActivo(): string | null {
-  return localStorage.getItem(ACTIVE_KEY);
+function _loadActivo(): number | null {
+  const raw = localStorage.getItem(ACTIVE_KEY);
+  if (raw === null) return null;
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : null;
 }
 
-function _persistActivo(id: string | null): void {
-  if (id) localStorage.setItem(ACTIVE_KEY, id);
+function _persistActivo(id: number | null): void {
+  if (id != null) localStorage.setItem(ACTIVE_KEY, String(id));
   else localStorage.removeItem(ACTIVE_KEY);
 }
 
 // ─── Factory ──────────────────────────────────────────────────────────────────
 
-function _crearExpediente(nombre?: string): Expediente {
-  const list = _load();
-  const num  = list.length + 1;
-  const now  = new Date().toISOString();
+function _crearExpediente(nombre: string, id: number): Expediente {
+  const now = new Date().toISOString();
   return {
-    id: nanoid(),
-    nombre: nombre ?? `Expediente #${num}`,
+    id,
+    nombre,
+    creadorId: 0,
+    status: "nuevo",
+    createdAt: now,
+    updatedAt: now,
+    deletedAt: null,
     f1: { data: { ...F1_INITIAL }, status: "nuevo" },
     f2: { data: { ...F2_INITIAL }, status: "nuevo" },
     f3: { status: "nuevo" },
-    createdAt: now,
-    updatedAt: now,
   };
 }
 
@@ -119,7 +123,7 @@ function _setState(
   _listeners.forEach((l) => l());
 }
 
-function _updateExpediente(id: string, updater: (exp: Expediente) => Expediente, persistImmediate = false): void {
+function _updateExpediente(id: number, updater: (exp: Expediente) => Expediente, persistImmediate = false): void {
   _setState(
     prev => prev.map(e => (e.id === id ? updater({ ...e, updatedAt: new Date().toISOString() }) : e)),
     { persistImmediate },
@@ -127,7 +131,7 @@ function _updateExpediente(id: string, updater: (exp: Expediente) => Expediente,
 }
 
 /** Acciones estables (referencia de módulo) para useCallback en hooks sin depender del objeto del hook. */
-export function storeUpdateF2(id: string, partial: Partial<F2Data>): void {
+export function storeUpdateF2(id: number, partial: Partial<F2Data>): void {
   _updateExpediente(id, e => ({
     ...e,
     f2: {
@@ -138,7 +142,7 @@ export function storeUpdateF2(id: string, partial: Partial<F2Data>): void {
   }));
 }
 
-export function storeGuardarF2(id: string, partial?: Partial<F2Data>): void {
+export function storeGuardarF2(id: number, partial?: Partial<F2Data>): void {
   _updateExpediente(id, e => ({
     ...e,
     f2: {
@@ -170,7 +174,7 @@ function _getSnapshot(): Expediente[] {
 }
 
 /** Lee un expediente directamente del singleton (sin esperar el ciclo de render de React). */
-export function getExpedienteFromState(id: string): Expediente | undefined {
+export function getExpedienteFromState(id: number): Expediente | undefined {
   return _state.find(e => e.id === id);
 }
 
@@ -189,25 +193,27 @@ export function useExpedienteStore() {
   // Suscripción al singleton: todas las instancias del hook leen el mismo
   // `_state` y se re-renderizan cuando _setState() notifica a los listeners.
   const expedientes = useSyncExternalStore(_subscribe, _getSnapshot, _getSnapshot);
+  const utils = trpc.useUtils();
 
   // ── Helpers internos ──────────────────────────────────────────────────────
 
-  const _update = useCallback((id: string, updater: (exp: Expediente) => Expediente, persistImmediate = false) => {
+  const _update = useCallback((id: number, updater: (exp: Expediente) => Expediente, persistImmediate = false) => {
     _updateExpediente(id, updater, persistImmediate);
   }, []);
 
   // ── CRUD de expedientes ───────────────────────────────────────────────────
 
   /** Crea un nuevo expediente y lo devuelve */
-  const crear = useCallback((nombre?: string): Expediente => {
-    const exp = _crearExpediente(nombre);
+  const crear = useCallback(async (nombre?: string): Promise<Expediente> => {
+    const result = await utils.client.expediente.crear.mutate({ nombre: nombre ?? "Nuevo expediente" });
+    const exp = _crearExpediente(result.expediente.nombre, result.expediente.id);
     _setState(prev => [...prev, exp], { persistImmediate: true });
     _persistActivo(exp.id);
     return exp;
-  }, []);
+  }, [utils.client]);
 
   /** Elimina un expediente por id (solo cliente; el servidor debe borrarse aparte). */
-  const eliminar = useCallback((id: string) => {
+  const eliminar = useCallback((id: number) => {
     _setState(prev => prev.filter(e => e.id !== id), { persistImmediate: true });
   }, []);
 
@@ -243,12 +249,12 @@ export function useExpedienteStore() {
   }, []);
 
   /** Renombra un expediente */
-  const renombrar = useCallback((id: string, nombre: string) => {
+  const renombrar = useCallback((id: number, nombre: string) => {
     _update(id, e => ({ ...e, nombre }));
   }, [_update]);
 
   /** Obtiene un expediente por id */
-  const getExpediente = useCallback((id: string): Expediente | undefined => {
+  const getExpediente = useCallback((id: number): Expediente | undefined => {
     return expedientes.find(e => e.id === id);
   }, [expedientes]);
 
@@ -258,7 +264,7 @@ export function useExpedienteStore() {
    * Marca F1 como "sin_guardar" cuando el usuario modifica un campo.
    * Llama a esto desde el onChange de cualquier campo de F1.
    */
-  const updateF1 = useCallback((id: string, partial: Partial<F1Data>) => {
+  const updateF1 = useCallback((id: number, partial: Partial<F1Data>) => {
     _update(id, e => ({
       ...e,
       f1: {
@@ -276,7 +282,7 @@ export function useExpedienteStore() {
    * (p. ej. el `noActa` autogenerado) sin tener que llamar `updateF1`
    * después, que regresaría el status a `sin_guardar`.
    */
-  const guardarF1 = useCallback((id: string, partial?: Partial<F1Data>) => {
+  const guardarF1 = useCallback((id: number, partial?: Partial<F1Data>) => {
     _update(id, e => ({
       ...e,
       f1: {
@@ -291,7 +297,7 @@ export function useExpedienteStore() {
   // ── F2 ────────────────────────────────────────────────────────────────────
 
   /** Marca F2 como "sin_guardar" cuando el usuario modifica un campo. */
-  const updateF2 = useCallback((id: string, partial: Partial<F2Data>) => {
+  const updateF2 = useCallback((id: number, partial: Partial<F2Data>) => {
     storeUpdateF2(id, partial);
   }, []);
 
@@ -301,21 +307,21 @@ export function useExpedienteStore() {
    * sin tener que llamar `updateF2` después (lo que regresaría el status a
    * `sin_guardar`).
    */
-  const guardarF2 = useCallback((id: string, partial?: Partial<F2Data>) => {
+  const guardarF2 = useCallback((id: number, partial?: Partial<F2Data>) => {
     storeGuardarF2(id, partial);
   }, []);
 
   // ── F3 ────────────────────────────────────────────────────────────────────
 
   /** Marca F3 como visto/guardado (es solo lectura, calculado desde F2) */
-  const marcarF3Visto = useCallback((id: string) => {
+  const marcarF3Visto = useCallback((id: number) => {
     _update(id, e => ({ ...e, f3: { status: "guardado" } }));
   }, [_update]);
 
   // ── Expediente activo ─────────────────────────────────────────────────────
 
-  const getActivo = useCallback((): string | null => _loadActivo(), []);
-  const setActivo = useCallback((id: string | null) => _persistActivo(id), []);
+  const getActivo = useCallback((): number | null => _loadActivo(), []);
+  const setActivo = useCallback((id: number | null) => _persistActivo(id), []);
 
   return {
     expedientes,

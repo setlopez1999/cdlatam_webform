@@ -234,7 +234,7 @@ function PagoTable({
   );
   const diff = Math.abs(totalPagos - totalReferencia);
   // En mantención no se valida integridad de suma vs total de servicios
-  const hasWarning = !esMantencion && diff > 0.1 && totalReferencia > 0;
+  const hasWarning = false;
 
   return (
     <div className="space-y-3">

@@ -20,7 +20,7 @@ interface Tab {
   id: "acta" | "ep" | "resultados" | "implementacion";
   label: string;
   icon: React.ReactNode;
-  path: (id: string) => string;
+  path: (id: number) => string;
 }
 
 const ALL_TABS: Tab[] = [
@@ -87,7 +87,7 @@ function StatusBadge({ status }: { status: FormStatus }) {
 }
 
 interface Props {
-  expedienteId: string;
+  expedienteId: number;
   activeTab: "acta" | "ep" | "resultados" | "implementacion";
   children: React.ReactNode;
 }
@@ -107,15 +107,15 @@ export default function ExpedienteLayout({ expedienteId, activeTab, children }: 
   // (potencialmente stale), por lo que el detalle nunca se refrescaba al
   // navegar y el usuario veía la versión vieja hasta hacer F5.
   const detalleQuery = trpc.expediente.detalle.useQuery(
-    { uuid: expedienteId },
-    { enabled: !!expedienteId, retry: false },
+    { id: expedienteId },
+    { enabled: expedienteId > 0, retry: false },
   );
   const renombrarSrv = trpc.expediente.renombrar.useMutation({
     onSuccess: () => {
       // Mantener listas y detalle sincronizados tras renombrar.
       void utils.expediente.listarResumen.invalidate();
       void utils.expediente.listarResumenWorkspace.invalidate();
-      void utils.expediente.detalle.invalidate({ uuid: expedienteId });
+      void utils.expediente.detalle.invalidate({ id: expedienteId });
     },
   });
 
@@ -198,7 +198,7 @@ export default function ExpedienteLayout({ expedienteId, activeTab, children }: 
   const handleGuardarNombre = () => {
     if (nombreTemp.trim()) {
       renombrar(expedienteId, nombreTemp.trim());
-      renombrarSrv.mutate({ uuid: expedienteId, nombre: nombreTemp.trim() });
+      renombrarSrv.mutate({ id: expedienteId, nombre: nombreTemp.trim() });
     }
     setEditando(false);
   };
@@ -248,9 +248,9 @@ export default function ExpedienteLayout({ expedienteId, activeTab, children }: 
             <Pencil className="w-3 h-3 opacity-0 group-hover:opacity-60 transition-opacity" />
           </button>
         )}
-        {expediente.codigo ? (
+        {(expediente as any).codigo ? (
           <span className="text-[11px] px-2 py-0.5 rounded border bg-muted/40 text-muted-foreground font-mono">
-            {expediente.codigo}
+            {(expediente as any).codigo}
           </span>
         ) : null}
       </div>

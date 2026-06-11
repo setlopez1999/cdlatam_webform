@@ -6,7 +6,7 @@ import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
 import { clausulasRouter } from "./routers/clausulas";
-import { buildActaCodigo, buildExpedienteCodigo } from "./documentCodes";
+import { buildActaCodigo } from "./documentCodes";
 import { mayAccessAllExpedientes } from "./expedienteAccess";
 
 // 1. IMPORTACIONES (actas/evaluaciones/búsqueda — siempre SQLite)
@@ -20,13 +20,14 @@ import {
   getContratosByEmpleado, getContratoActivoByEmpleado, createContrato, updateContrato,
   getBloquesByContrato, setBloques, getBloquesSemanales,
   // Expedientes y Audit Log
-  createExpediente, getExpedientesByUser, getExpedienteByUuid,
-  updateExpediente, getAuditLog, getAuditLogFiltered,
+  getExpedientesByUser, getExpedienteById,
+  updateExpediente, getAuditLogFiltered,
+  crearExpedienteConActa,
   // Actas por expediente
-  getActaByExpedienteUuid,
-  getEvaluacionByExpedienteUuid,
+  getActaByExpedienteId,
+  getEvaluacionByExpedienteId,
   upsertResultadoExpediente,
-  deleteExpedienteCascadeByUuid,
+  deleteExpedienteCascadeById,
   moverExpedienteAPapelera,
   restaurarExpedienteDePapelera,
   getExpedientesEnPapelera,
@@ -38,6 +39,7 @@ import {
   upsertImplementacionCheck,
   listImplementacionCatalogActivos,
   getSqliteDbPath,
+  getRawDb,
   isActiveImplementacionCatalogKey,
   findUserById,
 } from "./db";
@@ -145,6 +147,7 @@ const FilaCostoSchema = z.object({
   centroCosto: z.string(),
   valorNeto: z.number().min(0),
   tipoMoneda: z.string(),
+  tipoCambio: z.number().min(0).optional(),
   cantidad: z.number().min(0),
   totalNeto: z.number(),
   iva: z.number().min(0),
@@ -160,6 +163,7 @@ const FilaRRHHSchema = z.object({
   centroCosto: z.string(),
   valorSinImpuesto: z.number().min(0),
   tipoMoneda: z.string(),
+  tipoCambio: z.number().min(0).optional(),
   cantidad: z.number().min(0),
   totalNeto: z.number(),
   impuesto: z.number().min(0),
@@ -175,6 +179,7 @@ const FilaOtrosSchema = z.object({
   centroCosto: z.string(),
   valorNeto: z.number().min(0),
   tipoMoneda: z.string(),
+  tipoCambio: z.number().min(0).optional(),
   cantidad: z.number().min(0),
   totalNeto: z.number(),
   iva: z.number().min(0),
@@ -185,7 +190,6 @@ const FilaOtrosSchema = z.object({
 }).passthrough();
 
 const ActaInputSchema = z.object({
-  expedienteUuid: z.string().optional(),  // Vínculo con el store de Zustand
   noActa: z.string().optional(),
   atencion: z.string().optional(),
   fecha: z.string().optional(),
@@ -215,8 +219,7 @@ const ActaInputSchema = z.object({
 });
 
 const EvaluacionInputSchema = z.object({
-  actaId: z.number().optional(),
-  expedienteUuid: z.string().optional(),
+  expedienteId: z.number().optional(),
   unidadNegocios: z.string().optional(),
   empresa: z.string().optional(),
   centroCostoHeader: z.string().optional(),
@@ -234,6 +237,7 @@ const EvaluacionInputSchema = z.object({
   paisImplementacion: z.string().optional(),
   rut: z.string().optional(),
   nombreCliente: z.string().optional(),
+  nombreFantasia: z.string().optional(),
   hardware: z.array(FilaCostoSchema).optional(),
   materiales: z.array(FilaCostoSchema).optional(),
   rrhh: z.array(FilaRRHHSchema).optional(),
@@ -261,7 +265,7 @@ export const appRouter = router({
         entities: z.array(z.string()).optional(),
         userId: z.number().optional(),
         usernameContains: z.string().optional(),
-        expedienteUuidContains: z.string().optional(),
+        expedienteId: z.number().optional(),
         limit: z.number().min(1).max(500).default(100),
         cursor: z.object({
           id: z.number(),
@@ -283,7 +287,7 @@ export const appRouter = router({
           entities: input.entities,
           userId: input.userId,
           usernameContains: input.usernameContains,
-          expedienteUuidContains: input.expedienteUuidContains,
+          expedienteId: input.expedienteId,
           limit: input.limit,
           cursor,
         });
@@ -647,8 +651,6 @@ export const appRouter = router({
       .input(z.object({ id: z.number() }))
       .mutation(async ({ ctx, input }) => {
         await requireRole(ctx, "admin");
-        // Desasignar el rol de todos los usuarios antes de borrar
-        await ds_updateUser(0, {});
         const affected = await ds_getUsersByRoleId(input.id);
         for (const u of affected) {
           await ds_updateUser(u.id, { roleId: null });
@@ -718,7 +720,7 @@ export const appRouter = router({
 
   // ─── Catálogos — opciones para comboboxes (fuente controlada por USE_API) ──
   catalogs: router({
-    getAll: publicProcedure.query(async () => {
+    getAll: protectedProcedure.query(async ({ ctx }) => {
       return ds_getCatalogOptions();
     }),
   }),
@@ -776,28 +778,24 @@ export const appRouter = router({
 
     /**
      * syncF1 — Crea o actualiza el acta vinculada a un expediente.
-     * Recibe el expedienteUuid del store de Zustand y todos los campos de F1.
+     * Recibe el expedienteId y todos los campos de F1.
      * Si ya existe un acta para ese expediente, la actualiza; si no, la crea.
-     * También actualiza expedientes.actaId para mantener la FK blanda.
      */
     syncF1: protectedProcedure
       .input(ActaInputSchema.extend({
-        expedienteUuid: z.string().min(1),  // Requerido para syncF1
+        expedienteId: z.number().min(1),
       }))
       .mutation(async ({ ctx, input }) => {
-        const expedienteRow = await getExpedienteByUuid(input.expedienteUuid);
+        const expedienteRow = await getExpedienteById(input.expedienteId);
         if (!expedienteRow) {
           throw new TRPCError({ code: "NOT_FOUND", message: "Expediente no encontrado" });
         }
         if (!mayAccessAllExpedientes(ctx.user.role) && expedienteRow.creadorId !== ctx.user.id) {
           throw new TRPCError({ code: "FORBIDDEN", message: "No autorizado" });
         }
-        /** Filas acta ligadas a expediente: userId = creador del expediente (no el operador). */
         const ownerUserId = expedienteRow.creadorId;
-        const { expedienteUuid, f1SavedAt: f1SavedAtStr, ...actaRest } = input;
+        const { expedienteId, f1SavedAt: f1SavedAtStr, ...actaRest } = input;
         const f1SavedAt = f1SavedAtStr ? new Date(f1SavedAtStr) : undefined;
-        const codigoActa = buildActaCodigo(expedienteUuid, expedienteRow.nroActa ?? null);
-        /** No persistir firma dibujada en f1Datos (solo PDF con hueco vacío). */
         const f1DatosSinFirma = (raw: unknown): unknown => {
           if (!raw || typeof raw !== "object" || Array.isArray(raw)) return raw;
           const o = { ...(raw as Record<string, unknown>) };
@@ -805,14 +803,12 @@ export const appRouter = router({
           return o;
         };
         const f1DatosMerged = f1DatosSinFirma(actaRest.f1Datos);
-        const existing = await getActaByExpedienteUuid(expedienteUuid);
+        const existing = await getActaByExpedienteId(expedienteId);
         let acta;
         if (existing) {
           const prevF1 = f1DatosSinFirma(existing.f1Datos);
           await updateActa(existing.id, {
             ...actaRest,
-            codigo: codigoActa,
-            noActa: codigoActa,
             fecha: actaRest.fecha ? new Date(actaRest.fecha) : undefined,
             serviciosContratados: actaRest.serviciosContratados ?? existing.serviciosContratados,
             formasPagoImplementacion: actaRest.formasPagoImplementacion ?? existing.formasPagoImplementacion,
@@ -823,12 +819,17 @@ export const appRouter = router({
           });
           acta = await getActaById(existing.id);
         } else {
+          const raw = getRawDb();
+          const maxRow = raw.prepare(`SELECT COALESCE(MAX(nro_acta), 0) as max_nro FROM actas`).get() as { max_nro: number };
+          const nextNroActa = maxRow.max_nro + 1;
+          const codigoActa = buildActaCodigo("", nextNroActa);
           acta = await createActa({
             userId: ownerUserId,
-            expedienteUuid,
-            ...actaRest,
+            expedienteId,
+            nroActa: nextNroActa,
             codigo: codigoActa,
             noActa: codigoActa,
+            ...actaRest,
             fecha: actaRest.fecha ? new Date(actaRest.fecha) : undefined,
             serviciosContratados: actaRest.serviciosContratados ?? [],
             formasPagoImplementacion: actaRest.formasPagoImplementacion ?? [],
@@ -838,23 +839,20 @@ export const appRouter = router({
             f1FormStatus: actaRest.f1FormStatus ?? "nuevo",
             f1SavedAt: f1SavedAt ?? undefined,
           });
-          if (expedienteRow && acta) {
-            await updateExpediente(expedienteRow.id, { actaId: acta.id });
-          }
         }
         return acta;
       }),
 
-    /** Obtiene el acta vinculada a un expediente por su uuid. */
-    getByExpedienteUuid: protectedProcedure
-      .input(z.object({ expedienteUuid: z.string().min(1) }))
+    /** Obtiene el acta vinculada a un expediente por su id. */
+    getByExpedienteId: protectedProcedure
+      .input(z.object({ expedienteId: z.number().min(1) }))
       .query(async ({ ctx, input }) => {
-        const expediente = await getExpedienteByUuid(input.expedienteUuid);
+        const expediente = await getExpedienteById(input.expedienteId);
         if (!expediente) return null;
         if (!mayAccessAllExpedientes(ctx.user.role) && expediente.creadorId !== ctx.user.id) {
           throw new TRPCError({ code: "FORBIDDEN", message: "No autorizado" });
         }
-        return getActaByExpedienteUuid(input.expedienteUuid);
+        return getActaByExpedienteId(input.expedienteId);
       }),
   }),
 
@@ -922,17 +920,17 @@ export const appRouter = router({
       }),
 
     /**
-     * syncF2 — Crea o actualiza la evaluación vinculada al expediente (1:1 por expedienteUuid).
+     * syncF2 — Crea o actualiza la evaluación vinculada al expediente (1:1 por expedienteId).
      */
     syncF2: protectedProcedure
       .input(z.object({
-        expedienteUuid: z.string().min(1),
+        expedienteId: z.number().min(1),
         f2FormStatus: z.enum(["nuevo", "sin_guardar", "guardado"]),
         f2SavedAt: z.string().optional(),
         data: EvaluacionInputSchema,
       }))
       .mutation(async ({ ctx, input }) => {
-        const expediente = await getExpedienteByUuid(input.expedienteUuid);
+        const expediente = await getExpedienteById(input.expedienteId);
         if (!expediente) {
           throw new TRPCError({ code: "NOT_FOUND", message: "Expediente no encontrado" });
         }
@@ -940,16 +938,15 @@ export const appRouter = router({
           throw new TRPCError({ code: "FORBIDDEN", message: "No autorizado" });
         }
         const ownerUserId = expediente.creadorId;
-        const acta = await getActaByExpedienteUuid(input.expedienteUuid);
-        const existing = await getEvaluacionByExpedienteUuid(input.expedienteUuid);
+        const acta = await getActaByExpedienteId(input.expedienteId);
+        const existing = await getEvaluacionByExpedienteId(input.expedienteId);
         const d = input.data;
         const stripLabel = <T extends { label?: unknown }>(row: T) => {
           const { label: _l, ...rest } = row;
           return rest;
         };
         const basePatch = {
-          expedienteUuid: input.expedienteUuid,
-          actaId: d.actaId ?? acta?.id ?? null,
+          expedienteId: input.expedienteId,
           unidadNegocios: d.unidadNegocios,
           empresa: d.empresa,
           centroCostoHeader: d.centroCostoHeader,
@@ -967,6 +964,7 @@ export const appRouter = router({
           paisImplementacion: d.paisImplementacion,
           rut: d.rut,
           nombreCliente: d.nombreCliente,
+          nombreFantasia: d.nombreFantasia,
           hardware: d.hardware ?? [],
           materiales: d.materiales ?? [],
           rrhh: (d.rrhh ?? []).map(r => stripLabel(r as { label?: unknown })),
@@ -990,9 +988,6 @@ export const appRouter = router({
             userId: ownerUserId,
             ...basePatch,
           });
-        }
-        if (expediente && row) {
-          await updateExpediente(expediente.id, { evaluacionId: row.id });
         }
         return row;
       }),
@@ -1348,38 +1343,25 @@ export const appRouter = router({
   // ─── Sub-router: expediente ──────────────────────────────────────────────────
   // Metadata + vínculos a actas / evaluaciones / resultados en SQLite.
   expediente: router({
-    /** Crea o recupera un expediente en BD a partir de su uuid (nanoid de Zustand). */
-    sync: protectedProcedure
+    /** Crea un nuevo expediente con su acta (F1) en el servidor. */
+    crear: protectedProcedure
       .input(z.object({
-        uuid: z.string().min(1),
         nombre: z.string().min(1),
       }))
       .mutation(async ({ ctx, input }) => {
         const userId = ctx.user!.id;
-        // Si ya existe en BD, devolver el existente
-        const existing = await getExpedienteByUuid(input.uuid);
-        if (existing) {
-          if (!existing.codigo) {
-            return (await updateExpediente(existing.id, { codigo: buildExpedienteCodigo(existing.uuid) })) ?? existing;
-          }
-          return existing;
-        }
-        // Si no existe, crear
-        const created = await createExpediente({
-          uuid: input.uuid,
-          codigo: buildExpedienteCodigo(input.uuid),
+        const result = await crearExpedienteConActa({
           nombre: input.nombre,
           creadorId: userId,
         });
         await recordAuditFromTrpc(ctx, {
           action: "CREATE",
           entity: "expediente",
-          entityId: created.id,
-          expedienteUuid: input.uuid,
-          expedienteCodigo: created.codigo ?? null,
-          changes: { after: { uuid: input.uuid, nombre: input.nombre } },
+          entityId: result.expediente.id,
+          actaCodigo: result.acta.codigo ?? null,
+          changes: { after: { id: result.expediente.id, nombre: input.nombre } },
         });
-        return created;
+        return result;
       }),
 
     /** Lista expedientes del usuario actual (sin listado global). */
@@ -1428,25 +1410,25 @@ export const appRouter = router({
       });
     }),
 
-    /** Detalle completo de un expediente por uuid (F1/F2/F3 desde tablas). Dueño o rol workspace global. */
+    /** Detalle completo de un expediente por id (F1/F2/F3 desde tablas). Dueño o rol workspace global. */
     detalle: protectedProcedure
-      .input(z.object({ uuid: z.string().min(1) }))
+      .input(z.object({ id: z.number() }))
       .query(async ({ ctx, input }) => {
         if (!ctx.user) throw new Error("No autenticado");
         return mayAccessAllExpedientes(ctx.user.role)
-          ? getExpedienteDetalleGlobal(input.uuid)
-          : getExpedienteDetalle(input.uuid, ctx.user.id);
+          ? getExpedienteDetalleGlobal(input.id)
+          : getExpedienteDetalle(input.id, ctx.user.id);
       }),
 
     implementacion: router({
       listar: protectedProcedure
-        .input(z.object({ uuid: z.string().min(1) }))
+        .input(z.object({ id: z.number() }))
         .query(async ({ ctx, input }) => {
           if (!ctx.user) throw new Error("No autenticado");
           try {
             const det = mayAccessAllExpedientes(ctx.user.role)
-              ? await getExpedienteDetalleGlobal(input.uuid)
-              : await getExpedienteDetalle(input.uuid, ctx.user.id);
+              ? await getExpedienteDetalleGlobal(input.id)
+              : await getExpedienteDetalle(input.id, ctx.user.id);
             if (!det) {
               throw new TRPCError({ code: "NOT_FOUND", message: "Expediente no encontrado" });
             }
@@ -1472,7 +1454,7 @@ export const appRouter = router({
       setEstado: protectedProcedure
         .input(
           z.object({
-            uuid: z.string().min(1),
+            id: z.number(),
             checkKey: z.string().min(1),
             estado: z.boolean(),
           }),
@@ -1483,8 +1465,8 @@ export const appRouter = router({
             throw new TRPCError({ code: "BAD_REQUEST", message: "checkKey inválido o inactivo" });
           }
           const det = mayAccessAllExpedientes(ctx.user.role)
-            ? await getExpedienteDetalleGlobal(input.uuid)
-            : await getExpedienteDetalle(input.uuid, ctx.user.id);
+            ? await getExpedienteDetalleGlobal(input.id)
+            : await getExpedienteDetalle(input.id, ctx.user.id);
           if (!det) {
             throw new TRPCError({ code: "NOT_FOUND", message: "Expediente no encontrado" });
           }
@@ -1493,8 +1475,7 @@ export const appRouter = router({
             action: "UPDATE",
             entity: "implementacion",
             entityId: det.expediente.id,
-            expedienteUuid: input.uuid,
-            expedienteCodigo: det.expediente.codigo ?? null,
+            actaCodigo: null,
             changes: { after: { checkKey: input.checkKey, estado: input.estado } },
           });
           return { success: true as const };
@@ -1504,18 +1485,18 @@ export const appRouter = router({
     /** Persiste snapshot de resultados F3. */
     syncResultado: protectedProcedure
       .input(z.object({
-        expedienteUuid: z.string().min(1),
+        expedienteId: z.number(),
         payload: z.unknown(),
         f3FormStatus: z.enum(["nuevo", "sin_guardar", "guardado"]),
       }))
       .mutation(async ({ ctx, input }) => {
         if (!ctx.user) throw new Error("No autenticado");
         const det = mayAccessAllExpedientes(ctx.user.role)
-          ? await getExpedienteDetalleGlobal(input.expedienteUuid)
-          : await getExpedienteDetalle(input.expedienteUuid, ctx.user.id);
+          ? await getExpedienteDetalleGlobal(input.expedienteId)
+          : await getExpedienteDetalle(input.expedienteId, ctx.user.id);
         if (!det) throw new Error("Expediente no encontrado");
         await upsertResultadoExpediente({
-          expedienteUuid: input.expedienteUuid,
+          expedienteId: input.expedienteId,
           payload: input.payload,
           f3FormStatus: input.f3FormStatus,
         });
@@ -1523,22 +1504,21 @@ export const appRouter = router({
           action: "UPDATE",
           entity: "expediente",
           entityId: det.expediente.id,
-          expedienteUuid: input.expedienteUuid,
-          expedienteCodigo: det.expediente.codigo ?? null,
+          actaCodigo: null,
           changes: { after: { resultado: true, f3FormStatus: input.f3FormStatus } },
         });
         return { success: true as const };
       }),
 
-    /** Renombra un expediente por uuid. Solo el creador. */
+    /** Renombra un expediente por id. Solo el creador. */
     renombrar: protectedProcedure
       .input(z.object({
-        uuid: z.string().min(1),
+        id: z.number(),
         nombre: z.string().min(1),
       }))
       .mutation(async ({ ctx, input }) => {
         if (!ctx.user) throw new Error("No autenticado");
-        const row = await getExpedienteByUuid(input.uuid);
+        const row = await getExpedienteById(input.id);
         if (!row) throw new Error("Expediente no encontrado");
         if (row.creadorId !== ctx.user.id && !mayAccessAllExpedientes(ctx.user.role)) {
           throw new Error("No autorizado");
@@ -1548,8 +1528,7 @@ export const appRouter = router({
           action: "UPDATE",
           entity: "expediente",
           entityId: row.id,
-          expedienteUuid: row.uuid,
-          expedienteCodigo: row.codigo ?? null,
+          actaCodigo: null,
           changes: { after: { nombre: input.nombre } },
         });
         return updated;
@@ -1557,42 +1536,40 @@ export const appRouter = router({
 
     /** Elimina expediente y registros hijos (acta, evaluación, resultado). Solo el creador. */
     eliminar: protectedProcedure
-      .input(z.object({ uuid: z.string().min(1) }))
+      .input(z.object({ id: z.number() }))
       .mutation(async ({ ctx, input }) => {
         if (!ctx.user) throw new Error("No autenticado");
-        const row = await getExpedienteByUuid(input.uuid);
+        const row = await getExpedienteById(input.id);
         if (!row) throw new Error("Expediente no encontrado");
         if (row.creadorId !== ctx.user.id && !mayAccessAllExpedientes(ctx.user.role)) {
           throw new Error("No autorizado");
         }
-        await deleteExpedienteCascadeByUuid(input.uuid);
+        await deleteExpedienteCascadeById(input.id);
         await recordAuditFromTrpc(ctx, {
           action: "DELETE",
           entity: "expediente",
           entityId: row.id,
-          expedienteUuid: input.uuid,
-          expedienteCodigo: row.codigo ?? null,
+          actaCodigo: null,
         });
         return { success: true as const };
       }),
 
     /** Mueve un expediente a la papelera (soft-delete). Solo el creador o admin. */
     moverAPapelera: protectedProcedure
-      .input(z.object({ uuid: z.string().min(1) }))
+      .input(z.object({ id: z.number() }))
       .mutation(async ({ ctx, input }) => {
         if (!ctx.user) throw new Error("No autenticado");
-        const row = await getExpedienteByUuid(input.uuid);
+        const row = await getExpedienteById(input.id);
         if (!row) throw new Error("Expediente no encontrado");
         if (row.creadorId !== ctx.user.id && !mayAccessAllExpedientes(ctx.user.role)) {
           throw new Error("No autorizado");
         }
-        await moverExpedienteAPapelera(input.uuid);
+        await moverExpedienteAPapelera(input.id);
         await recordAuditFromTrpc(ctx, {
           action: "UPDATE",
           entity: "expediente",
           entityId: row.id,
-          expedienteUuid: input.uuid,
-          expedienteCodigo: row.codigo ?? null,
+          actaCodigo: null,
           changes: { after: { papelera: true } },
         });
         return { success: true as const };
@@ -1600,21 +1577,20 @@ export const appRouter = router({
 
     /** Restaura un expediente desde la papelera. Solo el creador o admin. */
     restaurarDePapelera: protectedProcedure
-      .input(z.object({ uuid: z.string().min(1) }))
+      .input(z.object({ id: z.number() }))
       .mutation(async ({ ctx, input }) => {
         if (!ctx.user) throw new Error("No autenticado");
-        const row = await getExpedienteByUuid(input.uuid);
+        const row = await getExpedienteById(input.id);
         if (!row) throw new Error("Expediente no encontrado");
         if (row.creadorId !== ctx.user.id && !mayAccessAllExpedientes(ctx.user.role)) {
           throw new Error("No autorizado");
         }
-        await restaurarExpedienteDePapelera(input.uuid);
+        await restaurarExpedienteDePapelera(input.id);
         await recordAuditFromTrpc(ctx, {
           action: "UPDATE",
           entity: "expediente",
           entityId: row.id,
-          expedienteUuid: input.uuid,
-          expedienteCodigo: row.codigo ?? null,
+          actaCodigo: null,
           changes: { after: { papelera: false } },
         });
         return { success: true as const };
@@ -1626,13 +1602,6 @@ export const appRouter = router({
       return getExpedientesEnPapelera(ctx.user.id);
     }),
 
-    /** Obtiene el audit log. Solo admin. */
-    auditLog: protectedProcedure
-      .input(z.object({ limit: z.number().min(1).max(1000).default(200) }))
-      .query(async ({ ctx, input }) => {
-        await requireAnyRole(ctx, ["admin"]);
-        return await getAuditLog(input.limit);
-      }),
   }),
 
   // ─── Cláusulas Legales (PDFs) ────────────────────────────────

@@ -25,8 +25,10 @@ export type InsertRole = typeof roles.$inferInsert;
 export const actas = sqliteTable("actas", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   userId: integer("userId").notNull(),
-  // Vínculo con el expediente de Zustand (nanoid del store)
-  expedienteUuid: text("expedienteUuid"),
+  // Vínculo con el expediente (FK numérica)
+  expedienteId: integer("expedienteId").notNull().unique().references(() => expedientes.id),
+  /** N° de Acta consecutivo (6 dígitos, desde 1) */
+  nroActa: integer("nro_acta").unique(),
   /** Codigo compacto autogenerado del documento F1 (solo backend). */
   codigo: text("codigo").unique(),
 
@@ -84,9 +86,8 @@ export type InsertActa = typeof actas.$inferInsert;
 export const evaluaciones = sqliteTable("evaluaciones", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   userId: integer("userId").notNull(),
-  actaId: integer("actaId"),
-  /** Mismo valor que expedientes.uuid */
-  expedienteUuid: text("expedienteUuid"),
+  /** Vínculo con el expediente (FK numérica) */
+  expedienteId: integer("expedienteId").notNull().unique().references(() => expedientes.id),
 
   // Información General
   unidadNegocios: text("unidadNegocios"),
@@ -107,6 +108,7 @@ export const evaluaciones = sqliteTable("evaluaciones", {
   paisImplementacion: text("paisImplementacion"),
   rut: text("rut"),
   nombreCliente: text("nombreCliente"),
+  nombreFantasia: text("nombreFantasia"),
 
   // Costos por categoría (JSON)
   hardware: text("hardware", { mode: "json" }),
@@ -423,25 +425,14 @@ export type CatalogImplementacionItem = typeof catalogImplementacionItems.$infer
 // ─── Expedientes (contenedor de actas y evaluaciones) ────────────────────────
 /**
  * Tabla expedientes — metadata del expediente.
- * Los datos de formulario (F1, F2) siguen en localStorage via Zustand
- * hasta que se complete la migración de campos (ver docs/ARQUITECTURA_EXPEDIENTES_INTEGRIDAD.md).
- *
- * Relaciones:
- *   creadorId → users.id   (quién creó el expediente)
- *   actaId    → actas.id   (FK blanda, null hasta que F1 se guarde en BD)
- *   evaluacionId → evaluaciones.id (FK blanda, null hasta que F2 se guarde en BD)
+ * Único identificador: id (autoincremental PK).
+ * Cada expediente tiene exactamente un acta (F1), una evaluación (F2)
+ * y un resultado (F3), vinculados por expedienteId.
  */
 export const expedientes = sqliteTable("expedientes", {
   id: integer("id").primaryKey({ autoIncrement: true }),
-  uuid: text("uuid").notNull().unique(),          // nanoid del store de Zustand
-  /** Codigo compacto autogenerado del expediente (solo backend). */
-  codigo: text("codigo").unique(),
-  /** N° de Acta consecutivo real (autoincremental desde 1000). Editable manualmente en F1. */
-  nroActa: integer("nro_acta"),
   nombre: text("nombre").notNull(),
   creadorId: integer("creadorId").notNull(),       // FK blanda → users.id
-  actaId: integer("actaId"),                       // FK blanda → actas.id (futuro)
-  evaluacionId: integer("evaluacionId"),           // FK blanda → evaluaciones.id (futuro)
   status: text("status").default("borrador").notNull(), // "borrador" | "en_proceso" | "completado"
   createdAt: integer("createdAt", { mode: "timestamp" }).default(sql`(strftime('%s', 'now'))`).notNull(),
   updatedAt: integer("updatedAt", { mode: "timestamp" }).default(sql`(strftime('%s', 'now'))`).notNull(),
@@ -455,7 +446,7 @@ export type InsertExpediente = typeof expedientes.$inferInsert;
 /** Resultados F3 persistidos por expediente (snapshot + estado UI) */
 export const resultadosExpediente = sqliteTable("resultados_expediente", {
   id: integer("id").primaryKey({ autoIncrement: true }),
-  expedienteUuid: text("expedienteUuid").notNull().unique(),
+  expedienteId: integer("expedienteId").notNull().unique().references(() => expedientes.id),
   /** JSON: salida de calcularResultadoF3 u objeto extendido */
   payload: text("payload", { mode: "json" }).notNull(),
   f3FormStatus: text("f3FormStatus").default("nuevo").notNull(),
@@ -506,8 +497,8 @@ export const auditLog = sqliteTable("audit_log", {
   action: text("action").notNull(),
   entity: text("entity").notNull(),
   entityId: integer("entityId"),                   // null p. ej. LOGIN
-  expedienteUuid: text("expedienteUuid"),         // denormalizado para filtros / UI
-  expedienteCodigo: text("expedienteCodigo"),
+  expedienteId: integer("expedienteId"),         // denormalizado para filtros / UI
+  actaCodigo: text("actaCodigo"),
   changes: text("changes", { mode: "json" }),      // { before, after } o null
   ip: text("ip"),
   createdAt: integer("createdAt", { mode: "timestamp" }).default(sql`(strftime('%s', 'now'))`).notNull(),

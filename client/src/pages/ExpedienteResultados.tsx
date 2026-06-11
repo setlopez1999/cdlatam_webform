@@ -11,7 +11,7 @@ import F3View from "@/features/expedientes/f3/F3View";
 export default function ExpedienteResultados() {
   const params = useParams<{ id: string }>();
   const [, navigate] = useLocation();
-  const expedienteId = params.id;
+  const expedienteId = Number(params.id);
 
   return (
     <ExpedienteLayout expedienteId={expedienteId} activeTab="resultados">

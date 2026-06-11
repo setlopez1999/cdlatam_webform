@@ -140,6 +140,7 @@ export interface FilaCosto {
   centroCosto: string;
   valorNeto: number;
   tipoMoneda: string;
+  tipoCambio: number;
   cantidad: number;
   totalNeto: number;
   iva: number;
@@ -156,6 +157,7 @@ export interface FilaRRHH {
   centroCosto: string;
   valorSinImpuesto: number;
   tipoMoneda: string;
+  tipoCambio: number;
   cantidad: number;
   totalNeto: number;
   impuesto: number;
@@ -172,6 +174,7 @@ export interface FilaOtros {
   centroCosto: string;
   valorNeto: number;
   tipoMoneda: string;
+  tipoCambio: number;
   cantidad: number;
   totalNeto: number;
   iva: number;
@@ -202,6 +205,7 @@ export interface F2Data {
   paisImplementacion: string;
   rut: string;
   nombreCliente: string;
+  nombreFantasia: string;
   // Costos
   hardware: FilaCosto[];
   materiales: FilaCosto[];
@@ -216,7 +220,7 @@ export const F2_INITIAL: F2Data = {
   montoProyecto: 0, tipoCambio: 1, totalClp: 0,
   descripcion: "", preventa: "", fechaEntrega: "",
   ejecutivoComercial: "", plazoImplementacion: "", propuestaNumero: "",
-  paisImplementacion: "", rut: "", nombreCliente: "",
+  paisImplementacion: "", rut: "", nombreCliente: "", nombreFantasia: "",
   hardware: [], materiales: [], rrhh: [], otrosGastos: [],
   firmaImagen: undefined,
 };
@@ -279,20 +283,17 @@ export interface FormSlot<T> {
 // ─── Expediente ───────────────────────────────────────────────────────────────
 
 export interface Expediente {
-  /** nanoid único — será el id en BD cuando se conecte */
-  id: string;
-  /** Codigo compacto autogenerado del expediente (solo backend) */
-  codigo?: string;
-  /** N° de Acta consecutivo real (de BD, 6 dígitos, desde 1000) */
-  nroActa?: number | null;
-  /** Nombre editable por el usuario */
+  id: number;
   nombre: string;
+  creadorId: number;
+  status: string;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt: number | null;
   /** F1 — Acta */
   f1: FormSlot<F1Data>;
   /** F2 — Evaluación de Proyecto */
   f2: FormSlot<F2Data>;
   /** F3 — Resultados (solo estado, sin data: se calcula desde f2.data) */
   f3: { status: FormStatus };
-  createdAt: string;
-  updatedAt: string;
 }

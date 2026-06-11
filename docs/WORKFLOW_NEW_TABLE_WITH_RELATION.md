@@ -2,7 +2,7 @@
 
 Este documento detalla el proceso para crear una nueva tabla en la base de datos (ej. `roles`) y establecer una relación con una tabla existente (ej. `users`), asegurando que el CRUD y la interfaz de usuario se actualicen correctamente.
 
-> Nota de vigencia: el orden de capas de este documento sigue siendo valido. Para ejecutar migraciones hoy, usar el flujo oficial de [`DATABASE_SCHEMA.md`](./DATABASE_SCHEMA.md) con Drizzle (`drizzle/schema.ts`, `drizzle/migrations`, `_journal.json`, `server/schemaBootstrap.ts` y `runMigrations` Paso 2 en `server/db.ts`). Los scripts Python aqui son referencia historica.
+> **Vigencia:** El orden de capas sigue siendo válido. Para migraciones usar Drizzle (ver [`DATABASE_SCHEMA.md`](./DATABASE_SCHEMA.md)). Code snippets Python son referencia legacy. La ruta de BD local es `./gestion.db` (Windows) o `./data/gestion.db` (Docker) — resuelta por `server/_core/dbConfig.ts`.
 
 ## 1. Definición en el Schema (`drizzle/schema.ts`)
 

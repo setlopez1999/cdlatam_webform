@@ -90,6 +90,7 @@ CREATE TABLE IF NOT EXISTS catalog_soluciones (
 CREATE TABLE IF NOT EXISTS catalog_detalle_servicio (
   id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
   valor TEXT NOT NULL UNIQUE,
+  solucionId INTEGER,
   activo INTEGER DEFAULT 1 NOT NULL
 );
 CREATE TABLE IF NOT EXISTS catalog_tipo_venta (
@@ -131,7 +132,8 @@ CREATE TABLE IF NOT EXISTS catalog_nombres (
 CREATE TABLE IF NOT EXISTS actas (
   id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
   userId INTEGER NOT NULL,
-  expedienteUuid TEXT,
+  expedienteId INTEGER NOT NULL UNIQUE REFERENCES expedientes(id),
+  nro_acta INTEGER UNIQUE,
   codigo TEXT UNIQUE,
   noActa TEXT,
   atencion TEXT,
@@ -164,8 +166,7 @@ CREATE TABLE IF NOT EXISTS actas (
 CREATE TABLE IF NOT EXISTS evaluaciones (
   id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
   userId INTEGER NOT NULL,
-  actaId INTEGER,
-  expedienteUuid TEXT,
+  expedienteId INTEGER NOT NULL UNIQUE REFERENCES expedientes(id),
   unidadNegocios TEXT,
   empresa TEXT,
   centroCostoHeader TEXT,
@@ -183,6 +184,7 @@ CREATE TABLE IF NOT EXISTS evaluaciones (
   paisImplementacion TEXT,
   rut TEXT,
   nombreCliente TEXT,
+  nombreFantasia TEXT,
   hardware TEXT,
   materiales TEXT,
   rrhh TEXT,
@@ -233,20 +235,17 @@ CREATE TABLE IF NOT EXISTS sch_bloques_horario (
 
 CREATE TABLE IF NOT EXISTS expedientes (
   id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
-  uuid TEXT NOT NULL UNIQUE,
-  codigo TEXT UNIQUE,
   nombre TEXT NOT NULL,
   creadorId INTEGER NOT NULL,
-  actaId INTEGER,
-  evaluacionId INTEGER,
   status TEXT DEFAULT 'borrador' NOT NULL,
   createdAt INTEGER DEFAULT (strftime('%s', 'now')) NOT NULL,
-  updatedAt INTEGER DEFAULT (strftime('%s', 'now')) NOT NULL
+  updatedAt INTEGER DEFAULT (strftime('%s', 'now')) NOT NULL,
+  deleted_at INTEGER DEFAULT NULL
 );
 
 CREATE TABLE IF NOT EXISTS resultados_expediente (
   id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
-  expedienteUuid TEXT NOT NULL UNIQUE,
+  expedienteId INTEGER NOT NULL UNIQUE REFERENCES expedientes(id),
   payload TEXT NOT NULL,
   f3FormStatus TEXT DEFAULT 'nuevo' NOT NULL,
   f3SavedAt INTEGER,
@@ -271,8 +270,8 @@ CREATE TABLE IF NOT EXISTS audit_log (
   action TEXT NOT NULL,
   entity TEXT NOT NULL,
   entityId INTEGER,
-  expedienteUuid TEXT,
-  expedienteCodigo TEXT,
+  expedienteId INTEGER,
+  actaCodigo TEXT,
   changes TEXT,
   ip TEXT,
   createdAt INTEGER DEFAULT (strftime('%s', 'now')) NOT NULL
@@ -286,6 +285,9 @@ CREATE TABLE IF NOT EXISTS catalog_clausulas (
   fileName TEXT NOT NULL,
   fileSize INTEGER,
   activo INTEGER DEFAULT 1 NOT NULL,
+  siempre_incluir INTEGER DEFAULT 0 NOT NULL,
+  tipo TEXT DEFAULT 'clausula' NOT NULL,
+  orden_global INTEGER DEFAULT 50 NOT NULL,
   createdAt INTEGER DEFAULT (strftime('%s', 'now')) NOT NULL
 );
 
@@ -293,7 +295,8 @@ CREATE TABLE IF NOT EXISTS catalog_consideraciones_comerciales (
   id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
   valor TEXT NOT NULL,
   orden INTEGER DEFAULT 0 NOT NULL,
-  activo INTEGER DEFAULT 1 NOT NULL
+  activo INTEGER DEFAULT 1 NOT NULL,
+  persistente INTEGER DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS catalog_implementacion_items (

@@ -34,9 +34,13 @@ import type { F2Data, F1Data } from "../types";
 const F1_TO_F2_HEADER_FIELDS = [
   { f2: "nombreCliente" as const, f1: "razonSocial" as const },
   { f2: "empresa" as const, f1: "razonSocial" as const },
+  { f2: "nombreFantasia" as const, f1: "nombreFantasia" as const },
   { f2: "rut" as const, f1: "rucDniRut" as const },
   { f2: "paisImplementacion" as const, f1: "pais" as const },
   { f2: "tipoMoneda" as const, f1: "moneda" as const },
+  // Campo "Atención" de F1 (catalog_nombres) → Ejecutivo Comercial y Preventa de F2
+  { f2: "ejecutivoComercial" as const, f1: "atencion" as const },
+  { f2: "preventa" as const, f1: "atencion" as const },
 ] as const;
 
 function f1ToF2HeaderPatch(f1: F1Data): Partial<F2Data> {
@@ -69,6 +73,7 @@ function f1ImportSuggestions(f1: F1Data | null) {
   return s as {
     nombreCliente: string;
     empresa: string;
+    nombreFantasia: string;
     rut: string;
     paisImplementacion: string;
     tipoMoneda: string;
@@ -79,7 +84,7 @@ function f1ImportSuggestions(f1: F1Data | null) {
   };
 }
 
-export function useF2(expedienteId: string) {
+export function useF2(expedienteId: number) {
   const { getExpediente } = useExpedienteStore();
   const utils = trpc.useUtils();
   const expediente = getExpediente(expedienteId);
@@ -124,7 +129,7 @@ export function useF2(expedienteId: string) {
 
     try {
       await syncF2Mutation.mutateAsync({
-        expedienteUuid: expedienteId,
+        expedienteId,
         f2FormStatus: "guardado",
         f2SavedAt: savedIso,
         data: f2DataToEvalSyncData(dataToSave),
@@ -135,7 +140,7 @@ export function useF2(expedienteId: string) {
       // Sin esto, al volver a Historial / Workspace el useQuery devuelve la
       // versión cacheada anterior y eso pisa el store via mergeLista.
       // No await: el store local ya está al día, no demoramos el toast.
-      void utils.expediente.detalle.invalidate({ uuid: expedienteId });
+      void utils.expediente.detalle.invalidate({ id: expedienteId });
       void utils.expediente.listarResumen.invalidate();
       void utils.expediente.listarResumenWorkspace.invalidate();
       return true;
@@ -150,8 +155,8 @@ export function useF2(expedienteId: string) {
    */
   const descartar = useCallback(async (): Promise<void> => {
     try {
-      await utils.expediente.detalle.invalidate({ uuid: expedienteId });
-      const fresh = await utils.expediente.detalle.fetch({ uuid: expedienteId });
+      await utils.expediente.detalle.invalidate({ id: expedienteId });
+      const fresh = await utils.expediente.detalle.fetch({ id: expedienteId });
       if (fresh) {
         storeMergeDetalleEnStore(mapDetalleToExpediente(fresh));
       }

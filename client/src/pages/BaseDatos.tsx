@@ -247,7 +247,7 @@ function ExpedientesView() {
     return matchQ && matchStatus;
   }), [expedientes, search, statusFilter]);
 
-  const handleDelete = (id: string) => {
+  const handleDelete = (id: number) => {
     if (!confirm("¿Eliminar este expediente? Esta acción no se puede deshacer.")) return;
     eliminar(id);
     toast.success("Expediente eliminado");

@@ -30,7 +30,7 @@ import type { ResumenMeses } from "../types";
 // ─── Componente ───────────────────────────────────────────────────────────────
 
 interface Props {
-  expedienteId: string;
+  expedienteId: number;
   onVolverF2?: () => void;
 }
 
@@ -73,7 +73,7 @@ export default function F3View({ expedienteId, onVolverF2 }: Props) {
     lastSyncedPayloadJson.current = json;
 
     syncResultado.mutate({
-      expedienteUuid: expedienteId,
+      expedienteId,
       payload,
       f3FormStatus: "guardado",
     });

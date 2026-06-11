@@ -1,0 +1,32 @@
+---
+description: Contexto base del proyecto CD-LATAM webform
+alwaysApply: true
+---
+
+# CD-LATAM — Gestión Administrativa
+
+App full-stack para formularios de expedientes (F1 Acta, F2 Evaluación, F3 calculado) y catálogos.
+
+## Stack
+- **Frontend**: React 19 + TypeScript + Vite + Tailwind + shadcn/ui + wouter
+- **Backend**: Node + Express + tRPC (`server/routers.ts`)
+- **BD**: SQLite (`data/gestion.db`) + Drizzle ORM (`drizzle/schema.ts`)
+- **Gestor**: `pnpm` (preferir `pnpm.cmd` en PowerShell si falla la política de ejecución)
+
+## Estructura clave
+- `client/src/features/expedientes/` — módulo principal de formularios
+- `client/src/features/expedientes/f1/` — Acta (servicios, formas de pago, empresa)
+- `client/src/features/expedientes/types.ts` — tipos centralizados F1/F2/F3
+- `server/db.ts` — conexión SQLite; `server/localAuth.ts` — JWT/bcrypt
+- `docs/README.md` — índice de documentación por tipo de cambio
+
+## Convenciones de trabajo
+- Cambios mínimos y enfocados; reutilizar helpers existentes
+- Responder en español al usuario
+- No commitear ni pushear salvo petición explícita
+- Tests con `pnpm test`; dev con `pnpm dev` → http://localhost:3000
+- Cambios de BD: seguir `docs/DATABASE_SCHEMA.md` y migraciones Drizzle
+
+## Dev local (Windows)
+- Si falla `better-sqlite3`: `pnpm rebuild better-sqlite3` o `npx prebuild-install` dentro de `node_modules/better-sqlite3`
+- Alinear versión de Node con el equipo de trabajo si hay errores de binarios nativos
