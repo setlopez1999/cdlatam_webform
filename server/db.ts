@@ -498,6 +498,7 @@ export async function runMigrations() {
       /* ya aplicado */
     }
   };
+  tryAlter(`ALTER TABLE audit_log RENAME COLUMN expedienteCodigo TO actaCodigo`, "Migrate audit_log.expedienteCodigo → actaCodigo");
   tryAlter(`CREATE INDEX IF NOT EXISTS idx_audit_log_created_at ON audit_log(createdAt)`, "Index audit_log createdAt");
   tryAlter(`CREATE INDEX IF NOT EXISTS idx_audit_log_user_created ON audit_log(userId, createdAt)`, "Index audit_log userId+createdAt");
 
