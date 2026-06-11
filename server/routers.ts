@@ -651,8 +651,6 @@ export const appRouter = router({
       .input(z.object({ id: z.number() }))
       .mutation(async ({ ctx, input }) => {
         await requireRole(ctx, "admin");
-        // Desasignar el rol de todos los usuarios antes de borrar
-        await ds_updateUser(0, {});
         const affected = await ds_getUsersByRoleId(input.id);
         for (const u of affected) {
           await ds_updateUser(u.id, { roleId: null });
@@ -722,7 +720,7 @@ export const appRouter = router({
 
   // ─── Catálogos — opciones para comboboxes (fuente controlada por USE_API) ──
   catalogs: router({
-    getAll: publicProcedure.query(async () => {
+    getAll: protectedProcedure.query(async ({ ctx }) => {
       return ds_getCatalogOptions();
     }),
   }),
@@ -745,7 +743,7 @@ export const appRouter = router({
       .input(ActaInputSchema)
       .mutation(async ({ ctx, input }) => {
         const { f1SavedAt: f1s, ...restIn } = input;
-        const result = await (createActa as (data: Record<string, unknown>) => Promise<unknown>)({
+        const result = await createActa({
           userId: ctx.user.id,
           ...restIn,
           fecha: input.fecha ? new Date(input.fecha) : undefined,
@@ -875,7 +873,7 @@ export const appRouter = router({
     create: protectedProcedure
       .input(EvaluacionInputSchema)
       .mutation(async ({ ctx, input }) => {
-        return (createEvaluacion as (data: Record<string, unknown>) => Promise<unknown>)({
+        return createEvaluacion({
           userId: ctx.user.id,
           ...input,
           fechaEntrega: input.fechaEntrega ? new Date(input.fechaEntrega) : undefined,

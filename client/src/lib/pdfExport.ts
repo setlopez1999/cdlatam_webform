@@ -448,6 +448,7 @@ async function buildActaPdfBytes(acta: ActaData, opts: ActaPdfExportOpts = {}): 
 
   const lo = resolveLayout(doc, resolvedOpts);
   const { margin, contentWidth, pageWidth, pageHeight, fontSize, lineHeight, spacing, cellPadding } = lo;
+  const sectionGap = 1; // mm extra entre secciones (ajustable)
 
   const currencyCode = getCurrencyCode(acta.moneda ?? "");
   const fmt = (v: number) => formatCurrency(v, currencyCode);
@@ -508,7 +509,7 @@ async function buildActaPdfBytes(acta: ActaData, opts: ActaPdfExportOpts = {}): 
 
   const textoIntro =
     (acta as { textoIntroductorio?: string }).textoIntroductorio ||
-    "Por medio de la presente, confirmo la recepción y aprobación de la propuesta comercial, en los términos y condiciones aquí expresados (indicado en mail que precede).";
+    "Por medio de la presente, confirmo la recepción y aprobación de la propuesta comercial, en los términos y condiciones aquí expresados.";
   y = drawIntroBox(doc, lo, textoIntro, margin, y, contentWidth);
 
   // ── 3. Datos de la empresa ──────────────────────────────────────────────
@@ -527,7 +528,7 @@ async function buildActaPdfBytes(acta: ActaData, opts: ActaPdfExportOpts = {}): 
   ], margin, y, contentWidth);
 
   // ── 4. Datos de contacto ────────────────────────────────────────────────
-  y += spacing;
+  y += spacing + sectionGap;
   y = drawSectionTitle(doc, lo, "Información de Contacto", margin, y);
   y = drawContactGrid(doc, lo, [
     {
@@ -596,7 +597,7 @@ async function buildActaPdfBytes(acta: ActaData, opts: ActaPdfExportOpts = {}): 
     },
   });
   y = (doc as unknown as { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY ?? y;
-  y += spacing;
+  y += spacing + sectionGap;
 
   // ── 6. Formas de pago — Implementación ──────────────────────────────────
   if (acta.formasPagoImplementacion?.length && lo.sections.formasPago) {
@@ -616,7 +617,7 @@ async function buildActaPdfBytes(acta: ActaData, opts: ActaPdfExportOpts = {}): 
       doc.setFont("helvetica", "normal");
       doc.setTextColor(...COLOR_GRAY);
       doc.text(`Ahorro total acumulado (cuotas de gracia): ${fmt(ahorroMant)}`, margin, y);
-      y += spacing + 1;
+      y += spacing + 1 + sectionGap;
       doc.setTextColor(...COLOR_TEXT);
     }
   }

@@ -5,7 +5,6 @@ import { Route, Switch, Redirect } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import Dashboard from "./pages/Dashboard";
-import ResultadoView from "./pages/ResultadoView";
 import BaseDatos from "./pages/BaseDatos";
 import AppLayout from "./components/AppLayout";
 import Login from "./pages/Login";
@@ -118,9 +117,6 @@ function Router() {
       {/* Rutas protegidas — los permisos viven en client/src/config/permissions.ts */}
       <Route path="/">
         {() => <ProtectedRoute component={Dashboard} routePath="/" />}
-      </Route>
-      <Route path="/resultado">
-        {() => <ProtectedRoute component={ResultadoView} routePath="/resultado" />}
       </Route>
       <Route path="/base-datos/spreadsheet">
         {() => <ProtectedRoute component={SpreadsheetView} routePath="/base-datos/spreadsheet" />}

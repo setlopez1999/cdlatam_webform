@@ -1,70 +1,58 @@
 # Integridad de Expedientes en Base de Datos
 
-Este documento describe el estado actual de la persistencia de expedientes y los pasos necesarios para completar la migración desde `localStorage` hacia la base de datos SQLite.
+Este documento describe el estado actual de la persistencia y sincronización de expedientes.
 
 ---
 
-## Estado Actual (Fase 1 completada)
+## Estado Actual (Fase 1 y 2 completadas)
 
-Actualmente, el sistema maneja un **CRUD esqueleto** para los expedientes. Esto significa que la base de datos conoce la existencia del expediente, pero no su contenido detallado.
+El sistema cuenta con persistencia completa en BD para todas las capas del expediente:
 
-| Capa | Dónde se guarda | Qué contiene |
+| Capa | Dónde se guarda | Cómo se sincroniza |
 |---|---|---|
-| **Metadata** | BD (`expedientes`) | `id`, `uuid`, `nombre`, `creadorId`, `status`, timestamps |
-| **Formulario F1 (Acta)** | BD (`actas`) | Todos los campos del acta (servicios, pagos, consideraciones). Sincronizado vía tRPC. |
-| **Formulario F2 (EP)** | `localStorage` (Zustand) | Todos los campos de la evaluación de proyecto (Pendiente de migración). |
-| **Auditoría** | BD (`audit_log`) | Acciones de creación, actualización y sincronización. |
+| **Metadata** | BD (`expedientes`) | `trpc.expediente.crear`, `trpc.expediente.renombrar`, `trpc.expediente.eliminar` |
+| **Formulario F1 (Acta)** | BD (`actas`) | `trpc.actas.syncF1` — guarda el snapshot completo |
+| **Formulario F2 (EP)** | BD (`evaluaciones`) | `trpc.evaluaciones.syncF2` — guarda el snapshot completo |
+| **Formulario F3 (Resultados)** | BD (`resultados_expediente`) | `trpc.expediente.syncResultado` — guarda el cálculo |
+| **Implementación** | BD (`implementaciones`) | `trpc.expediente.implementacion.setEstado` |
+| **Auditoría** | BD (`audit_log`) | Registro automático vía `recordAuditFromTrpc` |
 
-**Problema actual:** Si el usuario borra el caché del navegador, pierde el contenido de F1 y F2, aunque el expediente siga existiendo en la base de datos (vacío).
-
----
-
-## Plan de Migración (Fase 2)
-
-Para lograr la integridad completa y permitir la auditoría a nivel de campos, se deben ejecutar los siguientes pasos una vez que se definan los campos definitivos con el equipo de negocio.
-
-### 1. Sincronizar F1 (Acta) con la BD ✅
-**ESTADO: COMPLETADO**
-- Las tablas `actas` ya reciben datos JSON.
-- `useF1.ts` llama a `trpc.actas.syncF1` en cada guardado.
-- Se implementó la lógica de pagos dinámicos (1-4 cuotas) con validación de montos cruzados.
-
-### 2. Sincronizar F2 (Evaluación de Proyecto) con la BD
-
-1. Repetir el proceso de F1 para F2, usando la tabla `evaluaciones`.
-2. Actualizar el campo `evaluacionId` en la tabla `expedientes`.
-
-> **Operativo hoy:** `evaluaciones.syncF2` + store Zustand. Si un campo F2 «desaparece al guardar», ver el mapa de causas y checklist en [`F2_SYNC_PIPELINE.md`](./F2_SYNC_PIPELINE.md) (escalares en `F2_SYNC_SCALAR_KEYS`, tablas desde store real).
-
-### 3. Auditoría a nivel de campos
-
-Una vez que los datos viajen al backend, se debe modificar el router para que registre en `audit_log` exactamente qué campos cambiaron.
-
-```ts
-// Ejemplo de lo que debería hacer el router al actualizar un acta:
-await createAuditLog({
-  userId: ctx.localUser.id,
-  username: ctx.localUser.username,
-  action: "UPDATE",
-  entity: "acta",
-  entityId: acta.id,
-  changes: {
-    before: { status: "borrador" },
-    after: { status: "completado" }
-  }
-});
-```
-
-### 4. Visibilidad de campos (F1)
-
-El requerimiento de ocultar campos sensibles (como montos o consideraciones) a comerciales que no crearon el acta depende de esta migración.
-
-Una vez que el acta esté en la BD, el frontend podrá saber quién es el `creadorId` del expediente y compararlo con el usuario actual para decidir qué campos renderizar.
+**El contenido de F1, F2 y F3 ya no se pierde al borrar caché del navegador.** Todo persiste en SQLite en el servidor.
 
 ---
 
-## Nota sobre la regla de exclusión
+## Flujo de sincronización
 
-Existe una regla histórica en el proyecto que indica: *"Nunca se debe guardar información de expedientes en la base de datos"*.
+### F1 (Acta) — `useF1.ts`
+1. Usuario edita campos en el formulario F1.
+2. `useF1` llama `trpc.actas.syncF1.mutateAsync(...)` con el snapshot completo de F1.
+3. El servidor guarda en `actas.f1Datos` (JSON) y actualiza `actas.f1SavedAt`.
+4. El store cliente sincroniza el `f1SavedAt` para saber si está al día.
 
-Esta regla fue implementada temporalmente durante la fase de prototipado rápido. Sin embargo, los nuevos requerimientos de **auditoría, roles y visibilidad de campos** hacen obligatoria la persistencia en base de datos. Este documento sirve como guía para ejecutar esa transición de manera ordenada.
+### F2 (Evaluación de Proyecto) — `useF2.ts`
+1. Usuario edita campos en el formulario F2.
+2. `useF2` llama `trpc.evaluaciones.syncF2.mutateAsync(...)` con el snapshot completo.
+3. El servidor guarda en `evaluaciones.f2Datos` (JSON) y actualiza `evaluaciones.f2SavedAt`.
+
+### F3 (Resultados) — `storeMergeDetalleEnStore`
+1. Al guardar F2, se dispara el cálculo automático de F3.
+2. `storeMergeDetalleEnStore` calcula y persiste los resultados.
+3. `trpc.expediente.syncResultado` guarda en `resultados_expediente`.
+
+---
+
+## Vista de detalle (historial expandido)
+
+El componente `ExpedienteLayout` permite al usuario navegar entre F1, F2, F3 e Implementación.
+Los datos se cargan desde el servidor (`trpc.expediente.detalle`) y se mezclan con el store local.
+La fuente de verdad es lo que está en BD; el store local es una caché de edición.
+
+---
+
+## Auditoría
+
+Cada sincronización registra en `audit_log`:
+- `entidad`: `"acta"` / `"evaluacion"` / `"resultado"`
+- `accion`: `"SYNC_F1"` / `"SYNC_F2"` / `"SYNC_RESULTADO"`
+- `actaCodigo`: número de acta asociada
+- `userId` / `username`: quién realizó la acción

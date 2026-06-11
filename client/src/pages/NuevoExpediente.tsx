@@ -26,8 +26,10 @@ export default function NuevoExpediente() {
   const num = expedientes.length + 1;
   const [nombre, setNombre] = useState(`Expediente #${num}`);
 
+  const utils = trpc.useUtils();
+
   const crearExpediente = trpc.expediente.crear.useMutation({
-    onSuccess: () => void trpc.useUtils().expediente.listarResumen.invalidate(),
+    onSuccess: () => void utils.expediente.listarResumen.invalidate(),
     onError: (err) => {
       toast.error(err.message || "Error al crear expediente");
     },

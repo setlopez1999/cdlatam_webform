@@ -181,10 +181,14 @@ export function deriveFilasOtros(stored: FilaOtros[], n: number, moneda: string)
   return result;
 }
 
+function applyTipoCambio(totalNeto: number, row: { tipoCambio?: number }): number {
+  return totalNeto * (row.tipoCambio || 1);
+}
+
 export function recalcFilaCosto(row: FilaCosto, field: keyof FilaCosto, value: string | number): FilaCosto {
   const u = { ...row, [field]: value };
-  if (field === "valorNeto" || field === "cantidad") {
-    u.totalNeto = u.valorNeto * u.cantidad;
+  if (field === "valorNeto" || field === "cantidad" || field === "tipoCambio") {
+    u.totalNeto = applyTipoCambio(u.valorNeto * u.cantidad, u);
     u.total = u.totalNeto + u.iva;
   }
   if (field === "iva") u.total = u.totalNeto + u.iva;
@@ -193,8 +197,8 @@ export function recalcFilaCosto(row: FilaCosto, field: keyof FilaCosto, value: s
 
 export function recalcFilaRRHH(row: FilaRRHH, field: keyof FilaRRHH, value: string | number): FilaRRHH {
   const u = { ...row, [field]: value };
-  if (field === "valorSinImpuesto" || field === "cantidad") {
-    u.totalNeto = u.valorSinImpuesto * u.cantidad;
+  if (field === "valorSinImpuesto" || field === "cantidad" || field === "tipoCambio") {
+    u.totalNeto = applyTipoCambio(u.valorSinImpuesto * u.cantidad, u);
     u.total = u.totalNeto + u.impuesto;
   }
   if (field === "impuesto") u.total = u.totalNeto + u.impuesto;
@@ -203,8 +207,8 @@ export function recalcFilaRRHH(row: FilaRRHH, field: keyof FilaRRHH, value: stri
 
 export function recalcFilaOtros(row: FilaOtros, field: keyof FilaOtros, value: string | number): FilaOtros {
   const u = { ...row, [field]: value };
-  if (field === "valorNeto" || field === "cantidad") {
-    u.totalNeto = u.valorNeto * u.cantidad;
+  if (field === "valorNeto" || field === "cantidad" || field === "tipoCambio") {
+    u.totalNeto = applyTipoCambio(u.valorNeto * u.cantidad, u);
     u.total = u.totalNeto + u.iva;
   }
   if (field === "iva") u.total = u.totalNeto + u.iva;
