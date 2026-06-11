@@ -24,6 +24,7 @@ import type { ResumenMeses } from "@/features/expedientes/types";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { PageLayout } from "@/components/PageLayout";
+import { formatCurrency, getCurrencyCode } from "@/lib/formatters";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -65,13 +66,11 @@ function EstadoBadge({ estado, label }: { estado: EstadoDoc; label: string }) {
   );
 }
 
-function fmtCell(value: number) {
+function fmtCell(value: number, currencyCode = "USD") {
   if (value === 0) return <span className="text-muted-foreground">–</span>;
-  const abs = Math.abs(value);
-  const sign = value < 0 ? "-" : "";
   return (
     <span className={value < 0 ? "text-red-400" : ""}>
-      {sign}$ {abs.toLocaleString("es-CL", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+      {formatCurrency(value, currencyCode)}
     </span>
   );
 }
@@ -84,6 +83,7 @@ function ResultadosExpandidos({ exp }: { exp: Expediente }) {
 
   const f1Guardado = exp.f1.status === "guardado";
   const etiquetaGim = exp.f1.data.sres?.trim() || "GIM";
+  const currencyCode = exp.f1.data.moneda || "USD";
 
   const r = useMemo(
     () => calcularResultadoF3(exp.f2.data, exp.f1.data),
@@ -136,7 +136,7 @@ function ResultadosExpandidos({ exp }: { exp: Expediente }) {
                 <tr key={row.label} className={cn("border-b border-border/30", i % 2 !== 0 && "bg-muted/10")}>
                   <td className="px-3 py-1.5 font-medium">{row.label}</td>
                   {meses.map(mes => (
-                    <td key={mes} className="px-3 py-1.5 text-center">{fmtCell(getMesValue(row.values, mes))}</td>
+                    <td key={mes} className="px-3 py-1.5 text-center">{fmtCell(getMesValue(row.values, mes), currencyCode)}</td>
                   ))}
                 </tr>
               ))}
@@ -181,7 +181,7 @@ function ResultadosExpandidos({ exp }: { exp: Expediente }) {
                   <td />
                   {meses.map(mes => (
                     <td key={mes} className={cn("px-3 py-1.5 text-center", row.bold && "font-bold")}>
-                      {fmtCell(getMesValue(row.values, mes))}
+                      {fmtCell(getMesValue(row.values, mes), currencyCode)}
                     </td>
                   ))}
                 </tr>

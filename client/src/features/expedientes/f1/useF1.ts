@@ -18,6 +18,7 @@
 import { useCallback } from "react";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
+import { joinPhonePair } from "@/lib/formatters";
 import { useExpedienteStore } from "../store";
 import { mapDetalleToExpediente } from "../fromServer";
 import type { F1Data } from "../types";
@@ -68,13 +69,13 @@ export function useF1(expedienteId: number) {
         representanteLegal: data.representanteLegal,
         representanteDni: data.representanteDni,
         representanteEmail: data.representanteEmail,
-        representanteFono: data.representanteTelefonoFijo,
+        representanteFono: joinPhonePair(data.representanteTelefonoFijo, data.representanteTelefonoMovil),
         contactoTecnico: data.contactoTecnico,
         contactoTecnicoEmail: data.contactoTecnicoEmail,
-        contactoTecnicoFono: data.contactoTecnicoTelefonoFijo,
+        contactoTecnicoFono: joinPhonePair(data.contactoTecnicoTelefonoFijo, data.contactoTecnicoTelefonoMovil),
         contactoFacturacion: data.contactoFacturacion,
         contactoFacturacionEmail: data.contactoFacturacionEmail,
-        contactoFacturacionFono: data.contactoFacturacionTelefonoFijo,
+        contactoFacturacionFono: joinPhonePair(data.contactoFacturacionTelefonoFijo, data.contactoFacturacionTelefonoMovil),
         serviciosContratados: data.serviciosContratados,
         formasPagoImplementacion: data.formasPagoImplementacion,
         formasPagoMantencion: data.formasPagoMantencion,

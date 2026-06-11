@@ -131,12 +131,14 @@ export const F2CostTable = memo(function F2CostTable({
 }) {
   return (
     <div className="overflow-x-auto rounded-lg border border-border/40">
-      <table className="w-full min-w-[960px] border-collapse text-xs">
+      <table className="w-full min-w-[1140px] border-collapse text-xs">
         <thead>
           <tr className="bg-muted/60 text-muted-foreground">
             <th className="px-2 py-2 text-left font-medium w-[140px] min-w-[140px] border-b border-border/40">Centro Costo</th>
             <th className="px-2 py-2 text-left font-medium w-[90px] min-w-[90px] border-b border-border/40">Cuota</th>
-            <th className="px-2 py-2 text-left font-medium w-[180px] min-w-[180px] border-b border-border/40">Descripción</th>
+            <th className="px-2 py-2 text-left font-medium w-[150px] min-w-[150px] border-b border-border/40">Descripción</th>
+            <th className="px-2 py-2 text-left font-medium w-[90px] min-w-[90px] border-b border-border/40">Moneda</th>
+            <th className="px-2 py-2 text-right font-medium w-[80px] min-w-[80px] border-b border-border/40">T.Cambio</th>
             <th className="px-2 py-2 text-right font-medium w-[90px] min-w-[90px] border-b border-border/40">{valueLabel}</th>
             <th className="px-2 py-2 text-right font-medium w-[75px] min-w-[75px] border-b border-border/40">Cant.</th>
             <th className="px-2 py-2 text-right font-medium w-[90px] min-w-[90px] border-b border-border/40">Total Neto</th>
@@ -148,7 +150,7 @@ export const F2CostTable = memo(function F2CostTable({
         <tbody>
           {rows.length === 0 && (
             <tr>
-              <td colSpan={9} className="px-3 py-4 text-center text-xs text-muted-foreground">
+              <td colSpan={11} className="px-3 py-4 text-center text-xs text-muted-foreground">
                 Sin gastos. Use los botones para agregar por cuota.
               </td>
             </tr>
@@ -174,10 +176,27 @@ export const F2CostTable = memo(function F2CostTable({
                   nCuotas={nCuotas}
                 />
               </td>
-              <td className="px-1 py-1 min-w-[180px] max-w-[180px]">
+              <td className="px-1 py-1 min-w-[150px] max-w-[150px]">
                 <Input className="h-8 text-xs w-full min-w-0 truncate" placeholder="Descripción..."
                   value={row.descripcionGasto}
                   onChange={e => onUpdate(row.id, "descripcionGasto", e.target.value)} />
+              </td>
+              <td className="px-1 py-1 min-w-[90px]">
+                <Select value={row.tipoMoneda} onValueChange={v => onUpdate(row.id, "tipoMoneda", v)}>
+                  <SelectTrigger className={SELECT_TRIGGER_CELL}>
+                    <SelectValue placeholder="Moneda..." className="truncate" />
+                  </SelectTrigger>
+                  <SelectContent position="popper" sideOffset={4} className="z-[200]">
+                    {catalogs?.monedas?.map((m: any) => (
+                      <SelectItem key={m.value} value={m.value} className="text-xs">{m.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </td>
+              <td className="px-1 py-1 min-w-[80px]">
+                <Input type="number" className="h-8 text-xs text-right w-full min-w-[62px]" placeholder="1"
+                  value={row.tipoCambio || ""}
+                  onChange={e => onUpdate(row.id, "tipoCambio", parseNumeric(e.target.value))} />
               </td>
               <td className="px-1 py-1 min-w-[90px]">
                 <Input type="number" className="h-8 text-xs text-right w-full min-w-[72px]" placeholder="0.00"
@@ -231,12 +250,14 @@ export const F2RRHHTable = memo(function F2RRHHTable({
 }) {
   return (
     <div className="overflow-x-auto rounded-lg border border-border/40">
-      <table className="w-full min-w-[1040px] border-collapse text-xs">
+      <table className="w-full min-w-[1200px] border-collapse text-xs">
         <thead>
           <tr className="bg-muted/60 text-muted-foreground">
-            <th className="px-2 py-2 text-left font-medium w-[140px] min-w-[140px] border-b border-border/40">Centro Costo</th>
+            <th className="px-2 py-2 text-left font-medium w-[140px] min-w-[140px] border-b border-border/40">Tipo</th>
             <th className="px-2 py-2 text-left font-medium w-[90px] min-w-[90px] border-b border-border/40">Cuota</th>
-            <th className="px-2 py-2 text-left font-medium w-[150px] min-w-[150px] border-b border-border/40">Descripción</th>
+            <th className="px-2 py-2 text-left font-medium w-[140px] min-w-[140px] border-b border-border/40">Descripción</th>
+            <th className="px-2 py-2 text-left font-medium w-[90px] min-w-[90px] border-b border-border/40">Moneda</th>
+            <th className="px-2 py-2 text-right font-medium w-[80px] min-w-[80px] border-b border-border/40">T.Cambio</th>
             <th className="px-2 py-2 text-right font-medium w-[90px] min-w-[90px] border-b border-border/40">Valor s/Imp.</th>
             <th className="px-2 py-2 text-right font-medium w-[75px] min-w-[75px] border-b border-border/40">Cant.</th>
             <th className="px-2 py-2 text-right font-medium w-[90px] min-w-[90px] border-b border-border/40">Total Neto</th>
@@ -248,7 +269,7 @@ export const F2RRHHTable = memo(function F2RRHHTable({
         <tbody>
           {rows.length === 0 && (
             <tr>
-              <td colSpan={9} className="px-3 py-4 text-center text-xs text-muted-foreground">
+              <td colSpan={11} className="px-3 py-4 text-center text-xs text-muted-foreground">
                 Sin recursos. Use los botones para agregar por cuota.
               </td>
             </tr>
@@ -278,10 +299,27 @@ export const F2RRHHTable = memo(function F2RRHHTable({
                   nCuotas={nCuotas}
                 />
               </td>
-              <td className="px-1 py-1 min-w-[150px] max-w-[150px]">
+              <td className="px-1 py-1 min-w-[140px] max-w-[140px]">
                 <Input className="h-8 text-xs w-full min-w-0 truncate" placeholder="Descripción..."
                   value={row.descripcionGasto}
                   onChange={e => onUpdate(row.id, "descripcionGasto", e.target.value)} />
+              </td>
+              <td className="px-1 py-1 min-w-[90px]">
+                <Select value={row.tipoMoneda} onValueChange={v => onUpdate(row.id, "tipoMoneda", v)}>
+                  <SelectTrigger className={SELECT_TRIGGER_CELL}>
+                    <SelectValue placeholder="Moneda..." className="truncate" />
+                  </SelectTrigger>
+                  <SelectContent position="popper" sideOffset={4} className="z-[200]">
+                    {catalogs?.monedas?.map((m: any) => (
+                      <SelectItem key={m.value} value={m.value} className="text-xs">{m.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </td>
+              <td className="px-1 py-1 min-w-[80px]">
+                <Input type="number" className="h-8 text-xs text-right w-full min-w-[62px]" placeholder="1"
+                  value={row.tipoCambio || ""}
+                  onChange={e => onUpdate(row.id, "tipoCambio", parseNumeric(e.target.value))} />
               </td>
               <td className="px-1 py-1 min-w-[90px]">
                 <Input type="number" className="h-8 text-xs text-right w-full min-w-[72px]" placeholder="0.00"
@@ -335,12 +373,14 @@ export const F2OtrosTable = memo(function F2OtrosTable({
 }) {
   return (
     <div className="overflow-x-auto rounded-lg border border-border/40">
-      <table className="w-full min-w-[920px] border-collapse text-xs">
+      <table className="w-full min-w-[1100px] border-collapse text-xs">
         <thead>
           <tr className="bg-muted/60 text-muted-foreground">
-            <th className="px-2 py-2 text-left font-medium w-[120px] min-w-[120px] border-b border-border/40">Tipo</th>
-            <th className="px-2 py-2 text-left font-medium w-[120px] min-w-[120px] border-b border-border/40">Centro Costo</th>
-            <th className="px-2 py-2 text-left font-medium w-[160px] min-w-[160px] border-b border-border/40">Descripción</th>
+            <th className="px-2 py-2 text-left font-medium w-[110px] min-w-[110px] border-b border-border/40">Tipo</th>
+            <th className="px-2 py-2 text-left font-medium w-[110px] min-w-[110px] border-b border-border/40">Centro Costo</th>
+            <th className="px-2 py-2 text-left font-medium w-[140px] min-w-[140px] border-b border-border/40">Descripción</th>
+            <th className="px-2 py-2 text-left font-medium w-[90px] min-w-[90px] border-b border-border/40">Moneda</th>
+            <th className="px-2 py-2 text-right font-medium w-[80px] min-w-[80px] border-b border-border/40">T.Cambio</th>
             <th className="px-2 py-2 text-right font-medium w-[90px] min-w-[90px] border-b border-border/40">Valor Neto</th>
             <th className="px-2 py-2 text-right font-medium w-[75px] min-w-[75px] border-b border-border/40">Cant.</th>
             <th className="px-2 py-2 text-right font-medium w-[90px] min-w-[90px] border-b border-border/40">Total Neto</th>
@@ -352,7 +392,7 @@ export const F2OtrosTable = memo(function F2OtrosTable({
         <tbody>
           {rows.map(row => (
             <tr key={row.id} className="border-b border-border/20 last:border-b-0 hover:bg-muted/20 transition-colors">
-              <td className="px-1 py-1 min-w-[120px]">
+              <td className="px-1 py-1 min-w-[110px]">
                 <Select value={row.tipo} onValueChange={v => onUpdate(row.id, "tipo", v)}>
                   <SelectTrigger className={SELECT_TRIGGER_CELL}>
                     <SelectValue className="truncate" />
@@ -368,7 +408,7 @@ export const F2OtrosTable = memo(function F2OtrosTable({
                   </SelectContent>
                 </Select>
               </td>
-              <td className="px-1 py-1 min-w-[120px]">
+              <td className="px-1 py-1 min-w-[110px]">
                 <Select value={row.centroCosto} onValueChange={v => onUpdate(row.id, "centroCosto", v)}>
                   <SelectTrigger className={SELECT_TRIGGER_CELL}>
                     <SelectValue placeholder="CECO..." className="truncate" />
@@ -380,10 +420,27 @@ export const F2OtrosTable = memo(function F2OtrosTable({
                   </SelectContent>
                 </Select>
               </td>
-              <td className="px-1 py-1 min-w-[160px] max-w-[160px]">
+              <td className="px-1 py-1 min-w-[140px] max-w-[140px]">
                 <Input className="h-8 text-xs w-full min-w-0 truncate" placeholder="Descripción..."
                   value={row.descripcionGasto}
                   onChange={e => onUpdate(row.id, "descripcionGasto", e.target.value)} />
+              </td>
+              <td className="px-1 py-1 min-w-[90px]">
+                <Select value={row.tipoMoneda} onValueChange={v => onUpdate(row.id, "tipoMoneda", v)}>
+                  <SelectTrigger className={SELECT_TRIGGER_CELL}>
+                    <SelectValue placeholder="Moneda..." className="truncate" />
+                  </SelectTrigger>
+                  <SelectContent position="popper" sideOffset={4} className="z-[200]">
+                    {catalogs?.monedas?.map((m: any) => (
+                      <SelectItem key={m.value} value={m.value} className="text-xs">{m.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </td>
+              <td className="px-1 py-1 min-w-[80px]">
+                <Input type="number" className="h-8 text-xs text-right w-full min-w-[62px]" placeholder="1"
+                  value={row.tipoCambio || ""}
+                  onChange={e => onUpdate(row.id, "tipoCambio", parseNumeric(e.target.value))} />
               </td>
               <td className="px-1 py-1 min-w-[90px]">
                 <Input type="number" className="h-8 text-xs text-right w-full min-w-[72px]" placeholder="0.00"

@@ -18,7 +18,8 @@ import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/FormSection";
 import { FileText, Save, RefreshCw, Download } from "lucide-react";
 import { trpc } from "@/lib/trpc";
-import { createActaPdfBlob, buildFeaturesResumidoPdfBytes } from "@/lib/pdfExport";
+import { createActaPdfBlob, buildFeaturesResumidoPdfBytes, downloadPdfBlob } from "@/lib/pdfExport";
+import { joinPhonePair } from "@/lib/formatters";
 import { ActaPdfPreviewDialog } from "@/components/ActaPdfPreviewDialog";
 import { useF1 } from "./useF1";
 import { useClausulasVigentes } from "./useClausulasVigentes";
@@ -124,7 +125,10 @@ function createHitoPago(): HitoPago {
 // en vez del modal de vista previa.
 const PDF_USE_NATIVE_PRINT = true;
 
-/** Abre el diálogo nativo de imprimir/guardar como PDF con el blob dado. */
+/**
+ * Abre el diálogo nativo de imprimir/guardar como PDF.
+ * Carga el PDF en un iframe oculto y dispara window.print().
+ */
 function printBlobNative(blob: Blob, _filename: string) {
   const url = URL.createObjectURL(blob);
   const iframe = document.createElement("iframe");
@@ -485,7 +489,13 @@ export default function F1Form({ expedienteId }: Props) {
         const yaEsta = personalizadasConPersistentes.some(x => x.trim() === p.value.trim());
         if (!yaEsta) personalizadasConPersistentes.unshift(p.value);
       }
-      const dataParaPdf = { ...data, consideracionesPersonalizadas: personalizadasConPersistentes };
+      const dataParaPdf = {
+        ...data,
+        consideracionesPersonalizadas: personalizadasConPersistentes,
+        representanteFono: joinPhonePair(data.representanteTelefonoFijo, data.representanteTelefonoMovil),
+        contactoTecnicoFono: joinPhonePair(data.contactoTecnicoTelefonoFijo, data.contactoTecnicoTelefonoMovil),
+        contactoFacturacionFono: joinPhonePair(data.contactoFacturacionTelefonoFijo, data.contactoFacturacionTelefonoMovil),
+      };
 
       // Generar PDF de Features Resumido dinámico (SI/NO según implementación del expediente)
       // Se inyecta en el orden correcto dentro de createActaPdfBlob según ordenGlobal de las cláusulas
@@ -514,7 +524,9 @@ export default function F1Form({ expedienteId }: Props) {
         },
       );
       if (PDF_USE_NATIVE_PRINT) {
-        printBlobNative(blob, filename);
+        // DESCARGAR – opción elegida 2026-06-10. Para revertir a print nativo:
+        // reemplazar downloadPdfBlob(blob, filename) por printBlobNative(blob, filename)
+        downloadPdfBlob(blob, filename);
       } else {
         setActaPdfPreview({ blob, filename });
       }
@@ -538,7 +550,7 @@ export default function F1Form({ expedienteId }: Props) {
   // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
-    <div className="p-6 max-w-5xl mx-auto space-y-6" translate="no">
+    <div className="p-6 max-w-5xl mx-auto space-y-8" translate="no">
       <PageHeader
         title="Acta de Aceptación de Servicios"
         subtitle="Formulario 1 — Datos del cliente y servicios contratados"

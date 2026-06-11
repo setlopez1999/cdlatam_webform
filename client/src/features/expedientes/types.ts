@@ -140,6 +140,7 @@ export interface FilaCosto {
   centroCosto: string;
   valorNeto: number;
   tipoMoneda: string;
+  tipoCambio: number;
   cantidad: number;
   totalNeto: number;
   iva: number;
@@ -156,6 +157,7 @@ export interface FilaRRHH {
   centroCosto: string;
   valorSinImpuesto: number;
   tipoMoneda: string;
+  tipoCambio: number;
   cantidad: number;
   totalNeto: number;
   impuesto: number;
@@ -172,6 +174,7 @@ export interface FilaOtros {
   centroCosto: string;
   valorNeto: number;
   tipoMoneda: string;
+  tipoCambio: number;
   cantidad: number;
   totalNeto: number;
   iva: number;

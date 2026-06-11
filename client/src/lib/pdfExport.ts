@@ -21,8 +21,8 @@ import { formatCurrency, formatDate, getCurrencyCode } from "./formatters";
 import cdlatamLogoDataUrl from "../assets/cdlatam-logo.png";
 
 /** Pixeles del PNG del logo (relación de aspecto al escalar en mm). */
-const LOGO_NATURAL_W_PX = 1215;
-const LOGO_NATURAL_H_PX = 290;
+const LOGO_NATURAL_W_PX = 387;
+const LOGO_NATURAL_H_PX = 50;
 // Color turquesa corporativo CDLatam
 const BRAND_COLOR = "#00c2b2";
 const BRAND_DARK  = "#009e90";
@@ -323,7 +323,7 @@ export async function createActaPdfBlob(
   }
 
   const out = await merged.save();
-  const filename = `Acta_${noActa || "sin_numero"}_${slug(acta.razonSocial)}.pdf`;
+  const filename = `nro_acta_${noActa || "sin_numero"}.pdf`;
   const buf = new ArrayBuffer(out.byteLength);
   new Uint8Array(buf).set(out);
   return { blob: new Blob([buf], { type: "application/pdf" }), filename };
@@ -461,12 +461,12 @@ async function buildActaPdfBytes(acta: ActaData, opts: ActaPdfExportOpts = {}): 
   const logo: string | null = cdlatamLogoDataUrl ?? null;
   if (logo) {
     doc.setFillColor(...COLOR_TEXT);
-    doc.roundedRect(margin, y, 38, 14, 2, 2, "F");
+    doc.roundedRect(margin, y, 55, 16, 2, 2, "F");
     try {
       const innerX = margin + 4;
       const innerY = y + 2;
-      const boxW = 30;
-      const boxH = 10;
+      const boxW = 47;
+      const boxH = 12;
       const { drawW, drawH } = fitImagePreserveAspectMm(
         LOGO_NATURAL_W_PX,
         LOGO_NATURAL_H_PX,
@@ -534,7 +534,8 @@ async function buildActaPdfBytes(acta: ActaData, opts: ActaPdfExportOpts = {}): 
       title: "Representante Legal",
       fields: [
         { label: "Nombre", value: acta.representanteLegal },
-        { label: "DNI / Cédula", value: acta.representanteDni },
+        { label: "Tipo Doc.", value: acta.representanteTipoDoc },
+        { label: "N° Identificación Fiscal", value: acta.representanteDni },
         { label: "E-mail", value: acta.representanteEmail },
         { label: "Teléfono", value: acta.representanteFono },
       ],
@@ -803,7 +804,7 @@ function drawContactGrid(
       doc.setTextColor(...COLOR_TEXT);
       doc.setFont("helvetica", "normal");
       const value = f.value == null || f.value === "" ? " " : String(f.value);
-      const labelW = 22;
+      const labelW = 30;
       const valueW = colW - labelW - 4;
       if (valueW > 8) {
         const lines = doc.splitTextToSize(value, Math.max(1, valueW));
@@ -1049,12 +1050,12 @@ export function buildFeaturesResumidoPdfBytes(
   const logo: string | null = cdlatamLogoDataUrl ?? null;
   if (logo) {
     doc.setFillColor(...COLOR_TEXT);
-    doc.roundedRect(margin, y, 38, 14, 2, 2, "F");
+    doc.roundedRect(margin, y, 55, 16, 2, 2, "F");
     try {
       const innerX = margin + 4;
       const innerY = y + 2;
-      const boxW = 30;
-      const boxH = 10;
+      const boxW = 47;
+      const boxH = 12;
       const { drawW, drawH } = fitImagePreserveAspectMm(LOGO_NATURAL_W_PX, LOGO_NATURAL_H_PX, boxW, boxH);
       const imgX = innerX + (boxW - drawW) / 2;
       const imgY = innerY + (boxH - drawH) / 2;

@@ -308,7 +308,7 @@ export default function F2Form({ expedienteId, onVerResultado }: Props) {
       <FormSection title="Hardware" icon={Cpu} accent="violet" collapsible defaultOpen badge={fmt(totalHardware)}>
         <F2CostTable
           rows={hardwareRows}
-          catalogs={catalogsTable}
+          catalogs={catalogsInfo}
           onUpdate={updateHardwareRow}
           onAddCuota={addHardwareAtCuota}
           onRemove={removeHardwareRow}
@@ -325,7 +325,7 @@ export default function F2Form({ expedienteId, onVerResultado }: Props) {
       <FormSection title="Materiales" icon={Package} accent="violet" collapsible defaultOpen badge={fmt(totalMateriales)}>
         <F2CostTable
           rows={materialesRows}
-          catalogs={catalogsTable}
+          catalogs={catalogsInfo}
           onUpdate={updateMaterialesRow}
           onAddCuota={addMaterialesAtCuota}
           onRemove={removeMaterialesRow}
@@ -342,7 +342,7 @@ export default function F2Form({ expedienteId, onVerResultado }: Props) {
       <FormSection title="RRHH — Recursos Humanos" icon={Users} accent="violet" collapsible defaultOpen badge={fmt(totalRRHH)}>
         <F2RRHHTable
           rows={rrhhRows}
-          catalogs={catalogsTable}
+          catalogs={catalogsInfo}
           onUpdate={updateRRHHRow}
           onAddCuota={addRRHHAtCuota}
           onRemove={removeRRHHRow}
@@ -385,7 +385,7 @@ export default function F2Form({ expedienteId, onVerResultado }: Props) {
               </div>
               <F2OtrosTable
                 rows={mesFiltrado}
-                catalogs={catalogsTable}
+                catalogs={catalogsInfo}
                 onUpdate={updateOtrosRow}
                 onAdd={() => addOtrosRow(mes)}
                 onRemove={removeOtrosRow}

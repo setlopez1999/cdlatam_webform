@@ -109,13 +109,13 @@ export function mapDbActaToF1(acta: Record<string, unknown> | null): {
     representanteLegal: String(acta.representanteLegal ?? ""),
     representanteDni: String(acta.representanteDni ?? ""),
     representanteEmail: String(acta.representanteEmail ?? ""),
-    representanteTelefonoFijo: String(acta.representanteFono ?? ""),
+    ...splitPhone(String(acta.representanteFono ?? "")),
     contactoTecnico: String(acta.contactoTecnico ?? ""),
     contactoTecnicoEmail: String(acta.contactoTecnicoEmail ?? ""),
-    contactoTecnicoTelefonoFijo: String(acta.contactoTecnicoFono ?? ""),
+    ...splitPhone(String(acta.contactoTecnicoFono ?? ""), "contactoTecnico"),
     contactoFacturacion: String(acta.contactoFacturacion ?? ""),
     contactoFacturacionEmail: String(acta.contactoFacturacionEmail ?? ""),
-    contactoFacturacionTelefonoFijo: String(acta.contactoFacturacionFono ?? ""),
+    ...splitPhone(String(acta.contactoFacturacionFono ?? ""), "contactoFacturacion"),
     serviciosContratados: Array.isArray(acta.serviciosContratados)
       ? (acta.serviciosContratados as F1Data["serviciosContratados"])
       : [],
@@ -279,4 +279,16 @@ export function mapResumenRowToExpediente(row: ExpedienteResumenRow): Expediente
     f2,
     f3: { status: f3.status },
   };
+}
+
+/** Parte un string "fijo / móvil" en los campos TelefonoFijo y TelefonoMovil. */
+function splitPhone(val: string, prefix = "representante"): Partial<F1Data> {
+  const idx = val.indexOf(" / ");
+  if (idx === -1) {
+    return { [`${prefix}TelefonoFijo`]: val } as unknown as Partial<F1Data>;
+  }
+  return {
+    [`${prefix}TelefonoFijo`]: val.slice(0, idx),
+    [`${prefix}TelefonoMovil`]: val.slice(idx + 3),
+  } as unknown as Partial<F1Data>;
 }
