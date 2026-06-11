@@ -70,7 +70,6 @@ type AuditRow = {
   entity: string;
   entityId: number | null;
   expedienteId: number | null;
-  actaCodigo: string | null;
   changes: unknown;
   ip: string | null;
   createdAt: Date;
@@ -144,8 +143,7 @@ export default function AuditLog() {
       log.action.toLowerCase().includes(q) ||
       log.entity.toLowerCase().includes(q) ||
       String(log.userId ?? "").includes(q) ||
-      String(log.expedienteId ?? "").includes(q) ||
-      (log.actaCodigo?.toLowerCase().includes(q) ?? false)
+      String(log.expedienteId ?? "").includes(q)
     );
   });
 
@@ -233,7 +231,6 @@ export default function AuditLog() {
                 <TableHead>Entidad</TableHead>
                 <TableHead className="w-[72px]">Ent. ID</TableHead>
                 <TableHead className="w-[72px]">Exp. ID</TableHead>
-                <TableHead className="w-[100px]">Acta N°</TableHead>
                 <TableHead className="w-[120px]">IP</TableHead>
                 <TableHead className="text-right w-[80px]">Detalles</TableHead>
               </TableRow>
@@ -241,13 +238,13 @@ export default function AuditLog() {
             <TableBody>
               {isLoading && !data ? (
                 <TableRow>
-                  <TableCell colSpan={10} className="h-32 text-center text-muted-foreground">
+                  <TableCell colSpan={9} className="h-32 text-center text-muted-foreground">
                     Cargando registros…
                   </TableCell>
                 </TableRow>
               ) : filteredLogs.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={10} className="h-32 text-center text-muted-foreground">
+                  <TableCell colSpan={9} className="h-32 text-center text-muted-foreground">
                     No se encontraron registros en este rango.
                   </TableCell>
                 </TableRow>
@@ -292,9 +289,6 @@ export default function AuditLog() {
                     </TableCell>
                     <TableCell className="text-xs text-muted-foreground font-mono">
                       {log.expedienteId ?? "—"}
-                    </TableCell>
-                    <TableCell className="text-xs text-muted-foreground font-mono">
-                      {log.actaCodigo || "—"}
                     </TableCell>
                     <TableCell className="text-[10px] font-mono text-muted-foreground truncate max-w-[120px]" title={log.ip ?? ""}>
                       {log.ip || "—"}
