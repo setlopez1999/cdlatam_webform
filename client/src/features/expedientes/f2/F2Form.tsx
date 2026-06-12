@@ -119,8 +119,9 @@ export default function F2Form({ expedienteId, onVerResultado }: Props) {
       plazos: catalogs?.plazos as { value: string; label: string }[] | undefined,
       cecos: catalogs?.cecos as { value: string; label: string }[] | undefined,
       nombres: catalogs?.nombres as { value: string; label: string }[] | undefined,
+      preventas: catalogs?.preventas as { value: string; label: string }[] | undefined,
     }),
-    [catalogs?.monedas, catalogs?.paises, catalogs?.plazos, catalogs?.cecos, catalogs?.nombres],
+    [catalogs?.monedas, catalogs?.paises, catalogs?.plazos, catalogs?.cecos, catalogs?.nombres, catalogs?.preventas],
   );
 
   const catalogsTable = useMemo(

@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import { trpc } from "@/lib/trpc";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -6,7 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { Search, Plus, Edit2, Trash2, ArrowUpDown, Power } from "lucide-react";
+import { Search, Plus, Edit2, Trash2, ArrowUpDown, Power, ChevronRight } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { CatalogConfig } from "@/config/catalogConfig";
 import { toast } from "sonner";
@@ -14,6 +14,33 @@ import { parseErrorMessage } from "@/lib/errorUtils";
 import { slugifyForKey, uniqueKeyFromBase } from "@/lib/slugifyKey";
 
 export function CatalogCrudView({ config }: { config: CatalogConfig }) {
+  const SHOW_SCROLL_HINT = true;
+
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const [canScroll, setCanScroll] = useState(false);
+  const [isAtEnd, setIsAtEnd] = useState(false);
+
+  useEffect(() => {
+    if (!SHOW_SCROLL_HINT) return;
+    const el = wrapperRef.current;
+    if (!el) return;
+    const check = () => {
+      const can = el.scrollWidth > el.clientWidth;
+      setCanScroll(can);
+      setIsAtEnd(!can || el.scrollLeft + el.clientWidth >= el.scrollWidth - 2);
+    };
+    check();
+    const observer = new ResizeObserver(check);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  const handleScroll = useCallback(() => {
+    const el = wrapperRef.current;
+    if (!el) return;
+    setIsAtEnd(el.scrollLeft + el.clientWidth >= el.scrollWidth - 2);
+  }, []);
+
   const [search, setSearch] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -366,76 +393,86 @@ export function CatalogCrudView({ config }: { config: CatalogConfig }) {
       )}
 
       {/* Table Data Wrapper */}
-      <div className="bg-[#1a1f2e] border border-white/5 rounded-xl overflow-x-auto shadow-sm">
-        {filteredRecords.length === 0 ? (
-          <div className="flex flex-col items-center justify-center p-12 text-center text-slate-500">
-            <Search className="w-12 h-12 mb-4 text-slate-600 opacity-50" />
-            <p className="text-lg font-medium text-slate-400">No hay registros</p>
-            <p className="text-sm">Agrega un nuevo registro o intenta con otra búsqueda.</p>
-          </div>
-        ) : (
-          <table className="w-full text-sm text-left">
-            <thead className="bg-[#242b3d] text-xs uppercase text-slate-400 border-b border-white/10">
-              <tr>
-                <th className="px-5 py-3.5 w-12 text-center">
-                  <Checkbox 
-                    checked={filteredRecords.length > 0 && selectedIds.length === filteredRecords.length}
-                    onCheckedChange={handleSelectAll}
-                    aria-label="Seleccionar todos"
-                    className="border-white/30 data-[state=checked]:bg-blue-500 data-[state=checked]:border-blue-500"
-                  />
-                </th>
-                {displayFields.map((field) => (
-                  <th key={field.key} className="px-5 py-3.5 font-semibold tracking-wider">
-                    <div className="flex items-center gap-1.5 cursor-pointer hover:text-white transition-colors">
-                      {field.label}
-                      <ArrowUpDown className="w-3 h-3 opacity-50" />
-                    </div>
-                  </th>
-                ))}
-                <th className="px-5 py-3.5 text-right font-semibold tracking-wider sticky right-0 bg-[#242b3d] z-10 shadow-[-8px_0_12px_rgba(0,0,0,0.3)]">Acciones</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-white/5">
-              {filteredRecords.map((record: any, idx: number) => (
-                <tr key={record.id} className={`hover:bg-white/[0.04] transition-colors group ${selectedIds.includes(record.id) ? 'bg-blue-500/[0.08]' : ''}`}>
-                  <td className="px-5 py-3 text-center">
-                    <Checkbox
-                      checked={selectedIds.includes(record.id)}
-                      onCheckedChange={(c) => handleSelectOne(record.id, Boolean(c))}
-                      aria-label={`Seleccionar fila ${idx}`}
+      <div className="relative">
+        {SHOW_SCROLL_HINT && canScroll && !isAtEnd && (
+          <>
+            <div className="absolute right-0 top-0 bottom-0 w-16 bg-gradient-to-l from-[#1a1f2e] to-transparent pointer-events-none z-20 rounded-r-xl" />
+            <div className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400/70 animate-pulse pointer-events-none z-20">
+              <ChevronRight className="w-5 h-5" />
+            </div>
+          </>
+        )}
+        <div ref={wrapperRef} onScroll={handleScroll} className="bg-[#1a1f2e] border border-white/5 rounded-xl overflow-x-auto shadow-sm">
+          {filteredRecords.length === 0 ? (
+            <div className="flex flex-col items-center justify-center p-12 text-center text-slate-500">
+              <Search className="w-12 h-12 mb-4 text-slate-600 opacity-50" />
+              <p className="text-lg font-medium text-slate-400">No hay registros</p>
+              <p className="text-sm">Agrega un nuevo registro o intenta con otra búsqueda.</p>
+            </div>
+          ) : (
+            <table className="w-full text-sm text-left">
+              <thead className="bg-[#242b3d] text-xs uppercase text-slate-400 border-b border-white/10">
+                <tr>
+                  <th className="px-5 py-3.5 w-12 text-center">
+                    <Checkbox 
+                      checked={filteredRecords.length > 0 && selectedIds.length === filteredRecords.length}
+                      onCheckedChange={handleSelectAll}
+                      aria-label="Seleccionar todos"
                       className="border-white/30 data-[state=checked]:bg-blue-500 data-[state=checked]:border-blue-500"
                     />
-                  </td>
+                  </th>
                   {displayFields.map((field) => (
-                    <td key={field.key} className="px-5 py-3 whitespace-nowrap text-slate-300 font-medium">
-                      {field.type === "boolean" ? (
-                        <div className={`w-2.5 h-2.5 rounded-full ${record[field.key] ? "bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.4)]" : "bg-red-500"}`}></div>
-                      ) : field.type === "select" && field.options ? (
-                        field.options.find((o: any) => String(o.value) === String(record[field.key]))?.label || record[field.key] || <span className="text-slate-600">-</span>
-                      ) : (
-                        record[field.key] || <span className="text-slate-600">-</span>
-                      )}
-                    </td>
+                    <th key={field.key} className="px-5 py-3.5 font-semibold tracking-wider">
+                      <div className="flex items-center gap-1.5 cursor-pointer hover:text-white transition-colors">
+                        {field.label}
+                        <ArrowUpDown className="w-3 h-3 opacity-50" />
+                      </div>
+                    </th>
                   ))}
-                  <td className="px-5 py-3 whitespace-nowrap text-right sticky right-0 bg-[#1a1f2e] group-hover:bg-[#1f2537] z-10 shadow-[-8px_0_12px_rgba(0,0,0,0.25)] transition-colors">
-                    <div className="flex items-center justify-end gap-2">
-                      <Button variant="ghost" size="icon" onClick={() => openEdit(record)} className="h-8 w-8 text-blue-400 hover:text-blue-300 hover:bg-blue-500/10">
-                        <Edit2 className="w-4 h-4" />
-                      </Button>
-                      <Button variant="ghost" size="icon" onClick={() => toggleStatus(record)} title={record.activo ? "Desactivar" : "Activar"} className={`h-8 w-8 ${record.activo ? 'text-orange-400 hover:text-orange-300 hover:bg-orange-500/10' : 'text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10'}`}>
-                        <Power className="w-4 h-4" />
-                      </Button>
-                      <Button variant="ghost" size="icon" onClick={() => handleDelete(record.id)} title="Eliminar permanentemente" className="h-8 w-8 text-red-500 hover:text-red-400 hover:bg-red-500/10">
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  </td>
+                  <th className="px-5 py-3.5 text-right font-semibold tracking-wider sticky right-0 bg-[#242b3d] z-10 shadow-[-8px_0_12px_rgba(0,0,0,0.3)]">Acciones</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
+              </thead>
+              <tbody className="divide-y divide-white/5">
+                {filteredRecords.map((record: any, idx: number) => (
+                  <tr key={record.id} className={`hover:bg-white/[0.04] transition-colors group ${selectedIds.includes(record.id) ? 'bg-blue-500/[0.08]' : ''}`}>
+                    <td className="px-5 py-3 text-center">
+                      <Checkbox
+                        checked={selectedIds.includes(record.id)}
+                        onCheckedChange={(c) => handleSelectOne(record.id, Boolean(c))}
+                        aria-label={`Seleccionar fila ${idx}`}
+                        className="border-white/30 data-[state=checked]:bg-blue-500 data-[state=checked]:border-blue-500"
+                      />
+                    </td>
+                    {displayFields.map((field) => (
+                      <td key={field.key} className="px-5 py-3 whitespace-nowrap text-slate-300 font-medium">
+                        {field.type === "boolean" ? (
+                          <div className={`w-2.5 h-2.5 rounded-full ${record[field.key] ? "bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.4)]" : "bg-red-500"}`}></div>
+                        ) : field.type === "select" && field.options ? (
+                          field.options.find((o: any) => String(o.value) === String(record[field.key]))?.label || record[field.key] || <span className="text-slate-600">-</span>
+                        ) : (
+                          record[field.key] || <span className="text-slate-600">-</span>
+                        )}
+                      </td>
+                    ))}
+                    <td className="px-5 py-3 whitespace-nowrap text-right sticky right-0 bg-[#1a1f2e] group-hover:bg-[#1f2537] z-10 shadow-[-8px_0_12px_rgba(0,0,0,0.25)] transition-colors">
+                      <div className="flex items-center justify-end gap-2">
+                        <Button variant="ghost" size="icon" onClick={() => openEdit(record)} className="h-8 w-8 text-blue-400 hover:text-blue-300 hover:bg-blue-500/10">
+                          <Edit2 className="w-4 h-4" />
+                        </Button>
+                        <Button variant="ghost" size="icon" onClick={() => toggleStatus(record)} title={record.activo ? "Desactivar" : "Activar"} className={`h-8 w-8 ${record.activo ? 'text-orange-400 hover:text-orange-300 hover:bg-orange-500/10' : 'text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10'}`}>
+                          <Power className="w-4 h-4" />
+                        </Button>
+                        <Button variant="ghost" size="icon" onClick={() => handleDelete(record.id)} title="Eliminar permanentemente" className="h-8 w-8 text-red-500 hover:text-red-400 hover:bg-red-500/10">
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
       </div>
 
       <div className="flex justify-between items-center text-xs text-slate-500 px-2">

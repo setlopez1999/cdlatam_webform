@@ -373,6 +373,12 @@ export const catalogNombres = sqliteTable("catalog_nombres", {
   activo: integer("activo").default(1).notNull(),
 });
 
+export const catalogPreventa = sqliteTable("catalog_preventa", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  valor: text("valor").notNull().unique(),
+  activo: integer("activo").default(1).notNull(),
+});
+
 /** Plantillas para la sección Consideraciones del Acta (F1); ordenadas por `orden`. */
 export const catalogConsideracionesComerciales = sqliteTable("catalog_consideraciones_comerciales", {
   id: integer("id").primaryKey({ autoIncrement: true }),
@@ -420,6 +426,7 @@ export type CatalogCeco = typeof catalogCecos.$inferSelect;
 export type CatalogDepartamento = typeof catalogDepartamentos.$inferSelect;
 export type CatalogArea = typeof catalogAreas.$inferSelect;
 export type CatalogNombre = typeof catalogNombres.$inferSelect;
+export type CatalogPreventa = typeof catalogPreventa.$inferSelect;
 export type CatalogConsideracionComercial = typeof catalogConsideracionesComerciales.$inferSelect;
 export type CatalogImplementacionItem = typeof catalogImplementacionItems.$inferSelect;
 // ─── Expedientes (contenedor de actas y evaluaciones) ────────────────────────

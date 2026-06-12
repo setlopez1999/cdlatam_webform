@@ -525,6 +525,7 @@ async function buildActaPdfBytes(acta: ActaData, opts: ActaPdfExportOpts = {}): 
   ], margin, y, contentWidth);
   y = drawFieldRow(doc, lo, [
     { label: "Dirección Comercial", value: acta.direccionComercial },
+    { label: "País", value: acta.pais },
   ], margin, y, contentWidth);
 
   // ── 4. Datos de contacto ────────────────────────────────────────────────
@@ -664,7 +665,7 @@ async function buildActaPdfBytes(acta: ActaData, opts: ActaPdfExportOpts = {}): 
   // ── 10. Firma del Representante Legal ───────────────────────────────────
   // Dibujada al final de la página (posicion fija)
   const firmaW = 70;
-  const firmaHeight = Math.max(4, spacing) + lineHeight + lineHeight + 1;
+  const firmaHeight = Math.max(4, spacing) + lineHeight + lineHeight + lineHeight + 1;
   const firmaY = pageHeight - margin - 10 - firmaHeight;
   doc.setDrawColor(...COLOR_TEXT);
   doc.setLineWidth(0.3);
@@ -677,6 +678,7 @@ async function buildActaPdfBytes(acta: ActaData, opts: ActaPdfExportOpts = {}): 
   doc.setFontSize(fontSize.small);
   doc.setTextColor(...COLOR_GRAY);
   doc.text("Representante Legal", margin + firmaW / 2, firmaY + lineHeight + lineHeight, { align: "center" });
+  doc.text(acta.razonSocial || "", margin + firmaW / 2, firmaY + lineHeight + lineHeight + lineHeight, { align: "center" });
 
   // ── 11. Footer en cada página ───────────────────────────────────────────
   const totalPages = doc.getNumberOfPages();
@@ -783,46 +785,121 @@ function drawContactGrid(
   y: number,
   width: number,
 ): number {
+  const ENABLE_TEXT_WRAP = true;
   const colW = width / groups.length;
   const maxFields = Math.max(...groups.map(g => g.fields.length));
   const rowH = lo.compact ? 3.8 : 4.5;
   const headerH = lo.compact ? 8 : 10;
-  const gridH = headerH + maxFields * rowH + 2;
-  y = ensureSpace(doc, y, gridH, lo);
+
+  if (!ENABLE_TEXT_WRAP) {
+    const labelW = 30;
+    const gridH = headerH + maxFields * rowH + 2;
+    y = ensureSpace(doc, y, gridH, lo);
+    groups.forEach((group, gi) => {
+      const cx = x + gi * colW;
+      doc.setFontSize(lo.fontSize.small);
+      doc.setTextColor(...COLOR_BRAND);
+      doc.setFont("helvetica", "bold");
+      doc.text(String(group.title), cx + 2, y + (lo.compact ? 3 : 4));
+      group.fields.forEach((f, fi) => {
+        const fy = y + (lo.compact ? 6 : 7) + fi * rowH;
+        doc.setFontSize(lo.fontSize.tiny);
+        doc.setTextColor(...COLOR_GRAY);
+        doc.setFont("helvetica", "normal");
+        doc.text(`${f.label}:`, cx + 2, fy);
+        doc.setFontSize(lo.fontSize.small);
+        doc.setTextColor(...COLOR_TEXT);
+        doc.setFont("helvetica", "normal");
+        const value = f.value == null || f.value === "" ? " " : String(f.value);
+        const valueW = colW - labelW - 4;
+        if (valueW > 8) {
+          const lines = doc.splitTextToSize(value, Math.max(1, valueW));
+          doc.text(lines[0] ?? " ", cx + 2 + labelW, fy);
+        } else {
+          doc.text(value.length > 15 ? value.substring(0, 15) + "\u2026" : value, cx + 2 + labelW, fy);
+        }
+      });
+    });
+    doc.setDrawColor(209, 213, 219);
+    doc.setLineWidth(0.2);
+    for (let gi = 1; gi < groups.length; gi++) {
+      const cx = x + gi * colW;
+      doc.line(cx, y + 2, cx, y + gridH - 1);
+    }
+    doc.line(x, y + gridH - 1, x + width, y + gridH - 1);
+    return y + gridH + (lo.compact ? 2 : 3);
+  }
+
+  // ═══ Modo dinámico: label y value en líneas separadas, sin sangría ═══
+  const valueW = Math.max(1, colW - 4);
+
+  // Pre-calcular splits de texto con la fuente correcta
+  doc.setFontSize(lo.fontSize.small);
+  doc.setFont("helvetica", "normal");
+  type CellPrep = { label: string; lines: string[] };
+  const grid: CellPrep[][] = groups.map(group =>
+    group.fields.map(f => {
+      const val = f.value == null || f.value === "" ? " " : String(f.value);
+      return { label: `${f.label}:`, lines: doc.splitTextToSize(val, valueW) };
+    })
+  );
+
+  // Altura dinámica por fila — label + N líneas de value
+  const fieldRowHeights: number[] = [];
+  for (let fi = 0; fi < maxFields; fi++) {
+    let maxLines = 1;
+    for (let gi = 0; gi < groups.length; gi++) {
+      if (fi < grid[gi].length) {
+        maxLines = Math.max(maxLines, grid[gi][fi].lines.length);
+      }
+    }
+    fieldRowHeights.push(lo.lineHeight + maxLines * lo.lineHeight + 0.3);
+  }
+
+  const totalGridH = headerH + fieldRowHeights.reduce((a, b) => a + b, 0) + 2;
+  y = ensureSpace(doc, y, totalGridH, lo);
+
+  // Títulos de las columnas
   groups.forEach((group, gi) => {
     const cx = x + gi * colW;
     doc.setFontSize(lo.fontSize.small);
     doc.setTextColor(...COLOR_BRAND);
     doc.setFont("helvetica", "bold");
     doc.text(String(group.title), cx + 2, y + (lo.compact ? 3 : 4));
-    group.fields.forEach((f, fi) => {
-      const fy = y + (lo.compact ? 6 : 7) + fi * rowH;
+  });
+
+  // Filas con altura variable — label y value en líneas separadas
+  let cursorY = y + (lo.compact ? 6 : 7);
+  for (let fi = 0; fi < maxFields; fi++) {
+    for (let gi = 0; gi < groups.length; gi++) {
+      if (fi >= grid[gi].length) continue;
+      const cell = grid[gi][fi];
+      const cx = x + gi * colW;
       doc.setFontSize(lo.fontSize.tiny);
       doc.setTextColor(...COLOR_GRAY);
       doc.setFont("helvetica", "normal");
-      doc.text(`${f.label}:`, cx + 2, fy);
+      doc.text(cell.label, cx + 2, cursorY);
       doc.setFontSize(lo.fontSize.small);
       doc.setTextColor(...COLOR_TEXT);
       doc.setFont("helvetica", "normal");
-      const value = f.value == null || f.value === "" ? " " : String(f.value);
-      const labelW = 30;
-      const valueW = colW - labelW - 4;
-      if (valueW > 8) {
-        const lines = doc.splitTextToSize(value, Math.max(1, valueW));
-        doc.text(lines[0] ?? " ", cx + 2 + labelW, fy);
-      } else {
-        doc.text(value.length > 15 ? value.substring(0, 15) + "\u2026" : value, cx + 2 + labelW, fy);
+      for (let li = 0; li < cell.lines.length; li++) {
+        doc.text(cell.lines[li], cx + 2, cursorY + lo.lineHeight + li * lo.lineHeight);
       }
-    });
-  });
+    }
+    cursorY += fieldRowHeights[fi];
+  }
+
+  const gridEndY = y + totalGridH - 1;
+
+  // Bordes verticales entre columnas + línea inferior
   doc.setDrawColor(209, 213, 219);
   doc.setLineWidth(0.2);
   for (let gi = 1; gi < groups.length; gi++) {
-    const cx = x + gi * colW;
-    doc.line(cx, y + 2, cx, y + gridH - 1);
+    doc.line(x + gi * colW, y + 2, x + gi * colW, gridEndY);
   }
-  doc.line(x, y + gridH - 1, x + width, y + gridH - 1);
-  return y + gridH + (lo.compact ? 2 : 3);
+  doc.line(x, gridEndY, x + width, gridEndY);
+
+  return gridEndY + 1 + (lo.compact ? 2 : 3);
 }
 
 function drawPagoTable(
@@ -925,7 +1002,7 @@ function buildResultadoHTML(
       <thead><tr><th>Concepto</th><th class="text-right">Monto</th></tr></thead>
       <tbody>
         <tr><td>Distribuci\u00f3n ${etiquetaGim} (${pctGim}%)</td><td class="text-right">${fmt(resultado.distribucion?.gim?.mes1||0)}</td></tr>
-        <tr><td>Groupalnet SpA (${pctGp}%)</td><td class="text-right">${fmt(resultado.distribucion?.gp?.mes1||0)}</td></tr>
+        <tr><td>GROUPALNET SPA (${pctGp}%)</td><td class="text-right">${fmt(resultado.distribucion?.gp?.mes1||0)}</td></tr>
         <tr><td>Facturaci\u00f3n Bruto</td><td class="text-right">${fmt(resultado.facturacion?.bruto?.mes1||0)}</td></tr>
         <tr><td>IVA (${pctIva}%)</td><td class="text-right">${fmt(resultado.facturacion?.impuesto?.mes1||0)}</td></tr>
         <tr class="total-row"><td>Facturaci\u00f3n Neto</td><td class="text-right">${fmt(resultado.facturacion?.neto?.mes1||0)}</td></tr>

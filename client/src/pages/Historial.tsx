@@ -199,7 +199,7 @@ function ResultadosExpandidos({ exp }: { exp: Expediente }) {
                     ))}
                   </tr>
                   <tr className="border-b border-border/30 bg-muted/10">
-                    <td className="px-3 py-1.5 pl-5 font-medium">Groupalnet SpA</td>
+                    <td className="px-3 py-1.5 pl-5 font-medium">GROUPALNET SPA</td>
                     <td className="px-3 py-1.5 text-center text-muted-foreground">{(r.distribucion.gp.porcentaje * 100).toFixed(0)}%</td>
                     {meses.map(mes => (
                       <td key={mes} className="px-3 py-1.5 text-center">{fmtCell(getMesValue(r.distribucion.gp, mes))}</td>
@@ -210,7 +210,7 @@ function ResultadosExpandidos({ exp }: { exp: Expediente }) {
               {!f1Guardado && (
                 <tr className="bg-amber-500/5">
                   <td colSpan={colSpanMeses} className="px-3 py-2 text-[11px] text-amber-700/90">
-                    Guarde el Acta (F1) para ver la distribución ({etiquetaGim} / Groupalnet SpA) y la facturación inter-empresa.
+                    Guarde el Acta (F1) para ver la distribución ({etiquetaGim} / GROUPALNET SPA) y la facturación inter-empresa.
                   </td>
                 </tr>
               )}

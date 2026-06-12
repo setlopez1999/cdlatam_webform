@@ -29,6 +29,7 @@ interface Props {
     cecos?: CatalogItem[];
     areas?: CatalogItem[];
     nombres?: CatalogItem[];
+    preventas?: CatalogItem[];
   };
   /** Sugerencias de F1 para pre-llenado */
   f1Suggestions?: {
@@ -213,14 +214,14 @@ function F2InfoGeneralInner({ data, onUpdate, catalogs, f1Suggestions, onImporta
           )}
         </FieldGroup>
 
-        {/* Preventa — select desde catalog_nombres (misma fuente que F1 Atención) */}
+        {/* Preventa — select desde catalog_preventa */}
         <FieldGroup label="Preventa">
-          {nombresForSelect?.length ? (
+          {catalogs?.preventas?.length ? (
             <Select value={data.preventa} onValueChange={v => onUpdate({ preventa: v })}>
               <SelectTrigger><SelectValue placeholder="Responsable de preventa..." /></SelectTrigger>
               <SelectContent position="popper" sideOffset={4} className="z-[200]">
-                {nombresForSelect.map(n => (
-                  <SelectItem key={n.value} value={n.value}>{n.label}</SelectItem>
+                {catalogs.preventas.map(p => (
+                  <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>
                 ))}
               </SelectContent>
             </Select>

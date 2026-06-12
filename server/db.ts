@@ -18,7 +18,7 @@ import {
   catalogMonedas, catalogPaises, catalogEmpresas, catalogDocumentoIdentidad,
   catalogUnidadesNegocio, catalogSoluciones, catalogDetalleServicio,
   catalogTipoVenta, catalogPlazos, catalogDocumentos, catalogCecos,
-  catalogDepartamentos, catalogAreas, catalogNombres, catalogConsideracionesComerciales,
+  catalogDepartamentos, catalogAreas, catalogNombres, catalogPreventa, catalogConsideracionesComerciales,
   catalogImplementacionItems,
   // Gestor de Horarios
   schEmpleados, type SchEmpleado, type InsertSchEmpleado,
@@ -92,6 +92,7 @@ const FIXED_CATALOGS = [
   { tableName: "deptos",     realTable: "catalog_departamentos",       title: "Departamentos" },
   { tableName: "areas",      realTable: "catalog_areas",               title: "Áreas" },
   { tableName: "nombres",    realTable: "catalog_nombres",             title: "Nombres" },
+  { tableName: "preventas",  realTable: "catalog_preventa",            title: "Preventa" },
   {
     tableName: "consideraciones",
     realTable: "catalog_consideraciones_comerciales",
@@ -172,6 +173,7 @@ const catalogMap: Record<string, any> = {
   deptos: catalogDepartamentos,
   areas: catalogAreas,
   nombres: catalogNombres,
+  preventas: catalogPreventa,
   consideraciones: catalogConsideracionesComerciales,
   impl_items: catalogImplementacionItems,
 };

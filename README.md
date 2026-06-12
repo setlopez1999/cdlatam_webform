@@ -96,7 +96,33 @@ Cuando agregues, cambies o elimines tablas/columnas en `drizzle/schema.ts`:
 
 ## 4. Cómo Ejecutar el Proyecto
 
-### 4.1. Ejecución Local (Sin Docker)
+### 4.1. Flujo de Desarrollo con Drizzle (Schema + Migraciones)
+
+Al modificar tablas en los archivos de schema (`drizzle/schema.ts` o archivos en `drizzle/`), sigue este orden:
+
+1. **Asegúrate de que el servidor no esté corriendo** (Ctrl+C si está en dev).
+
+2. **Ejecutar migración**:
+   ```bash
+   npm run db:push
+   ```
+   Esto ejecuta `drizzle-kit generate && drizzle-kit migrate`:
+   - **generate**: Crea el archivo SQL en `drizzle/migrations/` basado en el nuevo schema.
+   - **migrate**: Aplica el SQL a `data/gestion.db`.
+
+3. **Eliminar el snapshot anterior** (para evitar conflictos en el próximo `db:push`):
+   ```bash
+   del drizzle\migrations\meta\0000_snapshot.json
+   ```
+
+4. **Iniciar el servidor**:
+   ```bash
+   npm run dev
+   ```
+
+> **Nota**: El snapshot (`0000_snapshot.json`) se regenera automáticamente al correr `db:push` la próxima vez. Borrarlo evita que Drizzle detecte cambios fantasma.
+
+### 4.2. Ejecución Local (Sin Docker)
 
 Ideal para desarrollo y pruebas rápidas.
 
@@ -120,7 +146,7 @@ Ideal para desarrollo y pruebas rápidas.
     Copia `.env.example` a `.env` y asegúrate de que contenga las claves básicas.
 
 4.  **Borrar BD antigua (si existe)**:
-    Si has corrido el proyecto antes, borra `gestion.db` para evitar conflictos de migración.
+    Si has corrido el proyecto antes, borra `data/gestion.db` para evitar conflictos de migración.
 
 5.  **Ejecutar el servidor de desarrollo**:
     ```bash
@@ -129,7 +155,21 @@ Ideal para desarrollo y pruebas rápidas.
 
 6.  **Abrir en el navegador**: [http://localhost:3000](http://localhost:3000)
 
-### 4.2. Ejecución Local (Con Docker)
+### 4.3. Flujo Completo de Desarrollo (Schema + Migraciones)
+
+Si vas a modificar tablas, combina ambos flujos:
+
+```bash
+# 1. Arrancar dev una vez para que cree la BD inicial
+npm run dev
+
+# 2. Detener (Ctrl+C), modificar schema, migrar y seguir:
+npm run db:push
+del drizzle\migrations\meta\0000_snapshot.json
+npm run dev
+```
+
+### 4.4. Ejecución con Docker (Producción/Simulación)
 
 Simula el entorno de producción en tu máquina local.
 
@@ -157,6 +197,8 @@ Simula el entorno de producción en tu máquina local.
 
     > **Nota**: Si el puerto 3002 está ocupado, puedes usar otro. Por ejemplo, para usar el 3003:
     > `docker-compose run --rm -p 3003:3000 web`
+
+> **Importante para Docker**: Si modificaste el schema de la BD, los cambios se aplican dentro del contenedor al arrancar. Para regenerar desde cero, borra `data/gestion.db` (en tu máquina local, no dentro del contenedor) antes de levantar el servicio.
 
 ---
 
