@@ -18,7 +18,7 @@ import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/FormSection";
 import { FileText, Save, RefreshCw, Download } from "lucide-react";
 import { trpc } from "@/lib/trpc";
-import { createActaPdfBlob, buildFeaturesResumidoPdfBytes, downloadPdfBlob } from "@/lib/pdfExport";
+import { createActaPdfBlob, buildFeaturesResumidoPdfBytes, downloadPdfBlob } from "@/lib/pdf";
 import { joinPhonePair } from "@/lib/formatters";
 import { ActaPdfPreviewDialog } from "@/components/ActaPdfPreviewDialog";
 import { useF1 } from "./useF1";
