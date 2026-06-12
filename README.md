@@ -8,7 +8,7 @@ Este documento provee una guía completa sobre la arquitectura, seguridad, base 
 
 El sistema es una aplicación full-stack diseñada para la gestión de formularios (Actas y Evaluaciones de Proyecto) y catálogos de datos maestros. Utiliza las siguientes tecnologías:
 
-- **Frontend**: React 18 + TypeScript + Vite
+- **Frontend**: React 19 + TypeScript + Vite
 - **Backend**: Node.js + Express + tRPC
 - **Base de Datos**: SQLite con Drizzle ORM
 - **Despliegue**: Docker + Nginx (como proxy reverso con SSL)
@@ -73,6 +73,25 @@ Las migraciones son scripts SQL que actualizan la estructura de la base de datos
 1.  Al arrancar, el servidor intenta aplicar las migraciones de Drizzle (`drizzle/migrations`).
 2.  Si esto falla (por ejemplo, si una base de datos está a medio migrar), el sistema tiene un **mecanismo de fallback**: ejecuta comandos `CREATE TABLE IF NOT EXISTS` para asegurar que todas las tablas existan y el servidor pueda arrancar sin errores.
 
+### 3.3. Flujo al modificar el esquema de BD
+
+Cuando agregues, cambies o elimines tablas/columnas en `drizzle/schema.ts`:
+
+1. **Editar** `drizzle/schema.ts`.
+2. **Regenerar migración y aplicarla en local**:
+   ```bash
+   npm run db:push
+   ```
+   (Ejecuta `drizzle-kit generate` + `drizzle-kit migrate`).
+3. **Hacer commit** del SQL generado (`drizzle/migrations/0000_current_schema.sql`).
+4. **Subir a GitHub**. Docker usará el SQL actualizado automáticamente al reconstruir.
+
+> **⚠️ En Windows**: Si `npm run db:push` genera un snapshot corrupto (`drizzle/migrations/meta/0000_snapshot.json` con `tables: {}`), hay que borrarlo manualmente y volver a ejecutar:
+> ```powershell
+> del .\drizzle\migrations\meta\0000_snapshot.json
+> npm run db:push
+> ```
+
 ---
 
 ## 4. Cómo Ejecutar el Proyecto
@@ -92,8 +111,10 @@ Ideal para desarrollo y pruebas rápidas.
 
 2.  **Instalar dependencias**:
     ```bash
-    npm install --legacy-peer-deps
+    npm install
     ```
+
+    > El `.npmrc` ya tiene `legacy-peer-deps=true`, por lo que `npm install` lo usa automáticamente.
 
 3.  **Crear archivo `.env`**:
     Copia `.env.example` a `.env` y asegúrate de que contenga las claves básicas.
