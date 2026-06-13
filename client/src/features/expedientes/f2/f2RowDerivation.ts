@@ -181,8 +181,16 @@ export function deriveFilasOtros(stored: FilaOtros[], n: number, moneda: string)
   return result;
 }
 
+export type TcConversionMode = "divide" | "multiply";
+export let tcConversionMode: TcConversionMode = "divide";
+
+export function setTcConversionMode(mode: TcConversionMode) {
+  tcConversionMode = mode;
+}
+
 function applyTipoCambio(totalNeto: number, row: { tipoCambio?: number }): number {
-  return totalNeto * (row.tipoCambio || 1);
+  const tc = row.tipoCambio || 1;
+  return tcConversionMode === "divide" ? totalNeto / tc : totalNeto * tc;
 }
 
 export function recalcFilaCosto(row: FilaCosto, field: keyof FilaCosto, value: string | number): FilaCosto {
