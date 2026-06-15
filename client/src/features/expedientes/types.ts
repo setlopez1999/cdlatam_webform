@@ -279,4 +279,6 @@ export interface Expediente {
   f2: FormSlot<F2Data>;
   /** F3 — Resultados (solo estado, sin data: se calcula desde f2.data) */
   f3: { status: FormStatus };
+  /** Número real de acta en BD (autoincremental desde 10001). Usado para generar VS-10001 en PDF e Historial. */
+  serverNroActa?: number | null;
 }

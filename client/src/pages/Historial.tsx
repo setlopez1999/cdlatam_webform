@@ -17,6 +17,7 @@ import { Badge } from "@/components/ui/badge";
 import { useExpedienteStore } from "@/features/expedientes/store";
 import { mapResumenRowToExpediente } from "@/features/expedientes/fromServer";
 import type { Expediente } from "@/features/expedientes/types";
+import { buildActaCodigo } from "@shared/documentCodes";
 import { trpc } from "@/lib/trpc";
 import { getMesValue, mesesActivos } from "@/features/expedientes/f1/f1ImplementacionCuotas";
 import { calcularResultadoF3 } from "@/features/expedientes/types";
@@ -312,7 +313,15 @@ export function ExpedienteCard({
           <p className="text-sm font-semibold truncate">{exp.nombre}</p>
           <p className="text-xs text-muted-foreground">
             ID de exp: <span className="font-mono text-cyan-400/80 font-medium">#{exp.id}</span>
-            {exp.f1.data.noActa ? <span className="ml-2">· N° de acta: <span className="font-mono text-cyan-400/80 font-medium">{exp.f1.data.noActa}</span></span> : null}
+            {(() => {
+              const unidad = exp.f1.data?.serviciosContratados?.[0]?.unidadNegocio ?? "";
+              const codigo = exp.serverNroActa
+                ? buildActaCodigo("", exp.serverNroActa, unidad)
+                : exp.f1.data?.noActa || null;
+              return codigo
+                ? <span className="ml-2">· N° de acta: <span className="font-mono text-cyan-400/80 font-medium">{codigo}</span></span>
+                : null;
+            })()}
             {creadorDisplay ? (
               <span className="ml-2">· <span className="text-foreground/80">{creadorDisplay}</span></span>
             ) : creadorEliminado ? (

@@ -22,6 +22,7 @@ import { createActaPdfBlob, buildFeaturesResumidoPdfBytes, downloadPdfBlob } fro
 import { joinPhonePair } from "@/lib/formatters";
 import { ActaPdfPreviewDialog } from "@/components/ActaPdfPreviewDialog";
 import { useF1 } from "./useF1";
+import { useExpedienteStore } from "../store";
 import { useClausulasVigentes } from "./useClausulasVigentes";
 import { useFieldVisibility } from "@/hooks/useFieldVisibility";
 import { useCan } from "@/hooks/useCan";
@@ -147,6 +148,8 @@ interface Props {
 
 export default function F1Form({ expedienteId }: Props) {
   const { data, status, update, guardar, descartar, isSyncing } = useF1(expedienteId);
+  const { getExpediente } = useExpedienteStore();
+  const expedienteDelStore = getExpediente(expedienteId);
   // Visibilidad de campos sensibles — cuando el acta persista en BD, pasar data.creadorId
   const { canViewSensitiveFields } = useFieldVisibility(undefined);
   const can = useCan();
@@ -467,6 +470,9 @@ export default function F1Form({ expedienteId }: Props) {
           onClausulaError: (c) => failed.push(c.fileName),
           featuresResumidoBytes,
           singlePage: true,
+          // Número real de acta para generar VS-10001 en el membrete del PDF
+          serverNroActa: expedienteDelStore?.serverNroActa ?? null,
+          serverUnidadNegocio: data?.serviciosContratados?.[0]?.unidadNegocio ?? "",
         },
       );
       if (PDF_USE_NATIVE_PRINT) {

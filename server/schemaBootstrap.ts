@@ -324,4 +324,7 @@ export function ensureAllProjectTables(sqlite: SqliteExecLike): void {
   // Seed de descripciones técnicas (extraídas del PDF de features)
   // Solo actualiza registros con descripcion vacía para no sobreescribir ediciones manuales
   sqlite.exec(sqlSeedImplementacionDescripciones());
+  // Inicializar autoincrement de actas desde 10000 → primer nroActa = 10001
+  // INSERT OR IGNORE no sobreescribe si ya existe un valor mayor (BDs con actas previas)
+  sqlite.exec(`INSERT OR IGNORE INTO sqlite_sequence (name, seq) VALUES ('actas', 10000);`);
 }

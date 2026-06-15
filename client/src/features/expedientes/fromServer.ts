@@ -275,6 +275,8 @@ export function mapResumenRowToExpediente(row: ExpedienteResumenRow): Expediente
     f1,
     f2,
     f3: { status: f3.status },
+    // Número real de acta en BD — usado para generar VS-10001 en PDF e Historial
+    serverNroActa: (row.acta as { nroActa?: number | null } | null)?.nroActa ?? null,
   };
 }
 

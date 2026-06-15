@@ -7,11 +7,22 @@ function roundSize(v: number): number {
   return Math.round(v * 10) / 10;
 }
 
-export function effectiveNoActaForPdf(acta: ActaData, expedienteUuid?: string): string {
+export function effectiveNoActaForPdf(
+  acta: ActaData,
+  expedienteUuid?: string,
+  serverNroActa?: number | null,
+  serverUnidadNegocio?: string,
+): string {
+  // Prioridad 1: nroActa real de BD con prefijo por unidad de negocio (VS-10001)
+  if (serverNroActa && serverNroActa > 0) {
+    return buildActaCodigo("", serverNroActa, serverUnidadNegocio ?? "");
+  }
+  // Prioridad 2: noActa guardado en el acta (campo manual)
   const t = acta.noActa?.trim();
   if (t) return t;
+  // Prioridad 3: fallback hash del UUID
   const ex = expedienteUuid?.trim();
-  if (ex) return buildActaCodigo(ex);
+  if (ex) return buildActaCodigo(ex, undefined, serverUnidadNegocio ?? "");
   return "";
 }
 

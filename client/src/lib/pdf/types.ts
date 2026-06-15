@@ -21,6 +21,10 @@ export type ActaPdfExportOpts = {
   compact?: boolean;
   singlePage?: boolean;
   sections?: SectionFlags;
+  /** Número real de acta en BD (autoincremental desde 10001) para generar VS-10001 en el PDF */
+  serverNroActa?: number | null;
+  /** Primera unidad de negocio del acta para el prefijo VS/TX/IN/RD/HO */
+  serverUnidadNegocio?: string;
 };
 
 export interface PdfLayout {

@@ -1,11 +1,43 @@
 /**
- * Generador centralizado de codigos de documentos (cliente + servidor).
- * Cambiar solo aqui para adoptar nuevos formatos.
+ * Generador centralizado de códigos de documentos (cliente + servidor).
+ * Cambiar solo aquí para adoptar nuevos formatos.
  *
- * N° de Acta: consecutivo numérico de 6 dígitos, partiendo desde 001000.
- * Se asigna en BD al crear el expediente (autoincremental real).
- * Fallback: hash determinístico del UUID para expedientes sin nroActa en BD.
+ * N° de Acta: <PREFIJO>-<NÚMERO>
+ *   - PREFIJO: 2 letras según la Unidad de Negocio del primer servicio contratado
+ *   - NÚMERO:  correlativo desde 10001 (autoincremental real en BD)
+ *
+ * Ejemplos: VS-10001, TX-10002, IN-10003, RD-10004, HO-10005
+ *
+ * Si no hay Unidad de Negocio seleccionada → prefijo "XX"
+ * Si no hay nroActa en BD (expediente nuevo sin guardar) → fallback hash del UUID
  */
+
+// ── Mapa de prefijos por Unidad de Negocio ──────────────────────────────────
+// Clave: fragmento del nombre (case-insensitive). Valor: prefijo de 2 letras.
+const UNIDAD_PREFIJO_MAP: Array<{ match: string; prefix: string }> = [
+  { match: "vas",         prefix: "VS" },
+  { match: "tx channel",  prefix: "TX" },
+  { match: "tx",          prefix: "TX" },
+  { match: "ingeniería",  prefix: "IN" },
+  { match: "ingenieria",  prefix: "IN" },
+  { match: "respaldo",    prefix: "RD" },
+  { match: "hospitality", prefix: "HO" },
+];
+
+/**
+ * Devuelve el prefijo de 2 letras para una Unidad de Negocio.
+ * Si no coincide con ninguna entrada conocida, devuelve "XX".
+ */
+export function getUnidadNegocioPrefijo(unidadNegocio: string): string {
+  const lower = (unidadNegocio ?? "").toLowerCase().trim();
+  if (!lower) return "XX";
+  for (const entry of UNIDAD_PREFIJO_MAP) {
+    if (lower.includes(entry.match)) return entry.prefix;
+  }
+  return "XX";
+}
+
+// ── Helpers internos ─────────────────────────────────────────────────────────
 
 function numericHash(input: string): number {
   let hash = 2166136261;
@@ -19,7 +51,6 @@ function numericHash(input: string): number {
 function compactFromUuid(uuid: string): string {
   const clean = uuid.replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
   const core = (clean.slice(0, 6) || "EXP").padEnd(6, "X");
-  // checksum base36 de 4 chars para el código de expediente
   let hash = 2166136261;
   for (let i = 0; i < uuid.length; i++) {
     hash ^= uuid.charCodeAt(i);
@@ -34,15 +65,30 @@ export function buildExpedienteCodigo(uuid: string): string {
 }
 
 /**
- * Genera el N° de Acta como un número consecutivo de 6 dígitos (001000–999999).
- * Usa el nroActa real de BD si está disponible; fallback al hash del UUID.
+ * Genera el código visual del Acta: <PREFIJO>-<NÚMERO>
+ *
+ * @param expedienteUuid   UUID del expediente (fallback si no hay nroActa)
+ * @param nroActa          Número real de BD (autoincremental desde 10001)
+ * @param unidadNegocio    Primera Unidad de Negocio del acta (para el prefijo)
+ *
+ * Ejemplos:
+ *   buildActaCodigo("...", 10001, "VAS Solution (VS)") → "VS-10001"
+ *   buildActaCodigo("...", 10002, "TX Channel (TX)")   → "TX-10002"
+ *   buildActaCodigo("...", undefined, "")              → "XX-10001" (fallback hash)
  */
-export function buildActaCodigo(expedienteUuid: string, nroActa?: number | null): string {
+export function buildActaCodigo(
+  expedienteUuid: string,
+  nroActa?: number | null,
+  unidadNegocio?: string,
+): string {
+  const prefix = getUnidadNegocioPrefijo(unidadNegocio ?? "");
+
   if (nroActa && nroActa > 0) {
-    return String(nroActa).padStart(6, "0");
+    return `${prefix}-${nroActa}`;
   }
-  // Fallback: hash determinístico del UUID (para expedientes sin nroActa en BD)
+
+  // Fallback: hash determinístico del UUID (expediente nuevo sin guardar aún)
   const h = numericHash(expedienteUuid);
-  const num = 1000 + (h % 999000);
-  return String(num).padStart(6, "0");
+  const num = 10001 + (h % 89999); // rango 10001–99999
+  return `${prefix}-${num}`;
 }
