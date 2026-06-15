@@ -68,9 +68,9 @@ export async function createActaPdfBlob(
   const baseBytes = await buildActaPdfBytes(actaForPdf, opts);
   const merged = await PDFDocument.load(baseBytes);
 
-  // Filtrar el PDF estático de features (tipo features_full) ya que ahora se genera dinámicamente
+  // Filtrar el PDF estático de features (tipo 'features') ya que ahora se genera dinámicamente
   const clausulasOrdenadas = [...clausulas]
-    .filter(c => c.tipo !== "features_full")
+    .filter(c => c.tipo !== "features")
     .sort((a, b) => (a.ordenGlobal ?? 50) - (b.ordenGlobal ?? 50));
 
   const docsEnOrden: DocEntry[] = [];
