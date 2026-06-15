@@ -264,9 +264,6 @@ export function mapResumenRowToExpediente(row: ExpedienteResumenRow): Expediente
   const uAt = e.updatedAt as Date | string | number | null | undefined;
   const createdAt = cAt ? new Date(cAt).toISOString() : new Date().toISOString();
   const updatedAt = uAt ? new Date(uAt).toISOString() : createdAt;
-  // nro_acta real de BD — disponible tras el primer guardado del F1
-  const rawNroActa = row.acta ? (row.acta as Record<string, unknown>)["nro_acta"] : undefined;
-  const serverNroActa = typeof rawNroActa === "number" && rawNroActa > 0 ? rawNroActa : undefined;
   return {
     id: e.id,
     nombre: e.nombre,
@@ -275,7 +272,6 @@ export function mapResumenRowToExpediente(row: ExpedienteResumenRow): Expediente
     createdAt,
     updatedAt,
     deletedAt: null,
-    serverNroActa,
     f1,
     f2,
     f3: { status: f3.status },

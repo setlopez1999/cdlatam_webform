@@ -16,10 +16,6 @@ export type SectionFlags = {
 export type ActaPdfExportOpts = {
   onClausulaError?: (c: ClausulaParaPdf, err: unknown) => void;
   expedienteUuid?: string;
-  /** nroActa real de BD (autoincremental). Si se provee, se usa para generar el código VS-10001. */
-  serverNroActa?: number;
-  /** Primera unidad de negocio del acta (para generar el prefijo VS, TX, IN, etc.). */
-  serverUnidadNegocio?: string;
   featuresResumidoBytes?: Uint8Array;
   fontSizeScale?: number;
   compact?: boolean;

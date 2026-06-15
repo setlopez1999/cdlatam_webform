@@ -63,7 +63,7 @@ export async function createActaPdfBlob(
   clausulas: ClausulaParaPdf[] = [],
   opts: ActaPdfExportOpts = {},
 ): Promise<{ blob: Blob; filename: string }> {
-  const noActa = effectiveNoActaForPdf(acta, opts.expedienteUuid, opts.serverNroActa, opts.serverUnidadNegocio);
+  const noActa = effectiveNoActaForPdf(acta, opts.expedienteUuid);
   const actaForPdf: ActaData = { ...acta, noActa };
   const baseBytes = await buildActaPdfBytes(actaForPdf, opts);
   const merged = await PDFDocument.load(baseBytes);
