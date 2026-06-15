@@ -4,15 +4,13 @@ import {
   LOGO_NATURAL_W_PX,
   LOGO_NATURAL_H_PX,
   PDF_COLOR_GLOBAL,
-  COLOR_BRAND,
   COLOR_BRAND_DARK,
-  COLOR_GRADIENT_END,
   COLOR_TEXT,
   COLOR_GRAY,
   COLOR_LIGHT,
   resolveHeaderColor,
   fitImagePreserveAspectMm,
-  drawGradientBand,
+  drawHeaderBand,
 } from "./constants";
 import { ensureSpace, drawSectionTitle, drawFieldRow, drawIntroBox, drawContactGrid, drawPagoTable, drawBulletList } from "./draw-primitives";
 import { formatDate } from "../formatters";
@@ -39,9 +37,9 @@ export function drawHeaderSection(
   // Color de membrete: override > PDF_HEADER_COLOR > PDF_COLOR_GLOBAL
   const hColor = resolveHeaderColor(headerColor);
 
-  // Margen superior + franja: degradado horizontal azul oscuro → azul medio
-  drawGradientBand(doc, 0, y, pageWidth, TOP_MARGIN, hColor, COLOR_GRADIENT_END);
-  drawGradientBand(doc, 0, y + TOP_MARGIN, pageWidth, HEADER_H, hColor, COLOR_GRADIENT_END);
+  // Margen superior + franja (sólido o degradado según PDF_HEADER_USE_GRADIENT en constants.ts)
+  drawHeaderBand(doc, 0, y, pageWidth, TOP_MARGIN, hColor);
+  drawHeaderBand(doc, 0, y + TOP_MARGIN, pageWidth, HEADER_H, hColor);
 
   // Logo pre-compuesto más grande
   try {

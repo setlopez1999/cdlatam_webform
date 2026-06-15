@@ -1,7 +1,5 @@
 import {
   PDF_COLOR_GLOBAL,
-  COLOR_BRAND,
-  COLOR_GRADIENT_END,
   COLOR_GRAY,
   COLOR_TEXT,
   COLOR_LIGHT,
@@ -9,7 +7,7 @@ import {
   LOGO_NATURAL_H_PX,
   resolveHeaderColor,
   fitImagePreserveAspectMm,
-  drawGradientBand,
+  drawHeaderBand,
 } from "./constants";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -44,9 +42,9 @@ export function buildFeaturesUnoPdfBytes(
 
   // ── Función para dibujar el header en cada página ────────────────────────
   const drawHeader = () => {
-    // Margen superior + franja: degradado horizontal azul oscuro → azul medio
-    drawGradientBand(doc, 0, 0, pageWidth, TOP_MARGIN, hColor, COLOR_GRADIENT_END);
-    drawGradientBand(doc, 0, TOP_MARGIN, pageWidth, HEADER_H, hColor, COLOR_GRADIENT_END);
+    // Margen superior + franja (sólido o degradado según PDF_HEADER_USE_GRADIENT en constants.ts)
+    drawHeaderBand(doc, 0, 0, pageWidth, TOP_MARGIN, hColor);
+    drawHeaderBand(doc, 0, TOP_MARGIN, pageWidth, HEADER_H, hColor);
 
     // Centro de la franja
     const bandMid = TOP_MARGIN + HEADER_H / 2;
