@@ -64,6 +64,36 @@ export const PDF_HEADER_GRADIENT_END: [number, number, number] = COLOR_GRADIENT_
  */
 export const PDF_COLOR_GLOBAL: [number, number, number] = PDF_HEADER_COLOR;
 
+/**
+ * Colores derivados del color global — se calculan automáticamente.
+ * NO modificar manualmente; cambian solos al cambiar PDF_COLOR_GLOBAL.
+ *
+ * PDF_COLOR_DARK    → versión oscura del color global (títulos de sección, textos)
+ * PDF_COLOR_TINT    → fondo semitransparente (intro-box, fila total de tabla)
+ * PDF_COLOR_LIGHT_TINT → fondo muy claro (intro-box fill)
+ * PDF_COLOR_SUBTITLE   → texto secundario en membrete (casi blanco con tinte del color)
+ */
+export const PDF_COLOR_DARK: [number, number, number] = [
+  Math.max(0, PDF_COLOR_GLOBAL[0] - 20),
+  Math.max(0, PDF_COLOR_GLOBAL[1] - 20),
+  Math.max(0, PDF_COLOR_GLOBAL[2] - 20),
+];
+export const PDF_COLOR_TINT: [number, number, number] = [
+  Math.min(255, Math.round(PDF_COLOR_GLOBAL[0] * 0.15 + 240)),
+  Math.min(255, Math.round(PDF_COLOR_GLOBAL[1] * 0.15 + 240)),
+  Math.min(255, Math.round(PDF_COLOR_GLOBAL[2] * 0.15 + 240)),
+];
+export const PDF_COLOR_LIGHT_TINT: [number, number, number] = [
+  Math.min(255, Math.round(PDF_COLOR_GLOBAL[0] * 0.08 + 245)),
+  Math.min(255, Math.round(PDF_COLOR_GLOBAL[1] * 0.08 + 245)),
+  Math.min(255, Math.round(PDF_COLOR_GLOBAL[2] * 0.08 + 245)),
+];
+export const PDF_COLOR_SUBTITLE: [number, number, number] = [
+  Math.min(255, Math.round(PDF_COLOR_GLOBAL[0] * 0.3 + 178)),
+  Math.min(255, Math.round(PDF_COLOR_GLOBAL[1] * 0.3 + 178)),
+  Math.min(255, Math.round(PDF_COLOR_GLOBAL[2] * 0.3 + 178)),
+];
+
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /**

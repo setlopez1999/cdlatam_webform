@@ -1,5 +1,5 @@
 import type { PdfLayout, FieldDef } from "./types";
-import { COLOR_BRAND, COLOR_BRAND_DARK, COLOR_TEXT, COLOR_GRAY, COLOR_LIGHT } from "./constants";
+import { PDF_COLOR_GLOBAL, PDF_COLOR_DARK, PDF_COLOR_TINT, PDF_COLOR_LIGHT_TINT, COLOR_TEXT, COLOR_GRAY, COLOR_LIGHT } from "./constants";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import { formatDate } from "../formatters";
@@ -18,9 +18,9 @@ export function drawSectionTitle(doc: jsPDF, lo: PdfLayout, title: string, x: nu
   y = ensureSpace(doc, y, 8, lo);
   doc.setFontSize(lo.fontSize.sectionTitle);
   doc.setFont("helvetica", "bold");
-  doc.setTextColor(...COLOR_BRAND_DARK);
+  doc.setTextColor(...PDF_COLOR_DARK);
   doc.text(title.toUpperCase(), x, y);
-  doc.setDrawColor(...COLOR_BRAND);
+  doc.setDrawColor(...PDF_COLOR_GLOBAL);
   doc.setLineWidth(0.4);
   doc.line(x, y + 1.2, x + 100, y + 1.2);
   return y + (lo.compact ? 4 : 5);
@@ -34,9 +34,9 @@ export function drawIntroBox(doc: jsPDF, lo: PdfLayout, text: string, x: number,
   const lineH = lo.lineHeight;
   const boxHeight = lines.length * lineH + (lo.compact ? 2 : 4);
   y = ensureSpace(doc, y, boxHeight + 2, lo);
-  doc.setFillColor(240, 253, 251);
+  doc.setFillColor(...PDF_COLOR_LIGHT_TINT);
   doc.rect(x, y, width, boxHeight, "F");
-  doc.setDrawColor(...COLOR_BRAND);
+  doc.setDrawColor(...PDF_COLOR_GLOBAL);
   doc.setLineWidth(0.8);
   doc.line(x, y, x, y + boxHeight);
   doc.text(lines, x + 4, y + (lo.compact ? 3.5 : 4.5));
@@ -115,7 +115,7 @@ export function drawContactGrid(
   groups.forEach((group, gi) => {
     const cx = x + gi * colW;
     doc.setFontSize(lo.fontSize.small);
-    doc.setTextColor(...COLOR_BRAND);
+    doc.setTextColor(...PDF_COLOR_GLOBAL);
     doc.setFont("helvetica", "bold");
     doc.text(String(group.title), cx + 2, y + (lo.compact ? 3 : 4));
   });
@@ -189,7 +189,7 @@ export function drawPagoTable(
     head: [head],
     body,
     styles: { fontSize: lo.fontSize.small, cellPadding: lo.cellPadding, textColor: COLOR_TEXT },
-    headStyles: { fillColor: COLOR_BRAND, textColor: [255, 255, 255], fontStyle: "bold" },
+    headStyles: { fillColor: PDF_COLOR_GLOBAL, textColor: [255, 255, 255], fontStyle: "bold" },
     alternateRowStyles: { fillColor: [249, 250, 251] },
   });
   const finalY = (doc as unknown as { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY ?? y;

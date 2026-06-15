@@ -1,5 +1,6 @@
 import {
   PDF_COLOR_GLOBAL,
+  PDF_COLOR_SUBTITLE,
   COLOR_GRAY,
   COLOR_TEXT,
   COLOR_LIGHT,
@@ -73,7 +74,7 @@ export function buildFeaturesUnoPdfBytes(
     // Razón social debajo del título
     doc.setFont("helvetica", "normal");
     doc.setFontSize(8);
-    doc.setTextColor(220, 245, 243);
+    doc.setTextColor(...PDF_COLOR_SUBTITLE);
     doc.text(razonSocial || "", pageWidth - margin, bandMid + 4, {
       align: "right",
       baseline: "middle",

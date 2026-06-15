@@ -4,7 +4,8 @@ import {
   LOGO_NATURAL_W_PX,
   LOGO_NATURAL_H_PX,
   PDF_COLOR_GLOBAL,
-  COLOR_BRAND_DARK,
+  PDF_COLOR_TINT,
+  PDF_COLOR_SUBTITLE,
   COLOR_TEXT,
   COLOR_GRAY,
   COLOR_LIGHT,
@@ -75,7 +76,7 @@ export function drawHeaderSection(
   // Fecha
   doc.setFont("helvetica", "normal");
   doc.setFontSize(lo.fontSize.small);
-  doc.setTextColor(220, 245, 243);
+  doc.setTextColor(...PDF_COLOR_SUBTITLE);
   doc.text(`Fecha: ${formatDate(fecha)}`, pageWidth - margin, bandMid + 8, { align: "right", baseline: "middle" });
 
   // Espacio generoso entre membrete y contenido del acta
@@ -226,7 +227,7 @@ export function drawServiciosTable(
     },
     didParseCell: (hookData) => {
       if (hookData.section === "body" && hookData.row.index === servicioRows.length - 1) {
-        hookData.cell.styles.fillColor = [230, 250, 248];
+        hookData.cell.styles.fillColor = PDF_COLOR_TINT;
         hookData.cell.styles.fontStyle = "bold";
       }
     },
