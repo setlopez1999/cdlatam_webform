@@ -212,6 +212,7 @@ export async function createCatalogRecordGeneric(tableName: string, data: any) {
     return db.insert(table).values(data).returning();
   }
   const realTable = `catalog_custom_${tableName}`;
+  sqlite.exec(`CREATE TABLE IF NOT EXISTS ${realTable} (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, valor TEXT NOT NULL, activo INTEGER DEFAULT 1 NOT NULL)`);
   const stmt = sqlite.prepare(`INSERT INTO ${realTable} (valor, activo) VALUES (?, ?) RETURNING *`);
   return [stmt.get(data.valor ?? 'Nuevo', data.activo ?? 1)];
 }
@@ -223,6 +224,7 @@ export async function updateCatalogRecordGeneric(tableName: string, id: number, 
     return db.update(table).set(data).where(eq(table.id, id));
   }
   const realTable = `catalog_custom_${tableName}`;
+  sqlite.exec(`CREATE TABLE IF NOT EXISTS ${realTable} (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, valor TEXT NOT NULL, activo INTEGER DEFAULT 1 NOT NULL)`);
   const sets = Object.keys(data).map(k => `${k} = ?`).join(', ');
   const vals = [...Object.values(data), id];
   sqlite.prepare(`UPDATE ${realTable} SET ${sets} WHERE id = ?`).run(...vals);
@@ -235,6 +237,7 @@ export async function deleteCatalogRecordGeneric(tableName: string, id: number) 
     return db.delete(table).where(eq(table.id, id));
   }
   const realTable = `catalog_custom_${tableName}`;
+  sqlite.exec(`CREATE TABLE IF NOT EXISTS ${realTable} (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, valor TEXT NOT NULL, activo INTEGER DEFAULT 1 NOT NULL)`);
   sqlite.prepare(`DELETE FROM ${realTable} WHERE id = ?`).run(id);
 }
 
@@ -246,6 +249,7 @@ export async function bulkDeleteCatalogRecordsGeneric(tableName: string, ids: nu
     return db.delete(table).where(inArray(table.id, ids));
   }
   const realTable = `catalog_custom_${tableName}`;
+  sqlite.exec(`CREATE TABLE IF NOT EXISTS ${realTable} (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, valor TEXT NOT NULL, activo INTEGER DEFAULT 1 NOT NULL)`);
   const placeholders = ids.map(() => '?').join(',');
   sqlite.prepare(`DELETE FROM ${realTable} WHERE id IN (${placeholders})`).run(...ids);
 }
@@ -300,6 +304,7 @@ export async function bulkUpdateCatalogRecords(tableName: string, ids: number[],
   if (!table) {
     // Tablas dinámicas (catalog_custom_*): usar SQL raw
     const realTable = tableName.startsWith('catalog_custom_') ? tableName : `catalog_custom_${tableName}`;
+    sqlite.exec(`CREATE TABLE IF NOT EXISTS "${realTable}" (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, valor TEXT NOT NULL, activo INTEGER DEFAULT 1 NOT NULL)`);
     const sets = Object.keys(data).map(k => `${k} = ?`).join(', ');
     const placeholders = ids.map(() => '?').join(',');
     const vals = [...Object.values(data), ...ids];
