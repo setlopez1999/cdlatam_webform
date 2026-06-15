@@ -311,19 +311,15 @@ export function ExpedienteCard({
         <div className="flex-1 min-w-0">
           <p className="text-sm font-semibold truncate">{exp.nombre}</p>
           <p className="text-xs text-muted-foreground">
-            {exp.f1.data.noActa ? <span className="font-mono text-cyan-400/80 font-medium">{exp.f1.data.noActa} · </span> : null}
+            ID de exp: <span className="font-mono text-cyan-400/80 font-medium">#{exp.id}</span>
+            {exp.f1.data.noActa ? <span className="ml-2">· N° de acta: <span className="font-mono text-cyan-400/80 font-medium">{exp.f1.data.noActa}</span></span> : null}
             {creadorDisplay ? (
-              <span className="text-foreground/80">Creador: {creadorDisplay} · </span>
+              <span className="ml-2">· <span className="text-foreground/80">{creadorDisplay}</span></span>
             ) : creadorEliminado ? (
-              <span
-                className="inline-flex items-center gap-1 mr-1"
-                title="El usuario que creó este expediente ya no existe en el sistema"
-              >
+              <span className="inline-flex items-center gap-1 ml-2" title="El usuario que creó este expediente ya no existe en el sistema">
                 <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/40 inline-block" />
               </span>
             ) : null}
-            {empresa ? <span className="text-foreground/70">{empresa} · </span> : null}
-            {fechaDisplay}
           </p>
         </div>
 
