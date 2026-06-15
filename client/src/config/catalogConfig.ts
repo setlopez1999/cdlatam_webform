@@ -1,4 +1,4 @@
-export type FieldType = "text" | "number" | "select" | "boolean";
+export type FieldType = "text" | "textarea" | "number" | "select" | "boolean";
 
 export interface CatalogField {
   key: string;
@@ -188,6 +188,7 @@ export const catalogConfigs: Record<string, CatalogConfig> = {
         readOnlyInForm: true,
       },
       { key: "label", label: "Descripción visible", type: "text", required: true },
+      { key: "descripcion", label: "Descripción técnica (PDF)", type: "textarea", required: false },
       { key: "orden", label: "Orden", type: "number", required: true },
       { key: "activo", label: "Activo", type: "boolean" },
     ],

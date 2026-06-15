@@ -17,14 +17,17 @@ export function drawHeaderSection(
   pageWidth: number,
   y: number,
 ): number {
+  const HEADER_H = 20;
+
+  // Franja azul full-ancho
+  doc.setFillColor(...COLOR_BRAND);
+  doc.rect(0, y, pageWidth, HEADER_H, "F");
+
+  // Logo blanco sobre fondo azul (izquierda)
   const logo: string | null = cdlatamLogoDataUrl ?? null;
   if (logo) {
-    doc.setFillColor(...COLOR_TEXT);
-    doc.roundedRect(margin, y, 55, 16, 2, 2, "F");
     try {
-      const innerX = margin + 4;
-      const innerY = y + 2;
-      const boxW = 47;
+      const boxW = 42;
       const boxH = 12;
       const { drawW, drawH } = fitImagePreserveAspectMm(
         LOGO_NATURAL_W_PX,
@@ -32,31 +35,34 @@ export function drawHeaderSection(
         boxW,
         boxH,
       );
-      const imgX = innerX + (boxW - drawW) / 2;
-      const imgY = innerY + (boxH - drawH) / 2;
+      const imgX = margin + (boxW - drawW) / 2;
+      const imgY = y + (HEADER_H - drawH) / 2;
       doc.addImage(logo, "PNG", imgX, imgY, drawW, drawH, undefined, "FAST");
     } catch {
       /* omitir si falla */
     }
   }
 
-  doc.setTextColor(...COLOR_TEXT);
+  // Título a la derecha en blanco
+  doc.setTextColor(255, 255, 255);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(lo.fontSize.title);
-  doc.text("Acta de Aceptación de Servicios", pageWidth - margin, y + 5, { align: "right" });
-  doc.setTextColor(...COLOR_BRAND_DARK);
-  doc.setFontSize(lo.fontSize.subtitle);
-  doc.text(`N° ${noActa || "S/N"}`, pageWidth - margin, y + 10, { align: "right" });
-  doc.setTextColor(...COLOR_GRAY);
-  doc.setFontSize(lo.fontSize.small);
-  doc.setFont("helvetica", "normal");
-  doc.text(`Fecha: ${formatDate(fecha)}`, pageWidth - margin, y + 14, { align: "right" });
-  y += 16;
+  doc.text("Acta de Aceptación de Servicios", pageWidth - margin, y + HEADER_H / 2 - 3, { align: "right", baseline: "middle" });
 
-  doc.setDrawColor(...COLOR_BRAND);
-  doc.setLineWidth(0.7);
-  doc.line(margin, y, pageWidth - margin, y);
-  y += 5;
+  // N° de acta
+  doc.setFontSize(lo.fontSize.subtitle);
+  doc.text(`N° ${noActa || "S/N"}`, pageWidth - margin, y + HEADER_H / 2 + 2, { align: "right", baseline: "middle" });
+
+  // Fecha
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(lo.fontSize.small);
+  doc.setTextColor(220, 245, 243);
+  doc.text(`Fecha: ${formatDate(fecha)}`, pageWidth - margin, y + HEADER_H / 2 + 7, { align: "right", baseline: "middle" });
+
+  y += HEADER_H + 5;
+
+  // Restaurar color de texto
+  doc.setTextColor(...COLOR_TEXT);
 
   return y;
 }

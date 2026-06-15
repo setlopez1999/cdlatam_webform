@@ -12,12 +12,13 @@ export interface ImplementacionItemVM {
   key: string;
   orden: number;
   label: string;
+  descripcion: string;
   estado: boolean;
 }
 
 /** Une catálogo (solo ítems a mostrar) con filas guardadas; sin fila ⇒ estado false. */
 export function mergeImplementacionFromCatalog(
-  catalog: readonly { key: string; orden: number; label: string }[],
+  catalog: readonly { key: string; orden: number; label: string; descripcion?: string }[],
   rows: ImplementacionRowLike[],
 ): ImplementacionItemVM[] {
   const map = new Map(rows.map(r => [r.checkKey, r.estado === 1]));
@@ -25,6 +26,7 @@ export function mergeImplementacionFromCatalog(
     key: item.key,
     orden: item.orden,
     label: item.label,
+    descripcion: item.descripcion ?? "",
     estado: map.get(item.key) ?? false,
   }));
 }

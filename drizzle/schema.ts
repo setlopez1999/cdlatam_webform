@@ -388,6 +388,7 @@ export const catalogImplementacionItems = sqliteTable("catalog_implementacion_it
   id: integer("id").primaryKey({ autoIncrement: true }),
   key: text("key").notNull().unique(),
   label: text("label").notNull(),
+  descripcion: text("descripcion").default("").notNull(),
   orden: integer("orden").default(0).notNull(),
   activo: integer("activo").default(1).notNull(),
 });

@@ -508,6 +508,7 @@ export async function runMigrations() {
     }
   };
   tryAlter(`ALTER TABLE audit_log RENAME COLUMN expedienteCodigo TO actaCodigo`, "Migrate audit_log.expedienteCodigo → actaCodigo");
+  tryAlter(`ALTER TABLE catalog_implementacion_items ADD COLUMN descripcion TEXT DEFAULT '' NOT NULL`, "Add catalog_implementacion_items.descripcion");
   tryAlter(`CREATE INDEX IF NOT EXISTS idx_audit_log_created_at ON audit_log(createdAt)`, "Index audit_log createdAt");
   tryAlter(`CREATE INDEX IF NOT EXISTS idx_audit_log_user_created ON audit_log(userId, createdAt)`, "Index audit_log userId+createdAt");
 
@@ -869,6 +870,7 @@ export async function listImplementacionCatalogActivos() {
       key: catalogImplementacionItems.key,
       orden: catalogImplementacionItems.orden,
       label: catalogImplementacionItems.label,
+      descripcion: catalogImplementacionItems.descripcion,
     })
     .from(catalogImplementacionItems)
     .where(eq(catalogImplementacionItems.activo, 1))
