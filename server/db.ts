@@ -198,7 +198,11 @@ export async function getCatalogListGeneric(tableName: string) {
   }
   // Tabla dinámica
   const realTable = `catalog_custom_${tableName}`;
-  return sqlite.prepare(`SELECT * FROM ${realTable} ORDER BY id`).all();
+  try {
+    return sqlite.prepare(`SELECT * FROM ${realTable} ORDER BY id`).all();
+  } catch {
+    return [];
+  }
 }
 
 export async function createCatalogRecordGeneric(tableName: string, data: any) {
