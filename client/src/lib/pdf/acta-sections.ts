@@ -6,6 +6,7 @@ import {
   PDF_COLOR_GLOBAL,
   COLOR_BRAND,
   COLOR_BRAND_DARK,
+  COLOR_GRADIENT_END,
   COLOR_TEXT,
   COLOR_GRAY,
   COLOR_LIGHT,
@@ -38,10 +39,9 @@ export function drawHeaderSection(
   // Color de membrete: override > PDF_HEADER_COLOR > PDF_COLOR_GLOBAL
   const hColor = resolveHeaderColor(headerColor);
 
-  // Margen superior + franja: degradado horizontal azul oscuro → turquesa
-  // El degradado va de hColor (izquierda) a COLOR_BRAND (turquesa, derecha)
-  drawGradientBand(doc, 0, y, pageWidth, TOP_MARGIN, hColor, COLOR_BRAND);
-  drawGradientBand(doc, 0, y + TOP_MARGIN, pageWidth, HEADER_H, hColor, COLOR_BRAND);
+  // Margen superior + franja: degradado horizontal azul oscuro → azul medio
+  drawGradientBand(doc, 0, y, pageWidth, TOP_MARGIN, hColor, COLOR_GRADIENT_END);
+  drawGradientBand(doc, 0, y + TOP_MARGIN, pageWidth, HEADER_H, hColor, COLOR_GRADIENT_END);
 
   // Logo pre-compuesto más grande
   try {

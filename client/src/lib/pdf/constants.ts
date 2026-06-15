@@ -5,6 +5,8 @@ export const BRAND_COLOR = "#00c2b2";
 export const BRAND_DARK = "#009e90";
 // Azul oscuro para el membrete (distinto del celeste de marca)
 export const HEADER_BLUE_DARK = "#003d6b";
+// Color final del degradado del membrete: azul medio (menos turquesa que #00c2b2)
+export const HEADER_GRADIENT_END = "#0077a8";
 export const TEXT_DARK = "#0f2027";
 
 export const hex = (h: string): [number, number, number] => {
@@ -19,6 +21,7 @@ export const hex = (h: string): [number, number, number] => {
 export const COLOR_BRAND = hex(BRAND_COLOR);
 export const COLOR_BRAND_DARK = hex(BRAND_DARK);
 export const COLOR_HEADER_BLUE = hex(HEADER_BLUE_DARK);
+export const COLOR_GRADIENT_END = hex(HEADER_GRADIENT_END);
 export const COLOR_TEXT = hex(TEXT_DARK);
 export const COLOR_GRAY = hex("#6b7280");
 export const COLOR_LIGHT = hex("#f3f4f6");
