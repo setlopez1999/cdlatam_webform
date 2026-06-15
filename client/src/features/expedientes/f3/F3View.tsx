@@ -7,7 +7,7 @@
  * F3-a: El ingreso viene de la suma de serviciosContratados en F1.
  * F3-b: La fila de gastos se llama "Total Gastos Imputados".
  *
- * Distribución (Sres./GIM + Groupalnet SpA) y facturación inter-empresa solo si F1 está guardado.
+ * Distribución (Sres./GIM + GROUPALNET SPA) y facturación inter-empresa solo si F1 está guardado.
  * El % GIM/GP y la tasa de impuesto (0,5–100 %) son editables; el payload de sync coincide con calcularResultadoF3.
  */
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -133,7 +133,7 @@ export default function F3View({ expedienteId, onVolverF2 }: Props) {
     return [
       ...base,
       { label: `${etiquetaBloque} (${pctGIM}%)`, values: r.distribucion.gim, bold: false, color: "text-blue-600" },
-      { label: `Groupalnet SpA (${pctGP}%)`, values: r.distribucion.gp, bold: false, color: "text-violet-600" },
+      { label: `GROUPALNET SPA (${pctGP}%)`, values: r.distribucion.gp, bold: false, color: "text-violet-600" },
       { label: "Facturación Neta", values: r.facturacion.neto, bold: true, color: "text-emerald-700" },
     ];
   }, [r, f1Guardado, etiquetaBloque, pctGIM, pctGP]);
@@ -170,7 +170,7 @@ export default function F3View({ expedienteId, onVolverF2 }: Props) {
         <div className="flex items-start gap-2 text-xs text-amber-700 bg-amber-500/10 rounded-lg px-3 py-2 border border-amber-500/25">
           <Info className="w-3.5 h-3.5 mt-0.5 shrink-0" />
           <span>
-            Guarde el Acta (F1) para ver la distribución ({etiquetaBloque !== "GIM" ? `${etiquetaBloque} / ` : ""}GIM + Groupalnet SpA) y la facturación inter-empresa. Hasta entonces solo se muestran ingreso, gastos y resultado.
+            Guarde el Acta (F1) para ver la distribución ({etiquetaBloque !== "GIM" ? `${etiquetaBloque} / ` : ""}GIM + GROUPALNET SPA) y la facturación inter-empresa. Hasta entonces solo se muestran ingreso, gastos y resultado.
           </span>
         </div>
       )}
@@ -216,7 +216,7 @@ export default function F3View({ expedienteId, onVolverF2 }: Props) {
               <CardHeader className="pb-3">
                 <CardTitle className="text-sm font-semibold flex items-center gap-2">
                   <PieChart className="w-4 h-4 text-blue-500" />
-                  Distribución {etiquetaBloque} / Groupalnet SpA (debe sumar 100%)
+                  Distribución {etiquetaBloque} / GROUPALNET SPA (debe sumar 100%)
                 </CardTitle>
               </CardHeader>
               <CardContent className="flex flex-wrap gap-6">
@@ -235,7 +235,7 @@ export default function F3View({ expedienteId, onVolverF2 }: Props) {
                   />
                 </div>
                 <div className="space-y-1.5 min-w-[140px]">
-                  <Label htmlFor="f3-pct-gp" className="text-xs">Groupalnet SpA (%)</Label>
+                  <Label htmlFor="f3-pct-gp" className="text-xs">GROUPALNET SPA (%)</Label>
                   <Input
                     id="f3-pct-gp"
                     type="number"
