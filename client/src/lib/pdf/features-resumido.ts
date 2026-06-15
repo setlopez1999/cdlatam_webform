@@ -1,5 +1,6 @@
 import {
   PDF_COLOR_GLOBAL,
+  COLOR_BRAND,
   COLOR_GRAY,
   COLOR_TEXT,
   COLOR_LIGHT,
@@ -7,6 +8,7 @@ import {
   LOGO_NATURAL_H_PX,
   resolveHeaderColor,
   fitImagePreserveAspectMm,
+  drawGradientBand,
 } from "./constants";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -41,13 +43,9 @@ export function buildFeaturesUnoPdfBytes(
 
   // ── Función para dibujar el header en cada página ────────────────────────
   const drawHeader = () => {
-    // Margen superior del mismo color que la franja
-    doc.setFillColor(...hColor);
-    doc.rect(0, 0, pageWidth, TOP_MARGIN, "F");
-
-    // Franja de color de membrete, full-ancho
-    doc.setFillColor(...hColor);
-    doc.rect(0, TOP_MARGIN, pageWidth, HEADER_H, "F");
+    // Margen superior + franja: degradado horizontal azul oscuro → turquesa
+    drawGradientBand(doc, 0, 0, pageWidth, TOP_MARGIN, hColor, COLOR_BRAND);
+    drawGradientBand(doc, 0, TOP_MARGIN, pageWidth, HEADER_H, hColor, COLOR_BRAND);
 
     // Centro de la franja
     const bandMid = TOP_MARGIN + HEADER_H / 2;
@@ -89,10 +87,12 @@ export function buildFeaturesUnoPdfBytes(
   const startY = TOP_MARGIN + HEADER_H + BOTTOM_GAP;
 
   // Anchos de columna: N° | Módulo | Descripción | SI | NO
+  // Módulo reducido al 30% del espacio disponible; Descripción toma el 50%
   const colNro = 10;
   const colSiNo = 12;
-  const colDesc = Math.floor((contentWidth - colNro - colSiNo * 2) * 0.40);
-  const colLabel = contentWidth - colNro - colDesc - colSiNo * 2;
+  const available = contentWidth - colNro - colSiNo * 2;
+  const colLabel = Math.floor(available * 0.30);  // Módulo/Componente: 30%
+  const colDesc = available - colLabel;            // Descripción: 70% restante
 
   const tableRows = items.map((item, idx) => [
     String(idx + 1),

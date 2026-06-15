@@ -60,6 +60,42 @@ export function resolveHeaderColor(
 // ─── Otros ───────────────────────────────────────────────────────────────────
 export const FEATURES_RESUMIDO_ORDEN = 20;
 
+/**
+ * drawGradientBand: dibuja una franja horizontal con degradado horizontal
+ * interpolando entre colorFrom (izquierda) y colorTo (derecha).
+ * Simula un degradado CSS dividiendo la franja en N tiras verticales delgadas.
+ *
+ * @param doc      instancia jsPDF
+ * @param x        posición X inicial
+ * @param y        posición Y inicial
+ * @param w        ancho total de la franja
+ * @param h        alto de la franja
+ * @param from     color RGB izquierdo
+ * @param to       color RGB derecho
+ * @param steps    número de tiras (más = más suave, default 60)
+ */
+export function drawGradientBand(
+  doc: import("jspdf").jsPDF,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  from: [number, number, number],
+  to: [number, number, number],
+  steps = 60,
+): void {
+  const stepW = w / steps;
+  for (let i = 0; i < steps; i++) {
+    const t = i / (steps - 1);
+    const r = Math.round(from[0] + (to[0] - from[0]) * t);
+    const g = Math.round(from[1] + (to[1] - from[1]) * t);
+    const b = Math.round(from[2] + (to[2] - from[2]) * t);
+    doc.setFillColor(r, g, b);
+    // +0.5 de overlap para evitar líneas blancas entre tiras
+    doc.rect(x + i * stepW, y, stepW + 0.5, h, "F");
+  }
+}
+
 export function fitImagePreserveAspectMm(
   naturalW: number,
   naturalH: number,
