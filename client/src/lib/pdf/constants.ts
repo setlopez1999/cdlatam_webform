@@ -3,6 +3,8 @@ export const LOGO_NATURAL_W_PX = 387;
 export const LOGO_NATURAL_H_PX = 50;
 export const BRAND_COLOR = "#00c2b2";
 export const BRAND_DARK = "#009e90";
+// Azul oscuro para el membrete (distinto del celeste de marca)
+export const HEADER_BLUE_DARK = "#003d6b";
 export const TEXT_DARK = "#0f2027";
 
 export const hex = (h: string): [number, number, number] => {
@@ -16,6 +18,7 @@ export const hex = (h: string): [number, number, number] => {
 
 export const COLOR_BRAND = hex(BRAND_COLOR);
 export const COLOR_BRAND_DARK = hex(BRAND_DARK);
+export const COLOR_HEADER_BLUE = hex(HEADER_BLUE_DARK);
 export const COLOR_TEXT = hex(TEXT_DARK);
 export const COLOR_GRAY = hex("#6b7280");
 export const COLOR_LIGHT = hex("#f3f4f6");
@@ -36,7 +39,8 @@ export const PDF_COLOR_GLOBAL: [number, number, number] = COLOR_BRAND;
  * únicamente esta constante.
  * Por defecto usa PDF_COLOR_GLOBAL.
  */
-export const PDF_HEADER_COLOR: [number, number, number] = PDF_COLOR_GLOBAL;
+// Usa azul oscuro (#003d6b) para el membrete, independiente del celeste de tablas/acentos
+export const PDF_HEADER_COLOR: [number, number, number] = COLOR_HEADER_BLUE;
 
 /**
  * resolveHeaderColor: devuelve el color de membrete a usar.

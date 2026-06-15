@@ -33,15 +33,23 @@ export function buildFeaturesUnoPdfBytes(
   const margin = 15;
   const contentWidth = pageWidth - margin * 2;
   const HEADER_H = 20;
+  const TOP_MARGIN = 6; // margen superior del mismo color que la franja (igual que Acta)
 
   // Color de membrete: override > PDF_HEADER_COLOR > PDF_COLOR_GLOBAL
   const hColor = resolveHeaderColor(headerColor);
 
   // ── Función para dibujar el header en cada página ────────────────────────
   const drawHeader = () => {
+    // Margen superior del mismo color que la franja
+    doc.setFillColor(...hColor);
+    doc.rect(0, 0, pageWidth, TOP_MARGIN, "F");
+
     // Franja de color de membrete, full-ancho
     doc.setFillColor(...hColor);
-    doc.rect(0, 0, pageWidth, HEADER_H, "F");
+    doc.rect(0, TOP_MARGIN, pageWidth, HEADER_H, "F");
+
+    // Centro de la franja
+    const bandMid = TOP_MARGIN + HEADER_H / 2;
 
     // Logo pre-compuesto (sin transparencia → se ve limpio sobre cualquier fondo)
     try {
@@ -49,7 +57,7 @@ export function buildFeaturesUnoPdfBytes(
       const boxH = 13;
       const { drawW, drawH } = fitImagePreserveAspectMm(LOGO_NATURAL_W_PX, LOGO_NATURAL_H_PX, boxW, boxH);
       const imgX = margin;
-      const imgY = (HEADER_H - drawH) / 2;
+      const imgY = TOP_MARGIN + (HEADER_H - drawH) / 2;
       doc.addImage(cdlatamLogoOnBrand, "PNG", imgX, imgY, drawW, drawH, undefined, "FAST");
     } catch { /* omitir si falla */ }
 
@@ -60,7 +68,7 @@ export function buildFeaturesUnoPdfBytes(
     doc.text(
       "Especificaciones y Matriz de Features",
       pageWidth - margin,
-      HEADER_H / 2 - 1.5,
+      bandMid - 1.5,
       { align: "right", baseline: "middle" },
     );
 
@@ -68,7 +76,7 @@ export function buildFeaturesUnoPdfBytes(
     doc.setFont("helvetica", "normal");
     doc.setFontSize(8);
     doc.setTextColor(220, 245, 243);
-    doc.text(razonSocial || "", pageWidth - margin, HEADER_H / 2 + 4, {
+    doc.text(razonSocial || "", pageWidth - margin, bandMid + 4, {
       align: "right",
       baseline: "middle",
     });
@@ -77,7 +85,7 @@ export function buildFeaturesUnoPdfBytes(
   drawHeader();
 
   // ── Tabla de features ────────────────────────────────────────────────────────
-  const startY = HEADER_H + 8;
+  const startY = TOP_MARGIN + HEADER_H + 8;
 
   // Anchos de columna: N° | Módulo | Descripción | SI | NO
   const colNro = 10;

@@ -13,6 +13,7 @@
 
 import { sqlSeedConsideracionesComerciales } from "./seeds/consideracionesComercialesSeed";
 import { sqlSeedImplementacionItems } from "./seeds/implementacionItemsSeed";
+import { sqlSeedImplementacionDescripciones } from "./seeds/implementacionDescripcionesSeed";
 
 /** Todas las sentencias CREATE en orden seguro (FK desactivadas por defecto en SQLite). */
 export const BOOTSTRAP_ALL_PROJECT_TABLES_SQL = `
@@ -320,4 +321,7 @@ export function ensureAllProjectTables(sqlite: SqliteExecLike): void {
   sqlite.exec(BOOTSTRAP_ALL_PROJECT_TABLES_SQL);
   sqlite.exec(sqlSeedConsideracionesComerciales());
   sqlite.exec(sqlSeedImplementacionItems());
+  // Seed de descripciones técnicas (extraídas del PDF de features)
+  // Solo actualiza registros con descripcion vacía para no sobreescribir ediciones manuales
+  sqlite.exec(sqlSeedImplementacionDescripciones());
 }

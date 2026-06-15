@@ -30,13 +30,18 @@ export function drawHeaderSection(
   headerColor?: [number, number, number],
 ): number {
   const HEADER_H = 20;
+  const TOP_MARGIN = 6; // margen superior del mismo color que la franja
 
   // Color de membrete: override > PDF_HEADER_COLOR > PDF_COLOR_GLOBAL
   const hColor = resolveHeaderColor(headerColor);
 
+  // Margen superior del mismo color que la franja (para que no se vea pegado al borde)
+  doc.setFillColor(...hColor);
+  doc.rect(0, y, pageWidth, TOP_MARGIN, "F");
+
   // Franja de color de membrete, full-ancho
   doc.setFillColor(...hColor);
-  doc.rect(0, y, pageWidth, HEADER_H, "F");
+  doc.rect(0, y + TOP_MARGIN, pageWidth, HEADER_H, "F");
 
   // Logo pre-compuesto (sin transparencia → se ve limpio sobre cualquier fondo)
   try {
@@ -49,29 +54,33 @@ export function drawHeaderSection(
       boxH,
     );
     const imgX = margin;
-    const imgY = y + (HEADER_H - drawH) / 2;
+    // Centrar logo dentro de la franja (desplazado por TOP_MARGIN)
+    const imgY = y + TOP_MARGIN + (HEADER_H - drawH) / 2;
     doc.addImage(cdlatamLogoOnBrand, "PNG", imgX, imgY, drawW, drawH, undefined, "FAST");
   } catch {
     /* omitir si falla */
   }
 
+  // Centro de la franja (desplazado por TOP_MARGIN)
+  const bandMid = y + TOP_MARGIN + HEADER_H / 2;
+
   // Título a la derecha en blanco
   doc.setTextColor(255, 255, 255);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(lo.fontSize.title);
-  doc.text("Acta de Aceptación de Servicios", pageWidth - margin, y + HEADER_H / 2 - 3, { align: "right", baseline: "middle" });
+  doc.text("Acta de Aceptación de Servicios", pageWidth - margin, bandMid - 3, { align: "right", baseline: "middle" });
 
   // N° de acta
   doc.setFontSize(lo.fontSize.subtitle);
-  doc.text(`N° ${noActa || "S/N"}`, pageWidth - margin, y + HEADER_H / 2 + 2, { align: "right", baseline: "middle" });
+  doc.text(`N° ${noActa || "S/N"}`, pageWidth - margin, bandMid + 2, { align: "right", baseline: "middle" });
 
   // Fecha
   doc.setFont("helvetica", "normal");
   doc.setFontSize(lo.fontSize.small);
   doc.setTextColor(220, 245, 243);
-  doc.text(`Fecha: ${formatDate(fecha)}`, pageWidth - margin, y + HEADER_H / 2 + 7, { align: "right", baseline: "middle" });
+  doc.text(`Fecha: ${formatDate(fecha)}`, pageWidth - margin, bandMid + 7, { align: "right", baseline: "middle" });
 
-  y += HEADER_H + 5;
+  y += TOP_MARGIN + HEADER_H + 5;
 
   // Restaurar color de texto
   doc.setTextColor(...COLOR_TEXT);
