@@ -32,8 +32,9 @@ export function buildFeaturesUnoPdfBytes(
   const pageHeight = doc.internal.pageSize.getHeight();
   const margin = 15;
   const contentWidth = pageWidth - margin * 2;
-  const HEADER_H = 20;
-  const TOP_MARGIN = 6; // margen superior del mismo color que la franja (igual que Acta)
+  const HEADER_H = 26;  // franja más alta (igual que Acta)
+  const TOP_MARGIN = 8; // margen superior del mismo color que la franja
+  const BOTTOM_GAP = 10; // espacio entre membrete y tabla
 
   // Color de membrete: override > PDF_HEADER_COLOR > PDF_COLOR_GLOBAL
   const hColor = resolveHeaderColor(headerColor);
@@ -51,10 +52,10 @@ export function buildFeaturesUnoPdfBytes(
     // Centro de la franja
     const bandMid = TOP_MARGIN + HEADER_H / 2;
 
-    // Logo pre-compuesto (sin transparencia → se ve limpio sobre cualquier fondo)
+    // Logo pre-compuesto más grande (igual que Acta)
     try {
-      const boxW = 52;
-      const boxH = 13;
+      const boxW = 72;
+      const boxH = 18;
       const { drawW, drawH } = fitImagePreserveAspectMm(LOGO_NATURAL_W_PX, LOGO_NATURAL_H_PX, boxW, boxH);
       const imgX = margin;
       const imgY = TOP_MARGIN + (HEADER_H - drawH) / 2;
@@ -68,7 +69,7 @@ export function buildFeaturesUnoPdfBytes(
     doc.text(
       "Especificaciones y Matriz de Features",
       pageWidth - margin,
-      bandMid - 1.5,
+      bandMid - 3,
       { align: "right", baseline: "middle" },
     );
 
@@ -85,7 +86,7 @@ export function buildFeaturesUnoPdfBytes(
   drawHeader();
 
   // ── Tabla de features ────────────────────────────────────────────────────────
-  const startY = TOP_MARGIN + HEADER_H + 8;
+  const startY = TOP_MARGIN + HEADER_H + BOTTOM_GAP;
 
   // Anchos de columna: N° | Módulo | Descripción | SI | NO
   const colNro = 10;

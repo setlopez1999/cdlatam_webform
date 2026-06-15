@@ -29,13 +29,14 @@ export function drawHeaderSection(
   /** Override opcional del color de membrete (prioridad máxima sobre PDF_HEADER_COLOR) */
   headerColor?: [number, number, number],
 ): number {
-  const HEADER_H = 20;
-  const TOP_MARGIN = 6; // margen superior del mismo color que la franja
+  const HEADER_H = 26;  // franja más alta para acomodar logo grande
+  const TOP_MARGIN = 8; // margen superior del mismo color que la franja
+  const BOTTOM_GAP = 10; // espacio entre membrete y contenido del acta
 
   // Color de membrete: override > PDF_HEADER_COLOR > PDF_COLOR_GLOBAL
   const hColor = resolveHeaderColor(headerColor);
 
-  // Margen superior del mismo color que la franja (para que no se vea pegado al borde)
+  // Margen superior del mismo color que la franja
   doc.setFillColor(...hColor);
   doc.rect(0, y, pageWidth, TOP_MARGIN, "F");
 
@@ -43,10 +44,10 @@ export function drawHeaderSection(
   doc.setFillColor(...hColor);
   doc.rect(0, y + TOP_MARGIN, pageWidth, HEADER_H, "F");
 
-  // Logo pre-compuesto (sin transparencia → se ve limpio sobre cualquier fondo)
+  // Logo pre-compuesto más grande
   try {
-    const boxW = 52;
-    const boxH = 13;
+    const boxW = 72;  // más ancho
+    const boxH = 18;  // más alto
     const { drawW, drawH } = fitImagePreserveAspectMm(
       LOGO_NATURAL_W_PX,
       LOGO_NATURAL_H_PX,
@@ -54,21 +55,21 @@ export function drawHeaderSection(
       boxH,
     );
     const imgX = margin;
-    // Centrar logo dentro de la franja (desplazado por TOP_MARGIN)
+    // Centrar logo verticalmente dentro de la franja
     const imgY = y + TOP_MARGIN + (HEADER_H - drawH) / 2;
     doc.addImage(cdlatamLogoOnBrand, "PNG", imgX, imgY, drawW, drawH, undefined, "FAST");
   } catch {
     /* omitir si falla */
   }
 
-  // Centro de la franja (desplazado por TOP_MARGIN)
+  // Centro de la franja
   const bandMid = y + TOP_MARGIN + HEADER_H / 2;
 
   // Título a la derecha en blanco
   doc.setTextColor(255, 255, 255);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(lo.fontSize.title);
-  doc.text("Acta de Aceptación de Servicios", pageWidth - margin, bandMid - 3, { align: "right", baseline: "middle" });
+  doc.text("Acta de Aceptación de Servicios", pageWidth - margin, bandMid - 4, { align: "right", baseline: "middle" });
 
   // N° de acta
   doc.setFontSize(lo.fontSize.subtitle);
@@ -78,9 +79,10 @@ export function drawHeaderSection(
   doc.setFont("helvetica", "normal");
   doc.setFontSize(lo.fontSize.small);
   doc.setTextColor(220, 245, 243);
-  doc.text(`Fecha: ${formatDate(fecha)}`, pageWidth - margin, bandMid + 7, { align: "right", baseline: "middle" });
+  doc.text(`Fecha: ${formatDate(fecha)}`, pageWidth - margin, bandMid + 8, { align: "right", baseline: "middle" });
 
-  y += TOP_MARGIN + HEADER_H + 5;
+  // Espacio generoso entre membrete y contenido del acta
+  y += TOP_MARGIN + HEADER_H + BOTTOM_GAP;
 
   // Restaurar color de texto
   doc.setTextColor(...COLOR_TEXT);
