@@ -70,8 +70,6 @@ function F2InfoGeneralInner({ data, onUpdate, catalogs, f1Suggestions, onImporta
 
   // Nombres para selects de Preventa y Ejecutivo Comercial (catalog_nombres, misma fuente que F1 Atención)
   const nombresForSelect = catalogs?.nombres;
-  const preventaOptions = nombresForSelect?.filter(n => n.value !== data.ejecutivoComercial);
-  const ejecutivoOptions = nombresForSelect?.filter(n => n.value !== data.preventa);
 
   return (
     <FormSection title="Información General del Proyecto" icon={Info} accent="violet">
@@ -200,11 +198,11 @@ function F2InfoGeneralInner({ data, onUpdate, catalogs, f1Suggestions, onImporta
 
         {/* Ejecutivo Comercial — select desde catalog_nombres (misma fuente que F1 Atención) */}
         <FieldGroup label="Ejecutivo Comercial">
-          {ejecutivoOptions?.length ? (
+          {nombresForSelect?.length ? (
             <Select value={data.ejecutivoComercial} onValueChange={v => onUpdate({ ejecutivoComercial: v })}>
               <SelectTrigger><SelectValue placeholder="Ejecutivo comercial..." /></SelectTrigger>
               <SelectContent position="popper" sideOffset={4} className="z-[200]">
-                {ejecutivoOptions.map(n => (
+                {nombresForSelect.map(n => (
                   <SelectItem key={n.value} value={n.value}>{n.label}</SelectItem>
                 ))}
               </SelectContent>
@@ -217,11 +215,11 @@ function F2InfoGeneralInner({ data, onUpdate, catalogs, f1Suggestions, onImporta
 
         {/* Preventa — select desde catalog_nombres (misma fuente que F1 Atención) */}
         <FieldGroup label="Preventa">
-          {preventaOptions?.length ? (
+          {nombresForSelect?.length ? (
             <Select value={data.preventa} onValueChange={v => onUpdate({ preventa: v })}>
               <SelectTrigger><SelectValue placeholder="Preventa..." /></SelectTrigger>
               <SelectContent position="popper" sideOffset={4} className="z-[200]">
-                {preventaOptions.map(n => (
+                {nombresForSelect.map(n => (
                   <SelectItem key={n.value} value={n.value}>{n.label}</SelectItem>
                 ))}
               </SelectContent>
