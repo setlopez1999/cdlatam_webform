@@ -273,6 +273,12 @@ export interface Expediente {
   createdAt: string;
   updatedAt: string;
   deletedAt: number | null;
+  /**
+   * Número de acta real de BD (autoincremental desde 10001 en BDs nuevas).
+   * Disponible tras el primer guardado del F1. Usado para generar el código
+   * VS-10001 en el PDF sin depender del campo noActa del store.
+   */
+  serverNroActa?: number;
   /** F1 — Acta */
   f1: FormSlot<F1Data>;
   /** F2 — Evaluación de Proyecto */

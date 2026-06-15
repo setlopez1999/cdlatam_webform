@@ -22,6 +22,7 @@ import { createActaPdfBlob, buildFeaturesResumidoPdfBytes, downloadPdfBlob } fro
 import { joinPhonePair } from "@/lib/formatters";
 import { ActaPdfPreviewDialog } from "@/components/ActaPdfPreviewDialog";
 import { useF1 } from "./useF1";
+import { getExpedienteFromState } from "../store";
 import { useClausulasVigentes } from "./useClausulasVigentes";
 import { useFieldVisibility } from "@/hooks/useFieldVisibility";
 import { useCan } from "@/hooks/useCan";
@@ -452,6 +453,11 @@ export default function F1Form({ expedienteId }: Props) {
           )
         : undefined;
 
+      // Obtener nroActa real de BD para el código VS-10001 en el PDF
+      const expFromStore = getExpedienteFromState(expedienteId);
+      const serverNroActa = expFromStore?.serverNroActa;
+      const serverUnidadNegocio = data.serviciosContratados?.[0]?.unidadNegocio ?? "";
+
       const { blob, filename } = await createActaPdfBlob(
         dataParaPdf as any,
         clausulasParaPdf.map(c => ({
@@ -467,6 +473,8 @@ export default function F1Form({ expedienteId }: Props) {
           onClausulaError: (c) => failed.push(c.fileName),
           featuresResumidoBytes,
           singlePage: true,
+          serverNroActa,
+          serverUnidadNegocio,
         },
       );
       if (PDF_USE_NATIVE_PRINT) {

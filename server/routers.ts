@@ -806,7 +806,11 @@ export const appRouter = router({
           const raw = getRawDb();
           const maxRow = raw.prepare(`SELECT COALESCE(MAX(nro_acta), 0) as max_nro FROM actas`).get() as { max_nro: number };
           const nextNroActa = maxRow.max_nro + 1;
-          const codigoActa = buildActaCodigo("", nextNroActa);
+          // Extraer la primera unidad de negocio para generar el prefijo (VS, TX, IN, etc.)
+          const firstUnidad = Array.isArray(actaRest.serviciosContratados)
+            ? (actaRest.serviciosContratados[0] as { unidadNegocio?: string } | undefined)?.unidadNegocio ?? ""
+            : "";
+          const codigoActa = buildActaCodigo("", nextNroActa, firstUnidad);
           acta = await createActa({
             userId: ownerUserId,
             expedienteId,

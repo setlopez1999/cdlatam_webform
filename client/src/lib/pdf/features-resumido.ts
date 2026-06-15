@@ -86,25 +86,24 @@ export function buildFeaturesUnoPdfBytes(
   // ── Tabla de features ────────────────────────────────────────────────────────
   const startY = TOP_MARGIN + HEADER_H + BOTTOM_GAP;
 
-  // Anchos de columna: N° | Módulo | Descripción | SI | NO
-  // Módulo reducido al 30% del espacio disponible; Descripción toma el 50%
+  // Anchos de columna: N° | Módulo/Componente | Descripción | Incluye
+  // Módulo: 28%, Descripción: 62%, Incluye: columna fija angosta
   const colNro = 10;
-  const colSiNo = 12;
-  const available = contentWidth - colNro - colSiNo * 2;
-  const colLabel = Math.floor(available * 0.30);  // Módulo/Componente: 30%
-  const colDesc = available - colLabel;            // Descripción: 70% restante
+  const colIncluye = 18; // columna única SI/NO
+  const available = contentWidth - colNro - colIncluye;
+  const colLabel = Math.floor(available * 0.28);  // Módulo/Componente: 28%
+  const colDesc = available - colLabel;            // Descripción: 72% restante
 
   const tableRows = items.map((item, idx) => [
     String(idx + 1),
     item.label,
     item.descripcion || "",   // ← descripcion técnica del feature
-    item.estado ? "SI" : "",
-    item.estado ? "" : "NO",
+    item.estado ? "SI" : "NO",
   ]);
 
   autoTable(doc, {
     startY,
-    head: [["N°", "Módulo / Componente", "Descripción", "SI", "NO"]],
+    head: [["N°", "Módulo / Componente", "Descripción", "Incluye"]],
     body: tableRows,
     margin: { left: margin, right: margin, top: TOP_MARGIN + HEADER_H + BOTTOM_GAP },
     tableWidth: contentWidth,
@@ -125,18 +124,16 @@ export function buildFeaturesUnoPdfBytes(
       0: { cellWidth: colNro, halign: "center" },
       1: { cellWidth: colLabel },
       2: { cellWidth: colDesc, textColor: COLOR_GRAY as [number, number, number], fontSize: 7.5 },
-      3: { cellWidth: colSiNo, halign: "center", fontStyle: "bold" },
-      4: { cellWidth: colSiNo, halign: "center", fontStyle: "bold" },
+      3: { cellWidth: colIncluye, halign: "center", fontStyle: "bold" },
     },
     alternateRowStyles: { fillColor: COLOR_LIGHT as [number, number, number] },
     didParseCell: (data) => {
-      if (data.section === "body") {
-        if (data.column.index === 3 && data.cell.raw === "SI") {
+      if (data.section === "body" && data.column.index === 3) {
+        if (data.cell.raw === "SI") {
           data.cell.styles.textColor = [16, 185, 129] as [number, number, number]; // verde
           data.cell.styles.fontStyle = "bold";
           data.cell.styles.fontSize = 9;
-        }
-        if (data.column.index === 4 && data.cell.raw === "NO") {
+        } else if (data.cell.raw === "NO") {
           data.cell.styles.textColor = [239, 68, 68] as [number, number, number]; // rojo
           data.cell.styles.fontStyle = "bold";
           data.cell.styles.fontSize = 9;
