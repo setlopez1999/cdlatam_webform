@@ -38,9 +38,8 @@ const F1_TO_F2_HEADER_FIELDS = [
   { f2: "rut" as const, f1: "rucDniRut" as const },
   { f2: "paisImplementacion" as const, f1: "pais" as const },
   { f2: "tipoMoneda" as const, f1: "moneda" as const },
-  // Campo "Atención" de F1 (catalog_nombres) → Ejecutivo Comercial y Preventa de F2
+  // Campo "Atención" de F1 (catalog_nombres) → Ejecutivo Comercial de F2
   { f2: "ejecutivoComercial" as const, f1: "atencion" as const },
-  { f2: "preventa" as const, f1: "atencion" as const },
 ] as const;
 
 function f1ToF2HeaderPatch(f1: F1Data): Partial<F2Data> {

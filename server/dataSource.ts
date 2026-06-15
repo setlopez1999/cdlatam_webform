@@ -159,6 +159,10 @@ export async function ds_getCatalogOptions() {
       orden: r.orden,
       persistente: r.persistente ?? 0,
     })),
+    preventas:          (await getCatalogListGeneric("preventas")).map((r: any) => ({
+      value: r.valor,
+      label: r.valor,
+    })),
     meses: MESES,
   };
 }

@@ -4,8 +4,8 @@
  * Sección de Información General del Proyecto (F2).
  * Incluye botón "Importar desde F1" para pre-llenar campos comunes.
  *
- * Preventa y Ejecutivo Comercial se cargan desde catalog_nombres (misma fuente
- * que el campo "Atención" de F1), pasado via props.catalogs.nombres.
+ * Preventa se carga desde catalog_custom_preventas y Ejecutivo Comercial desde
+ * catalog_nombres (misma fuente que "Atención" de F1).
  */
 import { memo } from "react";
 import { Input } from "@/components/ui/input";
@@ -29,6 +29,7 @@ interface Props {
     cecos?: CatalogItem[];
     areas?: CatalogItem[];
     nombres?: CatalogItem[];
+    preventas?: CatalogItem[];
   };
   /** Sugerencias de F1 para pre-llenado */
   f1Suggestions?: {
@@ -68,8 +69,9 @@ function f2InfoGeneralPropsEqual(prev: Props, next: Props): boolean {
 function F2InfoGeneralInner({ data, onUpdate, catalogs, f1Suggestions, onImportarDesdeF1 }: Props) {
   const totalClp = data.montoProyecto * (data.tipoCambio || 1);
 
-  // Nombres para selects de Preventa y Ejecutivo Comercial (catalog_nombres, misma fuente que F1 Atención)
+  // Ejecutivo Comercial desde catalog_nombres, Preventa desde catalog_custom_preventas
   const nombresForSelect = catalogs?.nombres;
+  const preventasForSelect = catalogs?.preventas;
 
   return (
     <FormSection title="Información General del Proyecto" icon={Info} accent="violet">
@@ -213,13 +215,13 @@ function F2InfoGeneralInner({ data, onUpdate, catalogs, f1Suggestions, onImporta
           )}
         </FieldGroup>
 
-        {/* Preventa — select desde catalog_nombres (misma fuente que F1 Atención) */}
+        {/* Preventa — select desde catalog_custom_preventas */}
         <FieldGroup label="Preventa">
-          {nombresForSelect?.length ? (
+          {preventasForSelect?.length ? (
             <Select value={data.preventa} onValueChange={v => onUpdate({ preventa: v })}>
               <SelectTrigger><SelectValue placeholder="Preventa..." /></SelectTrigger>
               <SelectContent position="popper" sideOffset={4} className="z-[200]">
-                {nombresForSelect.map(n => (
+                {preventasForSelect.map(n => (
                   <SelectItem key={n.value} value={n.value}>{n.label}</SelectItem>
                 ))}
               </SelectContent>
