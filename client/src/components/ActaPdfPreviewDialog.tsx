@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { downloadPdfBlob } from "@/lib/pdfExport";
+import { downloadPdfBlob } from "@/lib/pdf";
 
 export interface ActaPdfPreviewDialogProps {
   open: boolean;
