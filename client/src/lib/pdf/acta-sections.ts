@@ -1,12 +1,22 @@
 import type { ActaData } from "@/hooks/useFormStore";
 import type { PdfLayout } from "./types";
-import { LOGO_NATURAL_W_PX, LOGO_NATURAL_H_PX, COLOR_BRAND, COLOR_BRAND_DARK, COLOR_TEXT, COLOR_GRAY, COLOR_LIGHT } from "./constants";
-import { fitImagePreserveAspectMm } from "./constants";
+import {
+  LOGO_NATURAL_W_PX,
+  LOGO_NATURAL_H_PX,
+  PDF_COLOR_GLOBAL,
+  COLOR_BRAND_DARK,
+  COLOR_TEXT,
+  COLOR_GRAY,
+  COLOR_LIGHT,
+  resolveHeaderColor,
+  fitImagePreserveAspectMm,
+} from "./constants";
 import { ensureSpace, drawSectionTitle, drawFieldRow, drawIntroBox, drawContactGrid, drawPagoTable, drawBulletList } from "./draw-primitives";
 import { formatDate } from "../formatters";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
-import cdlatamLogoDataUrl from "@/assets/cdlatam-logo.png";
+// Logo pre-compuesto sobre fondo azul CDLatam (sin transparencia → no se ve "engranado" en jsPDF)
+import cdlatamLogoOnBrand from "@/assets/cdlatam-logo-on-brand.png";
 
 export function drawHeaderSection(
   doc: jsPDF,
@@ -16,31 +26,33 @@ export function drawHeaderSection(
   margin: number,
   pageWidth: number,
   y: number,
+  /** Override opcional del color de membrete (prioridad máxima sobre PDF_HEADER_COLOR) */
+  headerColor?: [number, number, number],
 ): number {
   const HEADER_H = 20;
 
-  // Franja azul full-ancho
-  doc.setFillColor(...COLOR_BRAND);
+  // Color de membrete: override > PDF_HEADER_COLOR > PDF_COLOR_GLOBAL
+  const hColor = resolveHeaderColor(headerColor);
+
+  // Franja de color de membrete, full-ancho
+  doc.setFillColor(...hColor);
   doc.rect(0, y, pageWidth, HEADER_H, "F");
 
-  // Logo blanco sobre fondo azul (izquierda)
-  const logo: string | null = cdlatamLogoDataUrl ?? null;
-  if (logo) {
-    try {
-      const boxW = 42;
-      const boxH = 12;
-      const { drawW, drawH } = fitImagePreserveAspectMm(
-        LOGO_NATURAL_W_PX,
-        LOGO_NATURAL_H_PX,
-        boxW,
-        boxH,
-      );
-      const imgX = margin + (boxW - drawW) / 2;
-      const imgY = y + (HEADER_H - drawH) / 2;
-      doc.addImage(logo, "PNG", imgX, imgY, drawW, drawH, undefined, "FAST");
-    } catch {
-      /* omitir si falla */
-    }
+  // Logo pre-compuesto (sin transparencia → se ve limpio sobre cualquier fondo)
+  try {
+    const boxW = 52;
+    const boxH = 13;
+    const { drawW, drawH } = fitImagePreserveAspectMm(
+      LOGO_NATURAL_W_PX,
+      LOGO_NATURAL_H_PX,
+      boxW,
+      boxH,
+    );
+    const imgX = margin;
+    const imgY = y + (HEADER_H - drawH) / 2;
+    doc.addImage(cdlatamLogoOnBrand, "PNG", imgX, imgY, drawW, drawH, undefined, "FAST");
+  } catch {
+    /* omitir si falla */
   }
 
   // Título a la derecha en blanco
@@ -196,7 +208,7 @@ export function drawServiciosTable(
     head: [["#", "Unidad Negocio", "Solución", "Detalle Servicio", "Tipo Venta", "Valor Unit.", "Cant.", "Total", "Plazo"]],
     body: servicioRows,
     styles: { fontSize: lo.fontSize.small, cellPadding, textColor: COLOR_TEXT },
-    headStyles: { fillColor: COLOR_BRAND, textColor: [255, 255, 255], fontStyle: "bold" },
+    headStyles: { fillColor: PDF_COLOR_GLOBAL, textColor: [255, 255, 255], fontStyle: "bold" },
     alternateRowStyles: { fillColor: [249, 250, 251] },
     columnStyles: {
       0: { cellWidth: 6, halign: "center" },
