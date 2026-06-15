@@ -70,6 +70,8 @@ function F2InfoGeneralInner({ data, onUpdate, catalogs, f1Suggestions, onImporta
 
   // Nombres para selects de Preventa y Ejecutivo Comercial (catalog_nombres, misma fuente que F1 Atención)
   const nombresForSelect = catalogs?.nombres;
+  const preventaOptions = nombresForSelect?.filter(n => n.value !== data.ejecutivoComercial);
+  const ejecutivoOptions = nombresForSelect?.filter(n => n.value !== data.preventa);
 
   return (
     <FormSection title="Información General del Proyecto" icon={Info} accent="violet">
@@ -198,11 +200,11 @@ function F2InfoGeneralInner({ data, onUpdate, catalogs, f1Suggestions, onImporta
 
         {/* Ejecutivo Comercial — select desde catalog_nombres (misma fuente que F1 Atención) */}
         <FieldGroup label="Ejecutivo Comercial">
-          {nombresForSelect?.length ? (
+          {ejecutivoOptions?.length ? (
             <Select value={data.ejecutivoComercial} onValueChange={v => onUpdate({ ejecutivoComercial: v })}>
               <SelectTrigger><SelectValue placeholder="Ejecutivo comercial..." /></SelectTrigger>
               <SelectContent position="popper" sideOffset={4} className="z-[200]">
-                {nombresForSelect.map(n => (
+                {ejecutivoOptions.map(n => (
                   <SelectItem key={n.value} value={n.value}>{n.label}</SelectItem>
                 ))}
               </SelectContent>
@@ -215,17 +217,17 @@ function F2InfoGeneralInner({ data, onUpdate, catalogs, f1Suggestions, onImporta
 
         {/* Preventa — select desde catalog_nombres (misma fuente que F1 Atención) */}
         <FieldGroup label="Preventa">
-          {nombresForSelect?.length ? (
+          {preventaOptions?.length ? (
             <Select value={data.preventa} onValueChange={v => onUpdate({ preventa: v })}>
-              <SelectTrigger><SelectValue placeholder="Responsable de preventa..." /></SelectTrigger>
+              <SelectTrigger><SelectValue placeholder="Preventa..." /></SelectTrigger>
               <SelectContent position="popper" sideOffset={4} className="z-[200]">
-                {nombresForSelect.map(n => (
+                {preventaOptions.map(n => (
                   <SelectItem key={n.value} value={n.value}>{n.label}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
           ) : (
-            <Input placeholder="Responsable de preventa" value={data.preventa}
+            <Input placeholder="Preventa" value={data.preventa}
               onChange={e => onUpdate({ preventa: e.target.value })} />
           )}
         </FieldGroup>
