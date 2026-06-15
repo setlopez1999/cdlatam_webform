@@ -791,6 +791,17 @@ export const appRouter = router({
         let acta;
         if (existing) {
           const prevF1 = f1DatosSinFirma(existing.f1Datos);
+          // Corrección automática: si el acta tiene nroActa < 10001 (expedientes de prueba anteriores),
+          // reasignar el siguiente número válido desde 10001
+          let nroActaFix: number | undefined;
+          let codigoFix: string | undefined;
+          if (!existing.nroActa || existing.nroActa < 10001) {
+            const rawDb = getRawDb();
+            const maxRow2 = rawDb.prepare(`SELECT COALESCE(MAX(nro_acta), 0) as max_nro FROM actas WHERE id != ?`).get(existing.id) as { max_nro: number };
+            nroActaFix = Math.max((maxRow2.max_nro ?? 0) + 1, 10001);
+            const primerServicioFix = ((actaRest.serviciosContratados ?? existing.serviciosContratados ?? []) as Array<{ unidadNegocio?: string }>)[0];
+            codigoFix = buildActaCodigo("", nroActaFix, primerServicioFix?.unidadNegocio ?? "");
+          }
           await updateActa(existing.id, {
             ...actaRest,
             fecha: actaRest.fecha ? new Date(actaRest.fecha) : undefined,
@@ -800,6 +811,7 @@ export const appRouter = router({
             f1Datos: (f1DatosMerged ?? prevF1) as typeof actaRest.f1Datos,
             f1FormStatus: actaRest.f1FormStatus ?? existing.f1FormStatus ?? "nuevo",
             f1SavedAt: f1SavedAt ?? existing.f1SavedAt ?? undefined,
+            ...(nroActaFix ? { nroActa: nroActaFix, codigo: codigoFix, noActa: codigoFix } : {}),
           });
           acta = await getActaById(existing.id);
         } else {

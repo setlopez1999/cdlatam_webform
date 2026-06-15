@@ -1088,7 +1088,8 @@ export async function crearExpedienteConActa(data: { nombre: string; creadorId: 
     .select({ max: sql<number>`MAX(nro_acta)` })
     .from(actas)
     .limit(1);
-  const nextNroActa = (maxRow[0]?.max ?? 0) + 1;
+  // Garantizar que el primer nroActa sea al menos 10001
+  const nextNroActa = Math.max((maxRow[0]?.max ?? 0) + 1, 10001);
   const codigo = buildActaCodigo("", nextNroActa);
   // 3. Crear acta (F1) vinculada
   const acta = await db.insert(actas).values({
