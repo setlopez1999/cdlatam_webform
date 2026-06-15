@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { FormSection, FieldGroup } from "@/components/FormSection";
 import { FileText, RotateCcw } from "lucide-react";
 import type { F1Data } from "../../types";
+import { buildActaCodigo } from "@shared/documentCodes";
 
 const TEXTO_INTRODUCTORIO_DEFAULT =
   "Por medio de la presente, confirmo la recepción y aprobación de la propuesta comercial, en los términos y condiciones aquí expresados.";
@@ -25,9 +26,20 @@ interface Props {
     sres?: CatalogItem[];
     atencion?: CatalogItem[];
   };
+  /** nroActa del servidor (ya asignado). Si es null, el acta aún no fue guardada. */
+  serverNroActa?: number | null;
+  /** Servicios contratados para extraer la primera unidad de negocio en tiempo real */
+  serviciosContratados?: Array<{ unidadNegocio?: string }>;
 }
 
-export function F1Encabezado({ data, onUpdate, catalogs }: Props) {
+export function F1Encabezado({ data, onUpdate, catalogs, serverNroActa, serviciosContratados }: Props) {
+  // Preview del código en tiempo real: usa la primera unidad de negocio y el nroActa del servidor
+  const primeraUnidad = (serviciosContratados ?? [])[0]?.unidadNegocio ?? "";
+  const codigoPreview = serverNroActa
+    ? buildActaCodigo("", serverNroActa, primeraUnidad)
+    : primeraUnidad
+      ? buildActaCodigo("", 10001, primeraUnidad).replace(/\d+$/, "#####")
+      : "";
   const hasSres     = (catalogs?.sres?.length ?? 0) > 0;
   const hasAtencion = (catalogs?.atencion?.length ?? 0) > 0;
 
@@ -115,11 +127,16 @@ export function F1Encabezado({ data, onUpdate, catalogs }: Props) {
         </FieldGroup>
         <FieldGroup label="Código Acta (autogenerado)">
           <Input
-            id="f1-noActa" placeholder="Autogenerado al guardar"
-            value={data.noActa}
+            id="f1-noActa"
+            placeholder={primeraUnidad ? "Guardar para confirmar número" : "Selecciona unidad de negocio"}
+            value={codigoPreview}
             readOnly
             disabled
+            className={!serverNroActa && codigoPreview ? "text-muted-foreground italic" : ""}
           />
+          {!serverNroActa && codigoPreview && (
+            <p className="text-xs text-muted-foreground mt-1">Vista previa — el número se confirma al guardar</p>
+          )}
         </FieldGroup>
       </div>
     </FormSection>

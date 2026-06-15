@@ -537,6 +537,8 @@ export default function F1Form({ expedienteId }: Props) {
       <F1Encabezado
         data={data} onUpdate={update}
         catalogs={catalogsEncabezado}
+        serverNroActa={expedienteDelStore?.serverNroActa ?? null}
+        serviciosContratados={data.serviciosContratados}
       />
 
       <F1Empresa
