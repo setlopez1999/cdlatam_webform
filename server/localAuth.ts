@@ -162,15 +162,23 @@ export async function seedDefaultRoles(): Promise<void> {
   }
 }
 
+function generateRandomPassword(): string {
+  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*";
+  let pwd = "";
+  for (let i = 0; i < 20; i++) {
+    pwd += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return pwd;
+}
+
 /**
  * Crea los usuarios predefinidos si no existen y sincroniza sus roles en user_roles.
  * Se llama al iniciar el servidor.
  *
- * Credenciales:
- *   admin   / 1234  → rol admin  (acceso total)
- *   usuario / 5678  → rol user   (solo formularios propios)
- *
- * TODO: En producción, cambiar estas contraseñas y usar variables de entorno.
+ * Las contraseñas se toman de variables de entorno:
+ *   DEFAULT_ADMIN_PASSWORD → contraseña para admin
+ *   DEFAULT_USER_PASSWORD  → contraseña para usuario
+ * Si no están definidas, se generan aleatoriamente y se muestran en consola.
  */
 export async function seedDefaultUsers(): Promise<void> {
   const db = await getDb();
@@ -179,9 +187,12 @@ export async function seedDefaultUsers(): Promise<void> {
     return;
   }
 
+  const adminPwd = ENV.defaultAdminPassword || generateRandomPassword();
+  const userPwd = ENV.defaultUserPassword || generateRandomPassword();
+
   const defaultUsers: Array<{ username: string; password: string; displayName: string; role: "admin" | "user" }> = [
-    { username: "admin",   password: "1234", displayName: "Administrador",  role: "admin" },
-    { username: "usuario", password: "5678", displayName: "Usuario Regular", role: "user"  },
+    { username: "admin",   password: adminPwd, displayName: "Administrador",  role: "admin" },
+    { username: "usuario", password: userPwd, displayName: "Usuario Regular", role: "user"  },
   ];
 
   for (const u of defaultUsers) {
@@ -198,8 +209,6 @@ export async function seedDefaultUsers(): Promise<void> {
       dbUser = await findUserByUsername(u.username);
       console.log(`[LocalAuth] Created default user: ${u.username} (${u.role})`);
     }
-
-    // Sincronizar user_roles: asignar el rol correspondiente si no lo tiene
     if (dbUser) {
       const roleRow = await db.select().from(roles).where(eq(roles.nombre, u.role)).limit(1);
       if (roleRow.length > 0) {
@@ -211,6 +220,15 @@ export async function seedDefaultUsers(): Promise<void> {
         }
       }
     }
+  }
+
+  if (!ENV.defaultAdminPassword) {
+    console.log(`[LocalAuth] 🔑 Admin password (no persistirá entre reinicios): ${adminPwd}`);
+    console.log(`[LocalAuth] 🔑 Defina DEFAULT_ADMIN_PASSWORD en .env para fijarla`);
+  }
+  if (!ENV.defaultUserPassword) {
+    console.log(`[LocalAuth] 🔑 Usuario password (no persistirá entre reinicios): ${userPwd}`);
+    console.log(`[LocalAuth] 🔑 Defina DEFAULT_USER_PASSWORD en .env para fijarla`);
   }
 }
 

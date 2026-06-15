@@ -28,7 +28,7 @@ import { useCan } from "@/hooks/useCan";
 import { useNavGuard } from "@/hooks/useNavGuard";
 import { UnsavedChangesDialog } from "@/components/UnsavedChangesDialog";
 import { F1_INITIAL } from "../types";
-import type { F1Data, HitoPago, ServicioContratado } from "../types";
+import type { F1Data, ServicioContratado } from "../types";
 import { nanoid } from "nanoid";
 import {
   F1Encabezado,
@@ -108,15 +108,6 @@ function createFormaPago(item: number) {
   return {
     id: nanoid(), item, tipoVenta: "", nCuotas: 1,
     cuotas: createFourCuotasEmpty(),
-  };
-}
-
-function createHitoPago(): HitoPago {
-  return {
-    id: nanoid(),
-    nombreHito: "",
-    precioHito: 0,
-    condicion: "",
   };
 }
 
@@ -369,51 +360,6 @@ export default function F1Form({ expedienteId }: Props) {
     });
   }, [data, update]);
 
-  const updateFormaPagoHitos = useCallback((
-    id: string,
-    field: string,
-    value: string | number,
-  ) => {
-    if (!data) return;
-    const list = data.formasPagoImplementacionHitos ?? [];
-    update({
-      formasPagoImplementacionHitos: list.map(fp => {
-        if (fp.id !== id) return fp;
-        if (field.startsWith("hitos.")) {
-          const parts = field.split(".");
-          const index = parseInt(parts[1]);
-          const child = parts[2];
-          const newHitos = [...fp.hitos];
-          newHitos[index] = { ...newHitos[index], [child]: value };
-          return { ...fp, hitos: newHitos };
-        }
-        return { ...fp, [field]: value };
-      }),
-    });
-  }, [data, update]);
-
-  const addHito = useCallback((formaPagoId: string) => {
-    if (!data) return;
-    const list = data.formasPagoImplementacionHitos ?? [];
-    update({
-      formasPagoImplementacionHitos: list.map(fp => {
-        if (fp.id !== formaPagoId) return fp;
-        return { ...fp, hitos: [...fp.hitos, createHitoPago()] };
-      }),
-    });
-  }, [data, update]);
-
-  const removeHito = useCallback((formaPagoId: string, hitoId: string) => {
-    if (!data) return;
-    const list = data.formasPagoImplementacionHitos ?? [];
-    update({
-      formasPagoImplementacionHitos: list.map(fp => {
-        if (fp.id !== formaPagoId) return fp;
-        return { ...fp, hitos: fp.hitos.filter(h => h.id !== hitoId) };
-      }),
-    });
-  }, [data, update]);
-
   // ── Guardar ────────────────────────────────────────────────────────────────
 
   /**
@@ -610,9 +556,6 @@ export default function F1Form({ expedienteId }: Props) {
         moneda={data.moneda}
         catalogs={catalogsFormasPago}
         onUpdate={updateFormaPago}
-        onUpdateHitos={updateFormaPagoHitos}
-        onAddHito={addHito}
-        onRemoveHito={removeHito}
         onAdd={addFormaPago}
         onRemove={removeFormaPago}
         restricted={!canViewSensitiveFields}

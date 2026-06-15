@@ -14,9 +14,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { FormSection } from "@/components/FormSection";
 import { Badge } from "@/components/ui/badge";
 import { CreditCard, Plus, Trash2, ShieldOff } from "lucide-react";
-import type { F1Data, FormaPago, FormaPagoHitos } from "../../types";
+import type { F1Data, FormaPago } from "../../types";
 import { formatCurrency, getCurrencyCode, parseNumeric } from "@/lib/formatters";
-import { isTipoImplementacion, isTipoImplementacionHitos, isTipoMantencion } from "../f1TipoVenta";
+import { isTipoImplementacion, isTipoMantencion } from "../f1TipoVenta";
 
 interface CatalogItem { value: string; label: string; }
 interface Catalogs {
@@ -35,9 +35,6 @@ interface Props {
   ) => void;
   onAdd?: (tipo: "formasPagoImplementacion" | "formasPagoMantencion") => void;
   onRemove?: (tipo: "formasPagoImplementacion" | "formasPagoMantencion", id: string) => void;
-  onUpdateHitos: (formaPagoId: string, field: string, value: string | number) => void;
-  onAddHito: (formaPagoId: string) => void;
-  onRemoveHito: (formaPagoId: string, hitoId: string) => void;
   /** Si true, oculta montos y detalles de pago y muestra placeholder de acceso restringido */
   restricted?: boolean;
 }
@@ -47,127 +44,6 @@ interface Props {
 interface FechaContraEntregaProps {
   value: string;
   onChange: (v: string) => void;
-}
-
-interface PagoHitosTableProps {
-  items: FormaPagoHitos[];
-  currencyCode?: string;
-  totalReferenciaByServicio: Record<string, number>;
-  onUpdateHitos: Props["onUpdateHitos"];
-  onAddHito: Props["onAddHito"];
-  onRemoveHito: Props["onRemoveHito"];
-}
-
-function PagoHitosTable({
-  items,
-  currencyCode = "USD",
-  totalReferenciaByServicio,
-  onUpdateHitos,
-  onAddHito,
-  onRemoveHito,
-}: PagoHitosTableProps) {
-  const safeItems = Array.isArray(items) ? items : [];
-  return (
-    <div className="space-y-4">
-      <h4 className="text-sm font-semibold text-foreground">Formas de Pago — Implementación Hitos</h4>
-
-      {safeItems.map((pago, idx) => {
-        const totalHitos = pago.hitos.reduce((sum, h) => sum + (h.precioHito || 0), 0);
-        const totalRef = totalReferenciaByServicio[pago.linkedServicioId ?? ""] ?? 0;
-        const hasWarning = totalRef > 0 && Math.abs(totalHitos - totalRef) > 0.1;
-        return (
-          <div key={pago.id} className="rounded-lg border border-border/60 p-3 space-y-2">
-            <div className="flex items-center justify-between gap-2">
-              <div className="text-xs text-muted-foreground">
-                <span className="font-medium text-foreground">Ítem {idx + 1}</span>
-                {" · "}
-                <span>{pago.tipoVenta || "Implementación Hitos"}</span>
-              </div>
-              <div className="flex items-center gap-2">
-                {hasWarning && (
-                  <Badge variant="outline" className="bg-orange-500/10 text-orange-400 border-orange-500/20 text-[10px] py-0 px-2">
-                    La suma de hitos no coincide con el total del servicio ({formatCurrency(totalRef, currencyCode)})
-                  </Badge>
-                )}
-                <Button type="button" variant="outline" size="sm" className="h-7 text-xs gap-1" onClick={() => onAddHito(pago.id)}>
-                  <Plus className="w-3 h-3" /> Agregar hito
-                </Button>
-              </div>
-            </div>
-
-            <div className="overflow-x-auto rounded-lg border border-border/40">
-              <table className="w-full min-w-[720px] text-xs border-collapse">
-                <thead>
-                  <tr className="bg-muted/60">
-                    <th className="border-b border-r border-border/60 px-2 py-2 text-left font-medium w-10">#</th>
-                    <th className="border-b border-r border-border/60 px-2 py-2 text-left font-medium">Nombre hito</th>
-                    <th className="border-b border-r border-border/60 px-2 py-2 text-right font-medium w-[130px]">Precio hito</th>
-                    <th className="border-b border-r border-border/60 px-2 py-2 text-left font-medium">Condiciones</th>
-                    <th className="border-b border-border/60 px-2 py-2 w-8"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {pago.hitos.map((hito, hIdx) => (
-                    <tr key={hito.id} className="hover:bg-muted/10 transition-colors border-b border-border/20 last:border-b-0">
-                      <td className="px-2 py-1 text-center text-muted-foreground">{hIdx + 1}</td>
-                      <td className="px-1 py-1">
-                        <Input
-                          className="h-7 text-xs"
-                          placeholder="Nombre del hito"
-                          value={hito.nombreHito}
-                          onChange={e => onUpdateHitos(pago.id, `hitos.${hIdx}.nombreHito`, e.target.value)}
-                        />
-                      </td>
-                      <td className="px-1 py-1">
-                        <Input
-                          type="number"
-                          min={0}
-                          className="h-7 text-xs text-right"
-                          placeholder="0"
-                          value={hito.precioHito || ""}
-                          onChange={e => onUpdateHitos(pago.id, `hitos.${hIdx}.precioHito`, parseNumeric(e.target.value))}
-                        />
-                      </td>
-                      <td className="px-1 py-1">
-                        <Input
-                          className="h-7 text-xs"
-                          placeholder="Condición de cumplimiento"
-                          value={hito.condicion}
-                          onChange={e => onUpdateHitos(pago.id, `hitos.${hIdx}.condicion`, e.target.value)}
-                        />
-                      </td>
-                      <td className="px-1 py-1 text-center">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="h-6 w-6 text-destructive/60 hover:text-destructive"
-                          onClick={() => onRemoveHito(pago.id, hito.id)}
-                        >
-                          <Trash2 className="w-3 h-3" />
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-                <tfoot>
-                  <tr className="bg-muted/40 font-medium">
-                    <td colSpan={2} className="border-t border-r border-border/60 px-2 py-1.5 text-right">Total hitos:</td>
-                    <td className={`border-t border-r border-border/60 px-2 py-1.5 text-right font-bold ${hasWarning ? "text-orange-400" : "text-emerald-400"}`}>
-                      {formatCurrency(totalHitos, currencyCode)}
-                    </td>
-                    <td colSpan={2} className="border-t border-border/60 px-2 py-1.5 text-[10px] text-muted-foreground">
-                      {hasWarning ? "Revisar suma de hitos vs total del servicio" : "Suma de hitos validada"}
-                    </td>
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
 }
 
 function FechaContraEntrega({ value, onChange }: FechaContraEntregaProps) {
@@ -381,17 +257,12 @@ export function F1FormasPago({
   onUpdate,
   onAdd,
   onRemove,
-  onUpdateHitos,
-  onAddHito,
-  onRemoveHito,
   restricted = false,
 }: Props) {
   const currencyCode = getCurrencyCode(moneda ?? "");
-  const hitosItems = data.formasPagoImplementacionHitos ?? [];
 
   const tieneImplementacion = data.serviciosContratados.some(s => isTipoImplementacion(s.tipoVenta));
   const tieneMantencion = data.serviciosContratados.some(s => isTipoMantencion(s.tipoVenta));
-  const tieneImplementacionHitos = data.serviciosContratados.some(s => isTipoImplementacionHitos(s.tipoVenta));
 
   const totalReferenciaImpl = data.serviciosContratados
     .filter(s => isTipoImplementacion(s.tipoVenta))
@@ -406,14 +277,7 @@ export function F1FormasPago({
     return acc;
   }, {});
 
-  const totalReferenciaHitosByServicio = data.serviciosContratados
-    .filter(s => isTipoImplementacionHitos(s.tipoVenta))
-    .reduce<Record<string, number>>((acc, s) => {
-      acc[s.id] = s.total || 0;
-      return acc;
-    }, {});
-
-  const mostrarAlguna = tieneImplementacion || tieneMantencion || tieneImplementacionHitos;
+  const mostrarAlguna = tieneImplementacion || tieneMantencion;
 
   if (restricted) {
     return (
@@ -432,7 +296,7 @@ export function F1FormasPago({
     return (
       <FormSection title="Formas de Pago" icon={CreditCard} accent="indigo">
         <p className="text-sm text-muted-foreground italic">
-          Agrega servicios de tipo <strong>Implementación</strong>, <strong>Implementación Hitos</strong> o <strong>Mantención</strong> para habilitar las formas de pago.
+          Agrega servicios de tipo <strong>Implementación</strong> o <strong>Mantención</strong> para habilitar las formas de pago.
         </p>
       </FormSection>
     );
@@ -468,18 +332,6 @@ export function F1FormasPago({
               onUpdate={onUpdate}
               onAdd={onAdd}
               onRemove={onRemove}
-            />
-          </div>
-        )}
-        {tieneImplementacionHitos && (
-          <div className={tieneImplementacion || tieneMantencion ? "border-t border-border/40 pt-6" : ""}>
-            <PagoHitosTable
-              items={hitosItems}
-              currencyCode={currencyCode}
-              totalReferenciaByServicio={totalReferenciaHitosByServicio}
-              onUpdateHitos={onUpdateHitos}
-              onAddHito={onAddHito}
-              onRemoveHito={onRemoveHito}
             />
           </div>
         )}

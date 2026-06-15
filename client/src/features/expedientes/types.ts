@@ -55,22 +55,6 @@ export interface FormaPago {
   cuotas: CuotaPago[]; // Arreglo dinámico de 1 a 4 cuotas
 }
 
-export interface HitoPago {
-  id: string;
-  nombreHito: string;
-  precioHito: number;
-  condicion: string;
-}
-
-export interface FormaPagoHitos {
-  id: string;
-  item: number;
-  /** Si existe, la fila se sincroniza con el servicio del mismo id. */
-  linkedServicioId?: string;
-  tipoVenta: string;
-  hitos: HitoPago[];
-}
-
 // ─── F1 — Acta ────────────────────────────────────────────────────────────────
 
 export interface F1Data {
@@ -107,7 +91,6 @@ export interface F1Data {
   serviciosContratados: ServicioContratado[];
   formasPagoImplementacion: FormaPago[];
   formasPagoMantencion: FormaPago[];
-  formasPagoImplementacionHitos: FormaPagoHitos[];
   /** Suma de (valor unitario − monto cuota) en cuotas de gracia Mantención — persiste en expediente. */
   total_descuento_mantencion: number;
   // Consideraciones y cláusulas
@@ -127,7 +110,7 @@ export const F1_INITIAL: F1Data = {
   contactoTecnicoTelefonoFijo: "", contactoTecnicoTelefonoMovil: "",
   contactoFacturacion: "", contactoFacturacionEmail: "",
   contactoFacturacionTelefonoFijo: "", contactoFacturacionTelefonoMovil: "",
-  serviciosContratados: [], formasPagoImplementacion: [], formasPagoMantencion: [], formasPagoImplementacionHitos: [],
+  serviciosContratados: [], formasPagoImplementacion: [], formasPagoMantencion: [],
   total_descuento_mantencion: 0,
   consideracionesPersonalizadas: [], clausulasLegales: "",
   firmaImagen: undefined,

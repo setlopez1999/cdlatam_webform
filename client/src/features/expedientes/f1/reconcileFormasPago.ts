@@ -4,15 +4,11 @@
  * Mantención: cuotas de gracia manuales vs valor unitario; si cambia el precio unitario se resetean montos de gracia.
  */
 import { nanoid } from "nanoid";
-import type { F1Data, FormaPago, FormaPagoHitos, ServicioContratado } from "../types";
+import type { F1Data, FormaPago, ServicioContratado } from "../types";
 import { createFourCuotasEmpty } from "./f1CuotasDefaults";
-import { isTipoImplementacion, isTipoImplementacionHitos, isTipoMantencion } from "./f1TipoVenta";
+import { isTipoImplementacion, isTipoMantencion } from "./f1TipoVenta";
 
 export function formasPagoListsEqual(a: FormaPago[], b: FormaPago[]): boolean {
-  return JSON.stringify(a) === JSON.stringify(b);
-}
-
-export function formasPagoHitosListsEqual(a: FormaPagoHitos[], b: FormaPagoHitos[]): boolean {
   return JSON.stringify(a) === JSON.stringify(b);
 }
 
@@ -61,12 +57,6 @@ export function findLinkedFormaPago(data: F1Data, servicioId: string): FormaPago
     data.formasPagoImplementacion.find(fp => fp.linkedServicioId === servicioId) ||
     data.formasPagoMantencion.find(fp => fp.linkedServicioId === servicioId)
   );
-}
-
-/** Busca fila enlazada en cualquier tabla de pagos (incluye hitos). */
-export function findLinkedFormaPagoHitos(data: F1Data, servicioId: string): FormaPagoHitos | undefined {
-  const hitos = data.formasPagoImplementacionHitos ?? [];
-  return hitos.find(fp => fp.linkedServicioId === servicioId);
 }
 
 /** Primera creación de fila Implementación enlazada. */
@@ -159,43 +149,14 @@ function buildLinkedRowMant(
   return seedLinkedFormaPagoMant(servicio, item);
 }
 
-/** Primera creación de fila por hitos para un servicio Implementación Hitos. */
-function seedLinkedFormaPagoHitos(servicio: ServicioContratado, item: number): FormaPagoHitos {
-  return {
-    id: nanoid(),
-    item,
-    linkedServicioId: servicio.id,
-    tipoVenta: servicio.tipoVenta,
-    hitos: [],
-  };
-}
-
-function buildLinkedRowHitos(
-  servicio: ServicioContratado,
-  existing: FormaPagoHitos | undefined,
-  item: number,
-): FormaPagoHitos {
-  if (existing) {
-    return {
-      ...existing,
-      item,
-      linkedServicioId: servicio.id,
-    };
-  }
-  return seedLinkedFormaPagoHitos(servicio, item);
-}
-
 export function reconcileFormasPagoDesdeServicios(
   data: F1Data,
-): Pick<F1Data, "formasPagoImplementacion" | "formasPagoMantencion" | "formasPagoImplementacionHitos"> {
+): Pick<F1Data, "formasPagoImplementacion" | "formasPagoMantencion"> {
   const implServicios = data.serviciosContratados.filter(s => isTipoImplementacion(s.tipoVenta));
   const mantServicios = data.serviciosContratados.filter(s => isTipoMantencion(s.tipoVenta));
-  const implHitosServicios = data.serviciosContratados.filter(s => isTipoImplementacionHitos(s.tipoVenta));
-  const hitosActuales = data.formasPagoImplementacionHitos ?? [];
 
   const manualImpl = data.formasPagoImplementacion.filter(fp => !fp.linkedServicioId);
   const manualMant = data.formasPagoMantencion.filter(fp => !fp.linkedServicioId);
-  const manualImplHitos = hitosActuales.filter(fp => !fp.linkedServicioId);
 
   const linkedImpl = implServicios.map((s, idx) => {
     const existing = findLinkedFormaPago(data, s.id);
@@ -207,15 +168,9 @@ export function reconcileFormasPagoDesdeServicios(
     return buildLinkedRowMant(s, existing, idx + 1);
   });
 
-  const linkedImplHitos = implHitosServicios.map((s, idx) => {
-    const existing = findLinkedFormaPagoHitos(data, s.id);
-    return buildLinkedRowHitos(s, existing, idx + 1);
-  });
-
   return {
     formasPagoImplementacion: [...linkedImpl, ...manualImpl],
     formasPagoMantencion: [...linkedMant, ...manualMant],
-    formasPagoImplementacionHitos: [...linkedImplHitos, ...manualImplHitos],
   };
 }
 
@@ -224,13 +179,11 @@ export function reconcileFormasPagoDesdeServicios(
  */
 export function formasReconcilePatchOrNull(
   data: F1Data,
-): Pick<F1Data, "formasPagoImplementacion" | "formasPagoMantencion" | "formasPagoImplementacionHitos"> | null {
+): Pick<F1Data, "formasPagoImplementacion" | "formasPagoMantencion"> | null {
   const rec = reconcileFormasPagoDesdeServicios(data);
-  const hitosActuales = data.formasPagoImplementacionHitos ?? [];
   if (
     formasPagoListsEqual(rec.formasPagoImplementacion, data.formasPagoImplementacion) &&
-    formasPagoListsEqual(rec.formasPagoMantencion, data.formasPagoMantencion) &&
-    formasPagoHitosListsEqual(rec.formasPagoImplementacionHitos, hitosActuales)
+    formasPagoListsEqual(rec.formasPagoMantencion, data.formasPagoMantencion)
   ) {
     return null;
   }

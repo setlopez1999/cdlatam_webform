@@ -283,21 +283,4 @@ describe("reconcileFormasPagoDesdeServicios", () => {
     expect(computeTotalDescuentoMantencion(data)).toBe(100);
   });
 
-  it("clasifica Implementación Hitos en lista separada", () => {
-    const base: F1Data = {
-      ...F1_INITIAL,
-      serviciosContratados: [
-        svc({
-          id: "s-h1",
-          tipoVenta: "implementacion hitos",
-          total: 300,
-        }),
-      ],
-    };
-    const r = reconcileFormasPagoDesdeServicios(base);
-    expect(r.formasPagoImplementacion).toHaveLength(0);
-    expect(r.formasPagoMantencion).toHaveLength(0);
-    expect(r.formasPagoImplementacionHitos).toHaveLength(1);
-    expect(r.formasPagoImplementacionHitos[0].linkedServicioId).toBe("s-h1");
-  });
 });

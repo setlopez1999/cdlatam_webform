@@ -3,7 +3,6 @@ import { useLocation } from "wouter";
 import { useLocalAuth } from "@/hooks/useLocalAuth";
 import { Label } from "@/components/ui/label";
 import { Loader2, Lock, User, ArrowRight, CheckCircle2 } from "lucide-react";
-import { getAppDebug } from "@/lib/errorUtils";
 import { CDLATAM_LOGO_PATH } from "@/lib/cdlatamBrand";
 
 export default function Login() {
@@ -11,7 +10,7 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [localError, setLocalError] = useState<string | null>(null);
 
-  const { login, isLoggingIn, loginError } = useLocalAuth();
+  const { login, isLoggingIn } = useLocalAuth();
   const [, navigate] = useLocation();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -25,12 +24,6 @@ export default function Login() {
     } catch (err: any) {
       setLocalError(err.message || "Credenciales incorrectas.");
     }
-  };
-
-  const fillCredentials = (u: string, p: string) => {
-    setUsername(u);
-    setPassword(p);
-    setLocalError(null);
   };
 
 
@@ -228,57 +221,7 @@ export default function Login() {
             </button>
           </form>
 
-          {/* Credentials hint — solo visible en modo debug */}
-          {getAppDebug() && <div className="mt-8 pt-6" style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
-            <p className="text-[10px] font-semibold uppercase tracking-widest text-white/20 text-center mb-3">
-              Acceso de prueba
-            </p>
-            <div className="grid grid-cols-2 gap-2.5">
-              <button
-                type="button"
-                onClick={() => fillCredentials("admin", "1234")}
-                className="text-left p-3 rounded-xl transition-all cursor-pointer"
-                style={{
-                  background: "rgba(0,229,204,0.06)",
-                  border: "1px solid rgba(0,229,204,0.15)",
-                }}
-                onMouseEnter={e => {
-                  (e.currentTarget as HTMLElement).style.background = "rgba(0,229,204,0.12)";
-                  (e.currentTarget as HTMLElement).style.border = "1px solid rgba(0,229,204,0.3)";
-                }}
-                onMouseLeave={e => {
-                  (e.currentTarget as HTMLElement).style.background = "rgba(0,229,204,0.06)";
-                  (e.currentTarget as HTMLElement).style.border = "1px solid rgba(0,229,204,0.15)";
-                }}
-              >
-                <p className="text-[10px] font-bold mb-1" style={{ color: "#00E5CC" }}>Administrador</p>
-                <p className="text-xs text-white/40 font-mono">admin / 1234</p>
-              </button>
-              <button
-                type="button"
-                onClick={() => fillCredentials("usuario", "5678")}
-                className="text-left p-3 rounded-xl transition-all cursor-pointer"
-                style={{
-                  background: "rgba(255,255,255,0.03)",
-                  border: "1px solid rgba(255,255,255,0.07)",
-                }}
-                onMouseEnter={e => {
-                  (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.07)";
-                  (e.currentTarget as HTMLElement).style.border = "1px solid rgba(255,255,255,0.15)";
-                }}
-                onMouseLeave={e => {
-                  (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.03)";
-                  (e.currentTarget as HTMLElement).style.border = "1px solid rgba(255,255,255,0.07)";
-                }}
-              >
-                <p className="text-[10px] font-bold text-white/40 mb-1">Usuario</p>
-                <p className="text-xs text-white/30 font-mono">usuario / 5678</p>
-              </button>
-            </div>
-            <p className="text-[10px] text-white/15 text-center mt-3">
-              Haz clic en una credencial para autocompletar
-            </p>
-          </div>}
+          {/* Credentials hint eliminado por seguridad — ya no se exponen credenciales en pantalla */}
         </div>
 
         {/* Footer */}

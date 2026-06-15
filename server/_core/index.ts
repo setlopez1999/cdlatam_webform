@@ -1,5 +1,7 @@
 import "dotenv/config";
 import express from "express";
+import helmet from "helmet";
+import rateLimit from "express-rate-limit";
 import { createServer } from "http";
 import net from "net";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
@@ -36,9 +38,26 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
 async function startServer() {
   const app = express();
   const server = createServer(app);
-  // Configure body parser with larger size limit for file uploads
-  app.use(express.json({ limit: "50mb" }));
-  app.use(express.urlencoded({ limit: "50mb", extended: true }));
+
+  // Seguridad HTTP
+  app.use(helmet({
+    contentSecurityPolicy: false,
+    crossOriginEmbedderPolicy: false,
+  }));
+
+  // Rate limiting solo para API (no afecta assets estáticos ni la SPA)
+  const apiLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 100,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: "Demasiadas solicitudes a la API, intente más tarde", code: 429 },
+  });
+  app.use("/api/trpc", apiLimiter);
+
+  // Configure body parser
+  app.use(express.json({ limit: "10mb" }));
+  app.use(express.urlencoded({ limit: "10mb", extended: true }));
 
   // Run DB migrations
   await runMigrations();
@@ -48,7 +67,7 @@ async function startServer() {
 
   // Seed default roles (admin, viewer, user, gestor_horarios)
   await seedDefaultRoles().catch(err => console.error("[Seed] Roles failed:", err));
-  // Seed default users (admin/1234 and usuario/5678)
+  // Seed default users (credenciales desde .env o generadas aleatoriamente)
   await seedDefaultUsers().catch(err => console.error("[Seed] Users failed:", err));
 
   // Custom REST auth routes

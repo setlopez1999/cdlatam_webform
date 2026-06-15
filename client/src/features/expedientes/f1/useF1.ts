@@ -79,7 +79,6 @@ export function useF1(expedienteId: number) {
         serviciosContratados: data.serviciosContratados,
         formasPagoImplementacion: data.formasPagoImplementacion,
         formasPagoMantencion: data.formasPagoMantencion,
-        formasPagoImplementacionHitos: data.formasPagoImplementacionHitos,
         status: "borrador",
         f1Datos: f1DatosSinFirma as Record<string, unknown>,
         f1FormStatus: "guardado",
