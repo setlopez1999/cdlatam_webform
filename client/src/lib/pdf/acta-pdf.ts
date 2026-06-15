@@ -23,7 +23,7 @@ async function buildActaPdfBytes(acta: ActaData, opts: ActaPdfExportOpts = {}): 
   const currencyCode = getCurrencyCode(acta.moneda ?? "");
   const fmt = (v: number) => formatCurrency(v, currencyCode);
 
-  let y = margin;
+  let y = 0; // El header empieza en el borde superior (y=0), sin margen superior
 
   // 1. Header
   y = drawHeaderSection(doc, lo, acta.noActa || "", acta.fecha, margin, pageWidth, y);
