@@ -98,15 +98,15 @@ export function buildFeaturesUnoPdfBytes(
     String(idx + 1),
     item.label,
     item.descripcion || "",   // ← descripcion técnica del feature
-    item.estado ? "✓" : "",
-    item.estado ? "" : "✓",
+    item.estado ? "SI" : "",
+    item.estado ? "" : "NO",
   ]);
 
   autoTable(doc, {
     startY,
     head: [["N°", "Módulo / Componente", "Descripción", "SI", "NO"]],
     body: tableRows,
-    margin: { left: margin, right: margin },
+    margin: { left: margin, right: margin, top: TOP_MARGIN + HEADER_H + BOTTOM_GAP },
     tableWidth: contentWidth,
     styles: {
       fontSize: 8,
@@ -131,13 +131,15 @@ export function buildFeaturesUnoPdfBytes(
     alternateRowStyles: { fillColor: COLOR_LIGHT as [number, number, number] },
     didParseCell: (data) => {
       if (data.section === "body") {
-        if (data.column.index === 3 && data.cell.raw === "✓") {
+        if (data.column.index === 3 && data.cell.raw === "SI") {
           data.cell.styles.textColor = [16, 185, 129] as [number, number, number]; // verde
-          data.cell.styles.fontSize = 11;
+          data.cell.styles.fontStyle = "bold";
+          data.cell.styles.fontSize = 9;
         }
-        if (data.column.index === 4 && data.cell.raw === "✓") {
+        if (data.column.index === 4 && data.cell.raw === "NO") {
           data.cell.styles.textColor = [239, 68, 68] as [number, number, number]; // rojo
-          data.cell.styles.fontSize = 11;
+          data.cell.styles.fontStyle = "bold";
+          data.cell.styles.fontSize = 9;
         }
       }
     },
