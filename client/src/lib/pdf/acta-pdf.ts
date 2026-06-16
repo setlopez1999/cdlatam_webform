@@ -113,7 +113,7 @@ export async function createActaPdfBlob(
           const tempDoc = new jsPDF({ unit: "mm", format: "letter" });
           const tempLo = resolveLayout(tempDoc, { compact: true });
           const pw = tempDoc.internal.pageSize.getWidth();
-          drawSharedHeader(tempDoc, tempLo, "CDLatam", [], margin, pw, 0, {
+          drawSharedHeader(tempDoc, tempLo, "CDLatam", [], 15, pw, 0, {
             bandHeightMm: 5,
             topMarginMm: 2,
             bottomGapMm: 4,
