@@ -44,7 +44,7 @@ const ALL_TABS: Tab[] = [
   },
   {
     id: "implementacion",
-    label: "Implementación",
+    label: "Features",
     icon: <Rocket className="w-4 h-4" />,
     path: (id) => `/expediente/${id}/implementacion`,
   },

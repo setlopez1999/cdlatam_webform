@@ -190,7 +190,7 @@ export const ROUTE_PERMISSIONS: Record<string, RoutePermission> = {
   },
   "/expediente/:id/implementacion": {
     roles: [ROLE_ANY],
-    label: "Implementación",
+    label: "Features",
     showInNav: false,
   },
 };

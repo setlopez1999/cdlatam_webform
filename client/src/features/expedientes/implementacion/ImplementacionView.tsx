@@ -49,9 +49,9 @@ export default function ImplementacionView({ expedienteId }: Props) {
   return (
     <div className="p-6 max-w-3xl mx-auto space-y-6" translate="no">
       <PageHeader
-        title="Implementación"
-        subtitle="Checklist de funcionalidades IPTV-OTT por expediente. Cada cambio se guarda automáticamente."
-        badge="Impl"
+        title="Features"
+        subtitle="Checklist de funcionalidades IPTV-OTT por expediente. Cada cambio se guarda automaticamente."
+        badge="Feat"
         badgeColor="bg-violet-50 text-violet-800 border-violet-200"
         icon={Rocket}
       />
