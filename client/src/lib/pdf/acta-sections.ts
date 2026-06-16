@@ -1,24 +1,11 @@
 import type { ActaData } from "@/hooks/useFormStore";
 import type { PdfLayout } from "./types";
-import {
-  LOGO_NATURAL_W_PX,
-  LOGO_NATURAL_H_PX,
-  PDF_COLOR_GLOBAL,
-  PDF_COLOR_TINT,
-  PDF_COLOR_SUBTITLE,
-  COLOR_TEXT,
-  COLOR_GRAY,
-  COLOR_LIGHT,
-  resolveHeaderColor,
-  fitImagePreserveAspectMm,
-  drawHeaderBand,
-} from "./constants";
+import { PDF_COLOR_GLOBAL, PDF_COLOR_TINT, COLOR_TEXT, COLOR_GRAY, COLOR_LIGHT } from "./constants";
 import { ensureSpace, drawSectionTitle, drawFieldRow, drawIntroBox, drawContactGrid, drawPagoTable, drawBulletList } from "./draw-primitives";
 import { formatDate } from "../formatters";
+import { drawSharedHeader } from "./draw-header";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
-// Logo pre-compuesto sobre fondo azul CDLatam (sin transparencia → no se ve "engranado" en jsPDF)
-import cdlatamLogoOnBrand from "@/assets/cdlatam-logo-on-brand.png";
 
 export function drawHeaderSection(
   doc: jsPDF,
@@ -28,64 +15,10 @@ export function drawHeaderSection(
   margin: number,
   pageWidth: number,
   y: number,
-  /** Override opcional del color de membrete (prioridad máxima sobre PDF_HEADER_COLOR) */
   headerColor?: [number, number, number],
 ): number {
-  const HEADER_H = 26;  // franja más alta para acomodar logo grande
-  const TOP_MARGIN = 8; // margen superior del mismo color que la franja
-  const BOTTOM_GAP = 10; // espacio entre membrete y contenido del acta
-
-  // Color de membrete: override > PDF_HEADER_COLOR > PDF_COLOR_GLOBAL
-  const hColor = resolveHeaderColor(headerColor);
-
-  // Margen superior + franja (sólido o degradado según PDF_HEADER_USE_GRADIENT en constants.ts)
-  drawHeaderBand(doc, 0, y, pageWidth, TOP_MARGIN, hColor);
-  drawHeaderBand(doc, 0, y + TOP_MARGIN, pageWidth, HEADER_H, hColor);
-
-  // Logo pre-compuesto más grande
-  try {
-    const boxW = 72;  // más ancho
-    const boxH = 18;  // más alto
-    const { drawW, drawH } = fitImagePreserveAspectMm(
-      LOGO_NATURAL_W_PX,
-      LOGO_NATURAL_H_PX,
-      boxW,
-      boxH,
-    );
-    const imgX = margin;
-    // Centrar logo verticalmente dentro de la franja
-    const imgY = y + TOP_MARGIN + (HEADER_H - drawH) / 2;
-    doc.addImage(cdlatamLogoOnBrand, "PNG", imgX, imgY, drawW, drawH, undefined, "FAST");
-  } catch {
-    /* omitir si falla */
-  }
-
-  // Centro de la franja
-  const bandMid = y + TOP_MARGIN + HEADER_H / 2;
-
-  // Título a la derecha en blanco
-  doc.setTextColor(255, 255, 255);
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(lo.fontSize.title);
-  doc.text("Acta de Aceptación de Servicios", pageWidth - margin, bandMid - 4, { align: "right", baseline: "middle" });
-
-  // N° de acta
-  doc.setFontSize(lo.fontSize.subtitle);
-  doc.text(`N° ${noActa || "S/N"}`, pageWidth - margin, bandMid + 2, { align: "right", baseline: "middle" });
-
-  // Fecha
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(lo.fontSize.small);
-  doc.setTextColor(...PDF_COLOR_SUBTITLE);
-  doc.text(`Fecha: ${formatDate(fecha)}`, pageWidth - margin, bandMid + 8, { align: "right", baseline: "middle" });
-
-  // Espacio generoso entre membrete y contenido del acta
-  y += TOP_MARGIN + HEADER_H + BOTTOM_GAP;
-
-  // Restaurar color de texto
-  doc.setTextColor(...COLOR_TEXT);
-
-  return y;
+  const rightLines = [`N\u00b0 ${noActa || "S/N"}`, `Fecha: ${formatDate(fecha)}`];
+  return drawSharedHeader(doc, lo, "Acta de Aceptaci\u00f3n de Servicios", rightLines, margin, pageWidth, y, { headerColor });
 }
 
 export function drawEncabezado(
@@ -194,8 +127,6 @@ export function drawServiciosTable(
 
   const precioUnitarioServicio = (s: { precioUnitario?: number; valorUnitario?: number }) =>
     Number(s.precioUnitario ?? s.valorUnitario ?? 0);
-  const totalServicios = serviciosContratados.reduce((sum, s) => sum + s.total, 0);
-
   const servicioRows = serviciosContratados.map((s, i) => [
     String(i + 1),
     s.unidadNegocio || "",
@@ -206,9 +137,6 @@ export function drawServiciosTable(
     String(s.cantidad),
     fmt(s.total),
     s.plazo || "",
-  ]);
-  servicioRows.push([
-    "", "", "", "", "", "", "TOTAL", fmt(totalServicios), "",
   ]);
 
   // Ancho dinámico solo para columnas angostas (4-8) — midiendo header + body
@@ -241,12 +169,6 @@ export function drawServiciosTable(
       6: { cellWidth: narrowW[6], halign: "right" },
       7: { cellWidth: narrowW[7], halign: "right", fontStyle: "bold" },
       8: { cellWidth: narrowW[8] },
-    },
-    didParseCell: (hookData) => {
-      if (hookData.section === "body" && hookData.row.index === servicioRows.length - 1) {
-        hookData.cell.styles.fillColor = PDF_COLOR_TINT;
-        hookData.cell.styles.fontStyle = "bold";
-      }
     },
   });
   y = (doc as unknown as { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY ?? y;
