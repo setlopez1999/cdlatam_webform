@@ -221,9 +221,13 @@ export function drawServiciosTable(
     alternateRowStyles: { fillColor: [249, 250, 251] },
     columnStyles: {
       0: { cellWidth: 6, halign: "center" },
-      5: { halign: "right" },
-      6: { halign: "right" },
-      7: { halign: "right", fontStyle: "bold" },
+      1: { cellWidth: 42 },
+      2: { cellWidth: 48 },
+      4: { cellWidth: 36 },
+      5: { cellWidth: 26, halign: "right" },
+      6: { cellWidth: 18, halign: "right" },
+      7: { cellWidth: 28, halign: "right", fontStyle: "bold" },
+      8: { cellWidth: 28 },
     },
     didParseCell: (hookData) => {
       if (hookData.section === "body" && hookData.row.index === servicioRows.length - 1) {
