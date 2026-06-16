@@ -4,7 +4,8 @@ import { effectiveNoActaForPdf, resolveLayout, findBestScale } from "./layout";
 import { drawHeaderSection, drawEncabezado, drawInfoLegal, drawContactSection, drawServiciosTable, drawFormasPagoSection, drawConsideracionesSection, drawClausulasSection, drawFirmaBlock, drawFooter } from "./acta-sections";
 import { getCurrencyCode, formatCurrency } from "../formatters";
 import { jsPDF } from "jspdf";
-import { PDFDocument } from "pdf-lib";
+import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
+import { PDF_HEADER_COLOR } from "./constants";
 
 async function buildActaPdfBytes(acta: ActaData, opts: ActaPdfExportOpts = {}): Promise<Uint8Array> {
   const doc = new jsPDF({ unit: "mm", format: "letter" });
@@ -104,12 +105,32 @@ export async function createActaPdfBlob(
         const pdf = await PDFDocument.load(bytes, { ignoreEncryption: true });
         // Escalar páginas importadas a Letter para que mantengan el mismo tamaño que el acta
         const copied = await merged.copyPages(pdf, pdf.getPageIndices());
+        const helv = c.tipo === "clausula" ? await merged.embedFont(StandardFonts.Helvetica) : null;
         for (const page of copied) {
           const { width: srcW, height: srcH } = page.getSize();
           const s = Math.min(PAGE_W / srcW, PAGE_H / srcH);
           page.scale(s, s);
           page.setSize(PAGE_W, PAGE_H);
           merged.addPage(page);
+          // Membreta reducida (1/5 del header normal) solo para cláusulas, no anexo
+          if (c.tipo === "clausula" && helv) {
+            const bandH = 14;
+            const hc = PDF_HEADER_COLOR;
+            page.drawRectangle({
+              x: 0,
+              y: PAGE_H - bandH,
+              width: PAGE_W,
+              height: bandH,
+              color: rgb(hc[0] / 255, hc[1] / 255, hc[2] / 255),
+            });
+            page.drawText("CDLatam", {
+              x: 20,
+              y: PAGE_H - bandH + 3,
+              size: 8,
+              font: helv,
+              color: rgb(1, 1, 1),
+            });
+          }
         }
       } catch (err) {
         console.warn("[pdfExport] clausula fallo, se omite:", c.fileName, err);
