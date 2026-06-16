@@ -15,6 +15,8 @@ if [ ! -f "$PKG" ]; then
   exit 1
 fi
 
+mkdir -p tmp
+
 echo "1/4 - git pull"
 git pull
 

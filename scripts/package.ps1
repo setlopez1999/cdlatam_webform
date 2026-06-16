@@ -22,8 +22,20 @@ Write-Host "Empaquetando gestion.db + data/clauses/ ..."
 if ($LASTEXITCODE -eq 0) {
   $size = "{0:N2}" -f ((Get-Item $Output).Length / 1MB)
   Write-Host "OK: $Output ($size MB)"
-  Write-Host "Subilo al server con:"
-  Write-Host "  scp $Output root@trapemn-opt-pe-02:/home/trapemn/cdlatam_webform/"
+  Write-Host ""
+  $answer = Read-Host "Enviar al VPS ahora? (s/n)"
+  if ($answer -eq "s") {
+    scp $Output root@trapemn-opt-pe-02:/home/trapemn/cdlatam_webform/tmp/
+    if ($LASTEXITCODE -eq 0) {
+      Write-Host "Enviado! En el VPS: bash scripts/deploy.sh"
+    } else {
+      Write-Host "ERROR: no se pudo enviar. Hacelo manual:"
+      Write-Host "  scp $Output root@trapemn-opt-pe-02:/home/trapemn/cdlatam_webform/tmp/"
+    }
+  } else {
+    Write-Host "Enviá manual con:"
+    Write-Host "  scp $Output root@trapemn-opt-pe-02:/home/trapemn/cdlatam_webform/tmp/"
+  }
 } else {
   Write-Host "ERROR: fallo al crear el paquete"
   exit 1
