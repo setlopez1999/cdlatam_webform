@@ -213,7 +213,7 @@ export function drawServiciosTable(
 
   // Ancho dinámico solo para columnas angostas (4-8) — midiendo header + body
   const headCells = ["#", "U.Negocio", "Solucion", "Detalle", "Tipo Venta", "V.Unit.", "Cant.", "Total", "Plazo"];
-  const narrowCols = [4, 5, 6, 7, 8];
+  const narrowCols = [1, 4, 5, 6, 7, 8];
   const narrowW: Record<number, number> = {};
   doc.setFontSize(lo.fontSize.small);
   for (const ci of narrowCols) {
@@ -235,6 +235,7 @@ export function drawServiciosTable(
     alternateRowStyles: { fillColor: [249, 250, 251] },
     columnStyles: {
       0: { cellWidth: 6, halign: "center" },
+      1: { cellWidth: narrowW[1] },
       4: { cellWidth: narrowW[4] },
       5: { cellWidth: narrowW[5], halign: "right" },
       6: { cellWidth: narrowW[6], halign: "right" },
