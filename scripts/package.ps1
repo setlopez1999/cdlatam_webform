@@ -24,17 +24,19 @@ if ($LASTEXITCODE -eq 0) {
   Write-Host "OK: $Output ($size MB)"
   Write-Host ""
   $answer = Read-Host "Enviar al VPS ahora? (s/n)"
+  $vps = "root@191.98.169.6"
+  $remote = "$vps`:/home/trapemn/cdlatam_webform/tmp/"
   if ($answer -eq "s") {
-    scp $Output root@trapemn-opt-pe-02:/home/trapemn/cdlatam_webform/tmp/
+    scp $Output $remote
     if ($LASTEXITCODE -eq 0) {
       Write-Host "Enviado! En el VPS: bash scripts/deploy.sh"
     } else {
       Write-Host "ERROR: no se pudo enviar. Hacelo manual:"
-      Write-Host "  scp $Output root@trapemn-opt-pe-02:/home/trapemn/cdlatam_webform/tmp/"
+      Write-Host "  scp $Output $remote"
     }
   } else {
-    Write-Host "Enviá manual con:"
-    Write-Host "  scp $Output root@trapemn-opt-pe-02:/home/trapemn/cdlatam_webform/tmp/"
+    Write-Host "Envia manual con:"
+    Write-Host "  scp $Output $remote"
   }
 } else {
   Write-Host "ERROR: fallo al crear el paquete"
