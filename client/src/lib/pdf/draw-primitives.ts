@@ -161,13 +161,14 @@ export function drawPagoTable(
   fmt: (v: number) => string,
   variant: "implementacion" | "mantencion" = "implementacion",
 ): number {
+  const esMantencion = variant === "mantencion";
   const maxCuotas = Math.min(4, Math.max(1, ...formas.map(i => i.nCuotas || 0)));
-  const head = ["#", "Tipo Venta", "N° Cuotas"];
+  const head = esMantencion ? ["#", "Tipo Venta"] : ["#", "Tipo Venta", "N° Cuotas"];
   for (let i = 0; i < maxCuotas; i++) {
     const esUltima = i === maxCuotas - 1 && maxCuotas > 1;
-    const cuotaLabel = variant === "mantencion" && esUltima
+    const cuotaLabel = esMantencion && esUltima
       ? `Cuota ${i + 1} en adelante`
-      : variant === "mantencion"
+      : esMantencion
         ? `Cuota ${i + 1}`
         : `${i + 1}\u00aa Cuota`;
     head.push(cuotaLabel, "Fecha");
@@ -177,8 +178,8 @@ export function drawPagoTable(
     const row: string[] = [
       String(i + 1),
       fp.tipoVenta || "",
-      String(fp.nCuotas),
     ];
+    if (!esMantencion) row.push(String(fp.nCuotas));
     for (let idx = 0; idx < maxCuotas; idx++) {
       const cuota = fp.cuotas?.[idx];
       const enabled = idx < (fp.nCuotas || 1);
