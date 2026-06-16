@@ -259,17 +259,7 @@ export function drawFormasPagoSection(
     y = ensureSpace(doc, y, 30, lo);
     y = drawSectionTitle(doc, lo, "Formas de Pago — Mantención", margin, y);
     y = drawPagoTable(doc, lo, acta.formasPagoMantencion, margin, y, fmt, "mantencion");
-    const ahorroMant = (acta as { total_descuento_mantencion?: number }).total_descuento_mantencion;
-    if (typeof ahorroMant === "number" && ahorroMant > 0) {
-      doc.setFontSize(lo.fontSize.small);
-      doc.setFont("helvetica", "normal");
-      doc.setTextColor(...COLOR_GRAY);
-      doc.text(`Ahorro total acumulado (cuotas de gracia): ${fmt(ahorroMant)}`, margin, y);
-      y += spacing + 1 + sectionGap;
-      doc.setTextColor(...COLOR_TEXT);
-    } else {
-      y += spacing + sectionGap;
-    }
+    y += spacing + sectionGap;
   }
 
   return y;
