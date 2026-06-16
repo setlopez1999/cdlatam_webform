@@ -103,20 +103,13 @@ export async function createActaPdfBlob(
         const bytes = await res.arrayBuffer();
         const pdf = await PDFDocument.load(bytes, { ignoreEncryption: true });
         // Escalar páginas importadas a Letter para que mantengan el mismo tamaño que el acta
-        const embedded = await merged.embedPdf(pdf);
-        for (let i = 0; i < pdf.getPageCount(); i++) {
-          const ep = embedded[i];
-          const { width: srcW, height: srcH } = ep;
-          const scale = Math.min(PAGE_W / srcW, PAGE_H / srcH);
-          const drawW = srcW * scale;
-          const drawH = srcH * scale;
-          const page = merged.addPage([PAGE_W, PAGE_H]);
-          page.drawPage(ep, {
-            x: (PAGE_W - drawW) / 2,
-            y: (PAGE_H - drawH) / 2,
-            width: drawW,
-            height: drawH,
-          });
+        const copied = await merged.copyPages(pdf, pdf.getPageIndices());
+        for (const page of copied) {
+          const { width: srcW, height: srcH } = page.getSize();
+          const s = Math.min(PAGE_W / srcW, PAGE_H / srcH);
+          page.scale(s, s);
+          page.setSize(PAGE_W, PAGE_H);
+          merged.addPage(page);
         }
       } catch (err) {
         console.warn("[pdfExport] clausula fallo, se omite:", c.fileName, err);
