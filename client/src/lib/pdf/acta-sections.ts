@@ -214,7 +214,7 @@ export function drawServiciosTable(
   autoTable(doc, {
     startY: y,
     margin: { left: margin, right: margin },
-    head: [["#", "Unidad Negocio", "Solución", "Detalle Servicio", "Tipo Venta", "Valor Unit.", "Cant.", "Total", "Plazo"]],
+    head: [["#", "U.Negocio", "Solucion", "Detalle", "Tipo Venta", "V.Unit.", "Cant.", "Total", "Plazo"]],
     body: servicioRows,
     styles: { fontSize: lo.fontSize.small, cellPadding, textColor: COLOR_TEXT },
     headStyles: { fillColor: PDF_COLOR_GLOBAL, textColor: [255, 255, 255], fontStyle: "bold" },
