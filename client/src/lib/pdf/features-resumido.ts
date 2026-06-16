@@ -142,14 +142,11 @@ export function buildFeaturesUnoPdfBytes(
     },
     didDrawPage: () => {
       drawHeader();
-      // Footer con número de página
-      const totalPages = (doc.internal as any).getNumberOfPages?.() ?? 1;
-      const currentPage = (doc.internal as any).getCurrentPageInfo?.()?.pageNumber ?? 1;
       doc.setFontSize(7);
       doc.setTextColor(...COLOR_GRAY);
       doc.setFont("helvetica", "normal");
-      doc.text("CDLatam — Transformación Digital en Latinoamérica", margin, pageHeight - 6);
-      doc.text(`Pág. ${currentPage} / ${totalPages}`, pageWidth - margin, pageHeight - 6, {
+      doc.text("CDLatam - Transformacion Digital en Latinoamerica", margin, pageHeight - 6);
+      doc.text(new Date().toLocaleDateString("es-CL"), pageWidth - margin, pageHeight - 6, {
         align: "right",
       });
     },
