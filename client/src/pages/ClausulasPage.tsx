@@ -205,16 +205,16 @@ export default function ClausulasPage() {
             <div className="text-xs text-slate-400 space-y-1">
               <p className="font-medium text-slate-300">Orden de ensamblado del PDF final</p>
               <p>
-                <span className="text-white font-medium">1. Acta</span> â€” siempre primero (generada automáticamente)
+                <span className="text-white font-medium">1. Acta</span> - siempre primero (generada automaticamente)
               </p>
               <p>
-                <span className="text-slate-300 font-medium">2. Features Resumido</span> â€” generado dinámicamente desde la pestaña de Implementación del expediente
+                <span className="text-slate-300 font-medium">2. Features Resumido</span> - generado dinamicamente desde la pestana de Implementacion del expediente
               </p>
               <p>
-                <span className="text-blue-300 font-medium">3. Cláusulas</span> â€” tipo <code className="bg-white/5 px-1 rounded">clausula</code>, ordenadas por <strong>Orden Global</strong> (20â€“29 por convención). Se incluyen según la Unidad de Negocio del servicio.
+                <span className="text-blue-300 font-medium">3. Clausulas</span> - tipo <code className="bg-white/5 px-1 rounded">clausula</code>, ordenadas por <strong>Orden Global</strong> (20-29 por convencion). Se incluyen segun la Unidad de Negocio del servicio.
               </p>
               <p>
-                <span className="text-violet-300 font-medium">4. Anexo de Soporte</span> â€” tipo <code className="bg-white/5 px-1 rounded">anexo_soporte</code>, orden 99 (siempre al final)
+                <span className="text-violet-300 font-medium">4. Anexo de Soporte</span> - tipo <code className="bg-white/5 px-1 rounded">anexo_soporte</code>, orden 99 (siempre al final)
               </p>
               <p className="text-slate-500 pt-1">
                 El campo <strong>Orden Global</strong> es editable. Números menores aparecen antes. El Acta siempre es posición 0 (no configurable).
@@ -341,7 +341,7 @@ export default function ClausulasPage() {
                           }`}
                           title={c.siempreIncluir ? 'Quitar de siempre incluir' : 'Marcar como siempre incluir'}
                         >
-                          {c.siempreIncluir ? 'âœ¦ Siempre' : 'No'}
+                          {c.siempreIncluir ? 'Siempre' : 'No'}
                         </button>
                       </td>
                       <td className="px-4 py-3 text-right">

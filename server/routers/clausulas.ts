@@ -110,9 +110,9 @@ export const clausulasRouter = router({
       valor: z.string().min(1).optional(),
       unidadNegocioId: z.number().optional().nullable(),
       activo: z.number().min(0).max(1).optional(),
-      /** Tipo de documento: 'clausula' | 'features' | 'anexo_soporte' */
+      /** Tipo de documento: 'clausula' | 'anexo_soporte' */
       tipo: z.enum(["clausula", "anexo_soporte"]).optional(),
-      /** Orden de apariciÃ³n en el PDF final (editable) */
+      /** Orden de aparicion en el PDF final (editable) */
       ordenGlobal: z.number().int().min(1).max(999).optional(),
     }))
     .mutation(async ({ ctx, input }) => {

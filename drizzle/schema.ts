@@ -616,16 +616,15 @@ export const catalogClausulas = sqliteTable("catalog_clausulas", {
   siempreIncluir: integer("siempre_incluir").default(0).notNull(), // si=1 se adjunta siempre al Acta
   /**
    * tipo: clasifica el documento para el ensamblado del PDF final.
-   *   'clausula'      â†’ clÃ¡usula legal segÃºn unidad de negocio
-   *   'features'      â†’ PDF estÃ¡tico de especificaciones (siempre va, posiciÃ³n 2)
-   *   'anexo_soporte' â†’ Nexo de soporte (siempre va, posiciÃ³n final)
+   *   'clausula'      -> clausula legal segun unidad de negocio
+   *   'anexo_soporte' -> anexo de soporte (siempre va, posicion final)
    */
   tipo: text("tipo").default("clausula").notNull(),
   /**
-   * orden_global: nÃºmero que define el orden de apariciÃ³n en el PDF final.
-   * El Acta siempre es posiciÃ³n 0 (generada aparte).
-   * Editable desde la UI de ClÃ¡usulas Legales.
-   * ConvenciÃ³n inicial: features=10, clausulas=20-29, anexo_soporte=99
+   * orden_global: numero que define el orden de aparicion en el PDF final.
+   * El Acta siempre es posicion 0 (generada aparte).
+   * Editable desde la UI de Clausulas Legales.
+   * Convencion inicial: clausulas=20-29, anexo_soporte=99
    */
   ordenGlobal: integer("orden_global").default(50).notNull(),
   createdAt: integer("createdAt", { mode: "timestamp" }).default(sql`(strftime('%s', 'now'))`).notNull(),

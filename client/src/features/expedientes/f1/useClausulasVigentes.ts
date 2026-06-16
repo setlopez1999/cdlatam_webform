@@ -7,9 +7,9 @@
  *   - Los PDFs que se anexan al final del Acta exportada en pdfExport.ts.
  *
  * Orden de ensamblado del PDF final (controlado por `ordenGlobal`):
- *   1. Acta (generada aparte, no viene de aquí)
- *   2. tipo=features_resumido (generado dinámicamente en F1Form, no viene de aquí)
- *   3. tipo=clausula       (según unidad de negocio, orden_global define posición)
+ *   1. Acta (generada aparte, no viene de aqui)
+ *   2. tipo=features_resumido (generado dinamicamente en F1Form, no viene de aqui)
+ *   3. tipo=clausula       (segun unidad de negocio, orden_global define posicion)
  *   4. tipo=anexo_soporte  (orden_global=99, siempre al final)
  *
  * Pasos:
