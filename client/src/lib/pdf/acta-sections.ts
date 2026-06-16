@@ -211,23 +211,35 @@ export function drawServiciosTable(
     "", "", "", "", "", "", "TOTAL", fmt(totalServicios), "",
   ]);
 
+  // Ancho dinámico solo para columnas angostas (4-8) — midiendo header + body
+  const headCells = ["#", "U.Negocio", "Solucion", "Detalle", "Tipo Venta", "V.Unit.", "Cant.", "Total", "Plazo"];
+  const narrowCols = [4, 5, 6, 7, 8];
+  const narrowW: Record<number, number> = {};
+  doc.setFontSize(lo.fontSize.small);
+  for (const ci of narrowCols) {
+    let maxW = doc.getTextWidth(headCells[ci]);
+    for (const row of servicioRows) {
+      const w = doc.getTextWidth(row[ci]);
+      if (w > maxW) maxW = w;
+    }
+    narrowW[ci] = maxW + 4;
+  }
+
   autoTable(doc, {
     startY: y,
     margin: { left: margin, right: margin },
-    head: [["#", "U.Negocio", "Solucion", "Detalle", "Tipo Venta", "V.Unit.", "Cant.", "Total", "Plazo"]],
+    head: [headCells],
     body: servicioRows,
     styles: { fontSize: lo.fontSize.small, cellPadding, textColor: COLOR_TEXT },
     headStyles: { fillColor: PDF_COLOR_GLOBAL, textColor: [255, 255, 255], fontStyle: "bold" },
     alternateRowStyles: { fillColor: [249, 250, 251] },
     columnStyles: {
       0: { cellWidth: 6, halign: "center" },
-      1: { cellWidth: 42 },
-      2: { cellWidth: 48 },
-      4: { cellWidth: 36 },
-      5: { cellWidth: 26, halign: "right" },
-      6: { cellWidth: 18, halign: "right" },
-      7: { cellWidth: 28, halign: "right", fontStyle: "bold" },
-      8: { cellWidth: 28 },
+      4: { cellWidth: narrowW[4] },
+      5: { cellWidth: narrowW[5], halign: "right" },
+      6: { cellWidth: narrowW[6], halign: "right" },
+      7: { cellWidth: narrowW[7], halign: "right", fontStyle: "bold" },
+      8: { cellWidth: narrowW[8] },
     },
     didParseCell: (hookData) => {
       if (hookData.section === "body" && hookData.row.index === servicioRows.length - 1) {
