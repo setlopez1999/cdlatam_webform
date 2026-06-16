@@ -29,7 +29,7 @@ export function buildFeaturesUnoPdfBytes(
   razonSocial: string,
   headerColor?: [number, number, number],
 ): Uint8Array {
-  const doc = new jsPDF({ unit: "mm", format: "a4" });
+  const doc = new jsPDF({ unit: "mm", format: "letter" });
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
   const margin = 15;

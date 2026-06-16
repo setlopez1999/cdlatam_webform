@@ -1,4 +1,4 @@
-import { sql } from "drizzle-orm";
+﻿import { sql } from "drizzle-orm";
 import {
   sqliteTable,
   text,
@@ -7,7 +7,7 @@ import {
   uniqueIndex,
 } from "drizzle-orm/sqlite-core";
 
-// ─── Roles del sistema ───────────────────────────────────────────────────────
+// â”€â”€â”€ Roles del sistema â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export const roles = sqliteTable("roles", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   nombre: text("nombre").notNull().unique(),
@@ -21,13 +21,13 @@ export const roles = sqliteTable("roles", {
 export type Role = typeof roles.$inferSelect;
 export type InsertRole = typeof roles.$inferInsert;
 
-// ─── Actas (Formulario 1) ─────────────────────────────────────────────────────
+// â”€â”€â”€ Actas (Formulario 1) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export const actas = sqliteTable("actas", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   userId: integer("userId").notNull(),
-  // Vínculo con el expediente (FK numérica)
+  // VÃ­nculo con el expediente (FK numÃ©rica)
   expedienteId: integer("expedienteId").notNull().unique().references(() => expedientes.id),
-  /** N° de Acta consecutivo (6 dígitos, desde 1) */
+  /** NÂ° de Acta consecutivo (6 dÃ­gitos, desde 1) */
   nroActa: integer("nro_acta").unique(),
   /** Codigo compacto autogenerado del documento F1 (solo backend). */
   codigo: text("codigo").unique(),
@@ -49,12 +49,12 @@ export const actas = sqliteTable("actas", {
   representanteEmail: text("representanteEmail"),
   representanteFono: text("representanteFono"),
 
-  // Contacto Técnico
+  // Contacto TÃ©cnico
   contactoTecnico: text("contactoTecnico"),
   contactoTecnicoEmail: text("contactoTecnicoEmail"),
   contactoTecnicoFono: text("contactoTecnicoFono"),
 
-  // Contacto Facturación
+  // Contacto FacturaciÃ³n
   contactoFacturacion: text("contactoFacturacion"),
   contactoFacturacionEmail: text("contactoFacturacionEmail"),
   contactoFacturacionFono: text("contactoFacturacionFono"),
@@ -82,17 +82,17 @@ export const actas = sqliteTable("actas", {
 export type Acta = typeof actas.$inferSelect;
 export type InsertActa = typeof actas.$inferInsert;
 
-// ─── Evaluaciones de Proyecto (Formulario 2) ─────────────────────────────────
+// â”€â”€â”€ Evaluaciones de Proyecto (Formulario 2) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export const evaluaciones = sqliteTable("evaluaciones", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   userId: integer("userId").notNull(),
-  /** Vínculo con el expediente (FK numérica) */
+  /** VÃ­nculo con el expediente (FK numÃ©rica) */
   expedienteId: integer("expedienteId").notNull().unique().references(() => expedientes.id),
 
-  // Información General
+  // InformaciÃ³n General
   unidadNegocios: text("unidadNegocios"),
   empresa: text("empresa"),
-  /** Centro de costo del encabezado F2 (catálogo CECOs). */
+  /** Centro de costo del encabezado F2 (catÃ¡logo CECOs). */
   centroCostoHeader: text("centroCostoHeader"),
   solucion: text("solucion"),
   tipoMoneda: text("tipoMoneda"),
@@ -110,7 +110,7 @@ export const evaluaciones = sqliteTable("evaluaciones", {
   nombreCliente: text("nombreCliente"),
   nombreFantasia: text("nombreFantasia"),
 
-  // Costos por categoría (JSON)
+  // Costos por categorÃ­a (JSON)
   hardware: text("hardware", { mode: "json" }),
   materiales: text("materiales", { mode: "json" }),
   rrhh: text("rrhh", { mode: "json" }),
@@ -139,7 +139,7 @@ export const evaluaciones = sqliteTable("evaluaciones", {
 export type Evaluacion = typeof evaluaciones.$inferSelect;
 export type InsertEvaluacion = typeof evaluaciones.$inferInsert;
 
-// ─── Usuarios del sistema ────────────────────────────────────────────────────
+// â”€â”€â”€ Usuarios del sistema â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export const users = sqliteTable("users", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   username: text("username").notNull().unique(),
@@ -160,7 +160,7 @@ export type LocalUser = User;
 /** @deprecated Usar User e InsertUser */
 export type InsertLocalUser = InsertUser;
 
-// ─── Relación N:N usuarios ↔ roles (RBAC) ────────────────────────────────────────────
+// â”€â”€â”€ RelaciÃ³n N:N usuarios â†” roles (RBAC) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export const userRoles = sqliteTable("user_roles", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   userId: integer("userId").notNull(),
@@ -215,7 +215,7 @@ export const schBloquesHorario = sqliteTable("sch_bloques_horario", {
 export type SchBloqueHorario = typeof schBloquesHorario.$inferSelect;
 export type InsertSchBloqueHorario = typeof schBloquesHorario.$inferInsert;
 
-// ─── Tipos compartidos para JSON fields (¡Estas eran las que faltaban!) ──────
+// â”€â”€â”€ Tipos compartidos para JSON fields (Â¡Estas eran las que faltaban!) â”€â”€â”€â”€â”€â”€
 
 export interface ServicioContratado {
   item: number;
@@ -285,7 +285,7 @@ export interface FilaOtros {
   mes: 1 | 2 | 3;
 }
 
-// ─── Catálogos del Sistema ──────────────────────────────────────────────────
+// â”€â”€â”€ CatÃ¡logos del Sistema â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export const catalogMonedas = sqliteTable("catalog_monedas", {
   id: integer("id").primaryKey({ autoIncrement: true }),
@@ -373,7 +373,7 @@ export const catalogNombres = sqliteTable("catalog_nombres", {
   activo: integer("activo").default(1).notNull(),
 });
 
-/** Plantillas para la sección Consideraciones del Acta (F1); ordenadas por `orden`. */
+/** Plantillas para la secciÃ³n Consideraciones del Acta (F1); ordenadas por `orden`. */
 export const catalogConsideracionesComerciales = sqliteTable("catalog_consideraciones_comerciales", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   valor: text("valor").notNull(),
@@ -383,7 +383,7 @@ export const catalogConsideracionesComerciales = sqliteTable("catalog_considerac
   persistente: integer("persistente").default(0).notNull(),
 });
 
-/** Maestro de ítems del checklist Implementación IPTV-OTT (`implementaciones.checkKey` → `key`). */
+/** Maestro de Ã­tems del checklist ImplementaciÃ³n IPTV-OTT (`implementaciones.checkKey` â†’ `key`). */
 export const catalogImplementacionItems = sqliteTable("catalog_implementacion_items", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   key: text("key").notNull().unique(),
@@ -393,7 +393,89 @@ export const catalogImplementacionItems = sqliteTable("catalog_implementacion_it
   activo: integer("activo").default(1).notNull(),
 });
 
-// ─── Metadatos de catálogos (fijos + dinámicos) ─────────────────────────────
+// â”€â”€â”€ CatÃ¡logos convertidos de dinÃ¡micos â†’ fijos â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Estos catÃ¡logos existÃ­an originalmente como tablas dinÃ¡micas catalog_custom_*
+// y se migraron a fijas para garantizar integridad y rendimiento.
+
+export const catalogPreventas = sqliteTable("catalog_preventas", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  valor: text("valor").notNull().unique(),
+  activo: integer("activo").default(1).notNull(),
+});
+
+export const catalogConceptosGasto = sqliteTable("catalog_conceptos_gasto", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  valor: text("valor").notNull().unique(),
+  activo: integer("activo").default(1).notNull(),
+});
+
+export const catalogGerencias = sqliteTable("catalog_gerencias", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  valor: text("valor").notNull().unique(),
+  activo: integer("activo").default(1).notNull(),
+});
+
+export const catalogSolicitantes = sqliteTable("catalog_solicitantes", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  valor: text("valor").notNull().unique(),
+  activo: integer("activo").default(1).notNull(),
+});
+
+export const catalogFlujosAprobacion = sqliteTable("catalog_flujos_aprobacion", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  valor: text("valor").notNull().unique(),
+  activo: integer("activo").default(1).notNull(),
+});
+
+export const catalogTiposGasto = sqliteTable("catalog_tipos_gasto", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  valor: text("valor").notNull().unique(),
+  activo: integer("activo").default(1).notNull(),
+});
+
+export const catalogProyectos = sqliteTable("catalog_proyectos", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  valor: text("valor").notNull().unique(),
+  activo: integer("activo").default(1).notNull(),
+});
+
+export const catalogTiposPago = sqliteTable("catalog_tipos_pago", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  valor: text("valor").notNull().unique(),
+  activo: integer("activo").default(1).notNull(),
+});
+
+export const catalogEspecialistasExternos = sqliteTable("catalog_especialistas_externos", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  valor: text("valor").notNull().unique(),
+  activo: integer("activo").default(1).notNull(),
+});
+
+export const catalogTecnicosInternos = sqliteTable("catalog_tecnicos_internos", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  valor: text("valor").notNull().unique(),
+  activo: integer("activo").default(1).notNull(),
+});
+
+export const catalogNrosActa = sqliteTable("catalog_nros_acta", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  valor: text("valor").notNull().unique(),
+  activo: integer("activo").default(1).notNull(),
+});
+
+export const catalogEjecutivosAtencion = sqliteTable("catalog_ejecutivos_atencion", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  valor: text("valor").notNull().unique(),
+  activo: integer("activo").default(1).notNull(),
+});
+
+export const catalogSets = sqliteTable("catalog_sets", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  valor: text("valor").notNull().unique(),
+  activo: integer("activo").default(1).notNull(),
+});
+
+// â”€â”€â”€ Metadatos de catÃ¡logos (fijos + dinÃ¡micos) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export const catalogMeta = sqliteTable("catalog_meta", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   tableName: text("table_name").notNull().unique(),
@@ -406,7 +488,7 @@ export const catalogMeta = sqliteTable("catalog_meta", {
 export type CatalogMetaRow = typeof catalogMeta.$inferSelect;
 export type InsertCatalogMeta = typeof catalogMeta.$inferInsert;
 
-// Tipos de catálogo
+// Tipos de catÃ¡logo
 export type CatalogMoneda = typeof catalogMonedas.$inferSelect;
 export type CatalogPais = typeof catalogPaises.$inferSelect;
 export type CatalogEmpresa = typeof catalogEmpresas.$inferSelect;
@@ -423,17 +505,30 @@ export type CatalogArea = typeof catalogAreas.$inferSelect;
 export type CatalogNombre = typeof catalogNombres.$inferSelect;
 export type CatalogConsideracionComercial = typeof catalogConsideracionesComerciales.$inferSelect;
 export type CatalogImplementacionItem = typeof catalogImplementacionItems.$inferSelect;
-// ─── Expedientes (contenedor de actas y evaluaciones) ────────────────────────
+export type CatalogPreventa = typeof catalogPreventas.$inferSelect;
+export type CatalogConceptoGasto = typeof catalogConceptosGasto.$inferSelect;
+export type CatalogGerencia = typeof catalogGerencias.$inferSelect;
+export type CatalogSolicitante = typeof catalogSolicitantes.$inferSelect;
+export type CatalogFlujoAprobacion = typeof catalogFlujosAprobacion.$inferSelect;
+export type CatalogTipoGasto = typeof catalogTiposGasto.$inferSelect;
+export type CatalogProyecto = typeof catalogProyectos.$inferSelect;
+export type CatalogTipoPago = typeof catalogTiposPago.$inferSelect;
+export type CatalogEspecialistaExterno = typeof catalogEspecialistasExternos.$inferSelect;
+export type CatalogTecnicoInterno = typeof catalogTecnicosInternos.$inferSelect;
+export type CatalogNroActa = typeof catalogNrosActa.$inferSelect;
+export type CatalogEjecutivoAtencion = typeof catalogEjecutivosAtencion.$inferSelect;
+export type CatalogSet = typeof catalogSets.$inferSelect;
+// â”€â”€â”€ Expedientes (contenedor de actas y evaluaciones) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 /**
- * Tabla expedientes — metadata del expediente.
- * Único identificador: id (autoincremental PK).
- * Cada expediente tiene exactamente un acta (F1), una evaluación (F2)
+ * Tabla expedientes â€” metadata del expediente.
+ * Ãšnico identificador: id (autoincremental PK).
+ * Cada expediente tiene exactamente un acta (F1), una evaluaciÃ³n (F2)
  * y un resultado (F3), vinculados por expedienteId.
  */
 export const expedientes = sqliteTable("expedientes", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   nombre: text("nombre").notNull(),
-  creadorId: integer("creadorId").notNull(),       // FK blanda → users.id
+  creadorId: integer("creadorId").notNull(),       // FK blanda â†’ users.id
   status: text("status").default("borrador").notNull(), // "borrador" | "en_proceso" | "completado"
   createdAt: integer("createdAt", { mode: "timestamp" }).default(sql`(strftime('%s', 'now'))`).notNull(),
   updatedAt: integer("updatedAt", { mode: "timestamp" }).default(sql`(strftime('%s', 'now'))`).notNull(),
@@ -459,7 +554,7 @@ export const resultadosExpediente = sqliteTable("resultados_expediente", {
 export type ResultadoExpediente = typeof resultadosExpediente.$inferSelect;
 export type InsertResultadoExpediente = typeof resultadosExpediente.$inferInsert;
 
-/** Items del checklist de Implementación IPTV-OTT por expediente (FK expedientes.id). */
+/** Items del checklist de ImplementaciÃ³n IPTV-OTT por expediente (FK expedientes.id). */
 export const implementaciones = sqliteTable(
   "implementaciones",
   {
@@ -469,7 +564,7 @@ export const implementaciones = sqliteTable(
       .references(() => expedientes.id, { onDelete: "cascade" }),
     /** Clave estable; debe existir en `catalog_implementacion_items.key`. */
     checkKey: text("checkKey").notNull(),
-    /** 0 = no, 1 = sí */
+    /** 0 = no, 1 = sÃ­ */
     estado: integer("estado").notNull().default(0),
     createdAt: integer("createdAt", { mode: "timestamp" }).default(sql`(strftime('%s', 'now'))`).notNull(),
     updatedAt: integer("updatedAt", { mode: "timestamp" }).default(sql`(strftime('%s', 'now'))`).notNull(),
@@ -482,19 +577,19 @@ export const implementaciones = sqliteTable(
 export type ImplementacionRow = typeof implementaciones.$inferSelect;
 export type InsertImplementacion = typeof implementaciones.$inferInsert;
 
-// ─── Audit Log — trazabilidad de acciones ────────────────────────────────────
+// â”€â”€â”€ Audit Log â€” trazabilidad de acciones â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 /**
- * Tabla audit_log — registra toda actividad relevante del sistema.
- * Se graba desde el momento del despliegue. Sin retención automática por ahora.
+ * Tabla audit_log â€” registra toda actividad relevante del sistema.
+ * Se graba desde el momento del despliegue. Sin retenciÃ³n automÃ¡tica por ahora.
  *
- * action: LOGIN, LOGOUT, LOGIN_FAILED, CREATE, UPDATE, DELETE, UPLOAD, …
- * entity: expediente, acta, auth, catalog_clausulas, …
+ * action: LOGIN, LOGOUT, LOGIN_FAILED, CREATE, UPDATE, DELETE, UPLOAD, â€¦
+ * entity: expediente, acta, auth, catalog_clausulas, â€¦
  * changes: JSON { before, after } u otro resumen
  */
 export const auditLog = sqliteTable("audit_log", {
   id: integer("id").primaryKey({ autoIncrement: true }),
-  userId: integer("userId"),                       // null si sesión expirada o intento fallido
-  username: text("username").notNull(),            // copia del username al momento de la acción
+  userId: integer("userId"),                       // null si sesiÃ³n expirada o intento fallido
+  username: text("username").notNull(),            // copia del username al momento de la acciÃ³n
   action: text("action").notNull(),
   entity: text("entity").notNull(),
   entityId: integer("entityId"),                   // null p. ej. LOGIN
@@ -508,29 +603,29 @@ export const auditLog = sqliteTable("audit_log", {
 export type AuditLog = typeof auditLog.$inferSelect;
 export type InsertAuditLog = typeof auditLog.$inferInsert;
 
-// ─── Catálogo de Cláusulas Legales (PDFs) ────────────────────────────────
+// â”€â”€â”€ CatÃ¡logo de ClÃ¡usulas Legales (PDFs) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Relacionado con Unidades de Negocio (catalog_unidades_negocio)
 export const catalogClausulas = sqliteTable("catalog_clausulas", {
   id: integer("id").primaryKey({ autoIncrement: true }),
-  valor: text("valor").notNull(),               // nombre de la cláusula
+  valor: text("valor").notNull(),               // nombre de la clÃ¡usula
   unidadNegocioId: integer("unidadNegocioId"),    // FK a catalog_unidades_negocio
   filePath: text("filePath").notNull(),         // ruta relativa al archivo PDF
   fileName: text("fileName").notNull(),        // nombre original del archivo
-  fileSize: integer("fileSize"),               // tamaño en bytes
+  fileSize: integer("fileSize"),               // tamaÃ±o en bytes
   activo: integer("activo").default(1).notNull(),
   siempreIncluir: integer("siempre_incluir").default(0).notNull(), // si=1 se adjunta siempre al Acta
   /**
    * tipo: clasifica el documento para el ensamblado del PDF final.
-   *   'clausula'      → cláusula legal según unidad de negocio
-   *   'features'      → PDF estático de especificaciones (siempre va, posición 2)
-   *   'anexo_soporte' → Nexo de soporte (siempre va, posición final)
+   *   'clausula'      â†’ clÃ¡usula legal segÃºn unidad de negocio
+   *   'features'      â†’ PDF estÃ¡tico de especificaciones (siempre va, posiciÃ³n 2)
+   *   'anexo_soporte' â†’ Nexo de soporte (siempre va, posiciÃ³n final)
    */
   tipo: text("tipo").default("clausula").notNull(),
   /**
-   * orden_global: número que define el orden de aparición en el PDF final.
-   * El Acta siempre es posición 0 (generada aparte).
-   * Editable desde la UI de Cláusulas Legales.
-   * Convención inicial: features=10, clausulas=20-29, anexo_soporte=99
+   * orden_global: nÃºmero que define el orden de apariciÃ³n en el PDF final.
+   * El Acta siempre es posiciÃ³n 0 (generada aparte).
+   * Editable desde la UI de ClÃ¡usulas Legales.
+   * ConvenciÃ³n inicial: features=10, clausulas=20-29, anexo_soporte=99
    */
   ordenGlobal: integer("orden_global").default(50).notNull(),
   createdAt: integer("createdAt", { mode: "timestamp" }).default(sql`(strftime('%s', 'now'))`).notNull(),
@@ -539,5 +634,6 @@ export const catalogClausulas = sqliteTable("catalog_clausulas", {
 export type CatalogClausula = typeof catalogClausulas.$inferSelect;
 export type InsertCatalogClausula = typeof catalogClausulas.$inferInsert;
 
-/** Tipos válidos para el campo `tipo` de catalog_clausulas */
-export type ClausulaTipo = 'clausula' | 'features' | 'anexo_soporte';
+/** Tipos vÃ¡lidos para el campo `tipo` de catalog_clausulas */
+export type ClausulaTipo = 'clausula' | 'anexo_soporte';
+

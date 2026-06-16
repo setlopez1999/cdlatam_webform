@@ -1,6 +1,5 @@
-import type { ActaData } from "@/hooks/useFormStore";
+﻿import type { ActaData } from "@/hooks/useFormStore";
 import type { ClausulaParaPdf, ActaPdfExportOpts, DocEntry } from "./types";
-import { FEATURES_RESUMIDO_ORDEN } from "./constants";
 import { effectiveNoActaForPdf, resolveLayout, findBestScale } from "./layout";
 import { drawHeaderSection, drawEncabezado, drawInfoLegal, drawContactSection, drawServiciosTable, drawFormasPagoSection, drawConsideracionesSection, drawClausulasSection, drawFirmaBlock, drawFooter } from "./acta-sections";
 import { getCurrencyCode, formatCurrency } from "../formatters";
@@ -8,7 +7,7 @@ import { jsPDF } from "jspdf";
 import { PDFDocument } from "pdf-lib";
 
 async function buildActaPdfBytes(acta: ActaData, opts: ActaPdfExportOpts = {}): Promise<Uint8Array> {
-  const doc = new jsPDF({ unit: "mm", format: "a4" });
+  const doc = new jsPDF({ unit: "mm", format: "letter" });
 
   let resolvedOpts = { ...opts };
   if (opts.singlePage && !opts.fontSizeScale) {
@@ -23,12 +22,12 @@ async function buildActaPdfBytes(acta: ActaData, opts: ActaPdfExportOpts = {}): 
   const currencyCode = getCurrencyCode(acta.moneda ?? "");
   const fmt = (v: number) => formatCurrency(v, currencyCode);
 
-  let y = 0; // El header empieza en el borde superior (y=0), sin margen superior
+  let y = 0;
 
   // 1. Header
   y = drawHeaderSection(doc, lo, acta.noActa || "", acta.fecha, margin, pageWidth, y);
 
-  // 2. Encabezado: Sres / Atención / Fecha + intro
+  // 2. Encabezado
   y = drawEncabezado(doc, lo, acta, margin, y, contentWidth);
 
   // 3. Datos de la empresa
@@ -46,13 +45,13 @@ async function buildActaPdfBytes(acta: ActaData, opts: ActaPdfExportOpts = {}): 
   // 8. Consideraciones
   y = drawConsideracionesSection(doc, lo, acta, margin, contentWidth, y, spacing);
 
-  // 9. Cláusulas legales
+  // 9. Clausulas legales
   y = drawClausulasSection(doc, lo, acta, margin, contentWidth, y, lineHeight);
 
   // 10. Firma
   drawFirmaBlock(doc, lo, acta.representanteLegal, acta.razonSocial, margin, pageWidth, pageHeight, lineHeight, spacing);
 
-  // 11. Footer en cada página
+  // 11. Footer en cada pagina
   drawFooter(doc, lo, margin, pageWidth);
 
   return new Uint8Array(doc.output("arraybuffer"));
@@ -68,29 +67,24 @@ export async function createActaPdfBlob(
   const baseBytes = await buildActaPdfBytes(actaForPdf, opts);
   const merged = await PDFDocument.load(baseBytes);
 
-  // Filtrar el PDF estático de features (tipo 'features') ya que ahora se genera dinámicamente
   const clausulasOrdenadas = [...clausulas]
-    .filter(c => c.tipo !== "features")
     .sort((a, b) => (a.ordenGlobal ?? 50) - (b.ordenGlobal ?? 50));
 
   const docsEnOrden: DocEntry[] = [];
-  let featuresResumidoInsertado = false;
 
+  // Features Resumido siempre va primero (despues del Acta)
+  if (opts.featuresResumidoBytes) {
+    docsEnOrden.push({ kind: "dynamic_features_resumido" });
+  }
+
+  // Luego las clausulas en su orden global
   for (const c of clausulasOrdenadas) {
-    if (
-      !featuresResumidoInsertado &&
-      opts.featuresResumidoBytes &&
-      (c.ordenGlobal ?? 50) > FEATURES_RESUMIDO_ORDEN
-    ) {
-      docsEnOrden.push({ kind: "dynamic_features_resumido" });
-      featuresResumidoInsertado = true;
-    }
     docsEnOrden.push({ kind: "static", clausula: c });
   }
 
-  if (!featuresResumidoInsertado && opts.featuresResumidoBytes) {
-    docsEnOrden.push({ kind: "dynamic_features_resumido" });
-  }
+  // Dimensiones Carta (Letter) en puntos (1in = 72 pts)
+  const PAGE_W = 612;
+  const PAGE_H = 792;
 
   for (const entry of docsEnOrden) {
     if (entry.kind === "dynamic_features_resumido") {
@@ -99,7 +93,7 @@ export async function createActaPdfBlob(
         const pages = await merged.copyPages(pdf, pdf.getPageIndices());
         pages.forEach(p => merged.addPage(p));
       } catch (err) {
-        console.warn("[pdfExport] features resumido falló, se omite:", err);
+        console.warn("[pdfExport] features resumido fallo, se omite:", err);
       }
     } else {
       const c = entry.clausula;
@@ -108,10 +102,24 @@ export async function createActaPdfBlob(
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const bytes = await res.arrayBuffer();
         const pdf = await PDFDocument.load(bytes, { ignoreEncryption: true });
-        const pages = await merged.copyPages(pdf, pdf.getPageIndices());
-        pages.forEach(p => merged.addPage(p));
+        // Escalar páginas importadas a Letter para que mantengan el mismo tamaño que el acta
+        const embedded = await merged.embedPdf(pdf);
+        for (let i = 0; i < pdf.getPageCount(); i++) {
+          const ep = embedded[i];
+          const { width: srcW, height: srcH } = ep;
+          const scale = Math.min(PAGE_W / srcW, PAGE_H / srcH);
+          const drawW = srcW * scale;
+          const drawH = srcH * scale;
+          const page = merged.addPage([PAGE_W, PAGE_H]);
+          page.drawPage(ep, {
+            x: (PAGE_W - drawW) / 2,
+            y: (PAGE_H - drawH) / 2,
+            width: drawW,
+            height: drawH,
+          });
+        }
       } catch (err) {
-        console.warn("[pdfExport] cláusula falló, se omite:", c.fileName, err);
+        console.warn("[pdfExport] clausula fallo, se omite:", c.fileName, err);
         opts.onClausulaError?.(c, err);
       }
     }

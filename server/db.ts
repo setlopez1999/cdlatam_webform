@@ -20,6 +20,11 @@ import {
   catalogTipoVenta, catalogPlazos, catalogDocumentos, catalogCecos,
   catalogDepartamentos, catalogAreas, catalogNombres, catalogConsideracionesComerciales,
   catalogImplementacionItems,
+  // Catálogos convertidos de dinámicos → fijos
+  catalogPreventas, catalogConceptosGasto, catalogGerencias,
+  catalogSolicitantes, catalogFlujosAprobacion, catalogTiposGasto,
+  catalogProyectos, catalogTiposPago, catalogEspecialistasExternos,
+  catalogTecnicosInternos, catalogNrosActa, catalogEjecutivosAtencion, catalogSets,
   // Gestor de Horarios
   schEmpleados, type SchEmpleado, type InsertSchEmpleado,
   schContratos, type SchContrato, type InsertSchContrato,
@@ -102,6 +107,20 @@ const FIXED_CATALOGS = [
     realTable: "catalog_implementacion_items",
     title: "Ítems implementación IPTV-OTT",
   },
+  // Catálogos convertidos de dinámicos → fijos
+  { tableName: "preventas",                realTable: "catalog_preventas",              title: "Preventa" },
+  { tableName: "concepto_gasto",           realTable: "catalog_conceptos_gasto",        title: "Concepto de Gasto" },
+  { tableName: "gerencias",                realTable: "catalog_gerencias",              title: "Gerencias" },
+  { tableName: "solicitante",              realTable: "catalog_solicitantes",           title: "Solicitante" },
+  { tableName: "flujo_aprobacion",         realTable: "catalog_flujos_aprobacion",      title: "Flujo de Aprobación" },
+  { tableName: "tipo_gasto",               realTable: "catalog_tipos_gasto",            title: "Tipo de Gasto" },
+  { tableName: "proyecto",                 realTable: "catalog_proyectos",              title: "Proyecto" },
+  { tableName: "tipo_pago",                realTable: "catalog_tipos_pago",             title: "Tipo de Pago" },
+  { tableName: "especialista_externo",     realTable: "catalog_especialistas_externos", title: "Especialista Externo" },
+  { tableName: "tecnico_interno",          realTable: "catalog_tecnicos_internos",      title: "Técnico Interno" },
+  { tableName: "n_de_acta",                realTable: "catalog_nros_acta",              title: "N° de Acta" },
+  { tableName: "ejecutivo_atencion_al_cliente", realTable: "catalog_ejecutivos_atencion", title: "Ejecutivo Atención al Cliente" },
+  { tableName: "set",                      realTable: "catalog_sets",                   title: "Set" },
 ];
 
 // Seed de catalog_meta al arrancar
@@ -174,6 +193,19 @@ const catalogMap: Record<string, any> = {
   nombres: catalogNombres,
   consideraciones: catalogConsideracionesComerciales,
   impl_items: catalogImplementacionItems,
+  preventas: catalogPreventas,
+  concepto_gasto: catalogConceptosGasto,
+  gerencias: catalogGerencias,
+  solicitante: catalogSolicitantes,
+  flujo_aprobacion: catalogFlujosAprobacion,
+  tipo_gasto: catalogTiposGasto,
+  proyecto: catalogProyectos,
+  tipo_pago: catalogTiposPago,
+  especialista_externo: catalogEspecialistasExternos,
+  tecnico_interno: catalogTecnicosInternos,
+  n_de_acta: catalogNrosActa,
+  ejecutivo_atencion_al_cliente: catalogEjecutivosAtencion,
+  set: catalogSets,
 };
 
 function getCatalogTable(tableName: string) {
@@ -527,6 +559,79 @@ export async function runMigrations() {
     console.log("[DB] Profile roles ensured (INSERT OR IGNORE)");
   } catch (rolesErr: any) {
     console.warn("[DB] Could not ensure profile roles:", rolesErr?.message ?? rolesErr);
+  }
+
+  // Migrar datos de catálogos dinámicos (catalog_custom_*) → fijos (catalog_*)
+  // Idempotente: solo copia si la tabla custom existe y la fija está vacía.
+  migrateDynamicCatalogsToFixed(sqlite);
+}
+
+/** Migración idempotente: copia datos de tablas catalog_custom_* a catalog_* fijas. */
+function migrateDynamicCatalogsToFixed(rawDb: Database.Database): void {
+  const conversions: Array<{ shortName: string; fixedTable: string; customTable: string }> = [
+    { shortName: "preventas",                fixedTable: "catalog_preventas",              customTable: "catalog_custom_campo_de_preventa" },
+    { shortName: "concepto_gasto",           fixedTable: "catalog_conceptos_gasto",        customTable: "catalog_custom_concepto_gasto" },
+    { shortName: "gerencias",                fixedTable: "catalog_gerencias",              customTable: "catalog_custom_gerencias" },
+    { shortName: "solicitante",              fixedTable: "catalog_solicitantes",           customTable: "catalog_custom_solicitante" },
+    { shortName: "flujo_aprobacion",         fixedTable: "catalog_flujos_aprobacion",      customTable: "catalog_custom_flujo_aprobacion" },
+    { shortName: "tipo_gasto",               fixedTable: "catalog_tipos_gasto",            customTable: "catalog_custom_tipo_gasto" },
+    { shortName: "proyecto",                 fixedTable: "catalog_proyectos",              customTable: "catalog_custom_proyecto" },
+    { shortName: "tipo_pago",                fixedTable: "catalog_tipos_pago",             customTable: "catalog_custom_tipo_pago" },
+    { shortName: "especialista_externo",     fixedTable: "catalog_especialistas_externos", customTable: "catalog_custom_especialista_externo" },
+    { shortName: "tecnico_interno",          fixedTable: "catalog_tecnicos_internos",      customTable: "catalog_custom_tecnico_interno" },
+    { shortName: "n_de_acta",                fixedTable: "catalog_nros_acta",              customTable: "catalog_custom_n_de_acta" },
+    { shortName: "ejecutivo_atencion_al_cliente", fixedTable: "catalog_ejecutivos_atencion", customTable: "catalog_custom_ejecutivo_atencion_al_cliente" },
+    { shortName: "set",                      fixedTable: "catalog_sets",                   customTable: "catalog_custom_set" },
+  ];
+
+  for (const c of conversions) {
+    try {
+      // Verificar si la tabla custom existe
+      const row = rawDb.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name = ?").get(c.customTable) as { name: string } | undefined;
+      if (!row) continue;
+
+      // Verificar si la tabla fija está vacía
+      const count = rawDb.prepare(`SELECT COUNT(*) as cnt FROM "${c.fixedTable}"`).get() as { cnt: number };
+      if (count.cnt > 0) continue; // ya migrada
+
+      // Copiar datos
+      const customRows = rawDb.prepare(`SELECT * FROM "${c.customTable}"`).all() as Array<{ id: number; valor: string; activo: number }>;
+      if (customRows.length === 0) continue;
+
+      const insert = rawDb.prepare(`INSERT OR IGNORE INTO "${c.fixedTable}" (id, valor, activo) VALUES (?, ?, ?)`);
+      const tx = rawDb.transaction((rows: Array<{ id: number; valor: string; activo: number }>) => {
+        let count2 = 0;
+        for (const r of rows) {
+          const result = insert.run(r.id, r.valor, r.activo ?? 1);
+          if (result.changes > 0) count2++;
+        }
+        return count2;
+      });
+      const copied = tx(customRows);
+      if (copied > 0) {
+        console.log(`[DB] Migrated ${c.customTable} → ${c.fixedTable}: ${copied} rows`);
+      }
+    } catch (e: unknown) {
+      console.warn(`[DB] Migration ${c.customTable} → ${c.fixedTable}:`, e instanceof Error ? e.message : e);
+    }
+  }
+
+  // Actualizar catalog_meta: marcar como fijas y normalizar nombres
+  try {
+    // Para "preventas": eliminar la entrada antigua "campo_de_preventa" si existe
+    rawDb.prepare("DELETE FROM catalog_meta WHERE table_name = 'campo_de_preventa'").run();
+
+    const metaUpdates = [
+      "preventas", "concepto_gasto", "gerencias", "solicitante",
+      "flujo_aprobacion", "tipo_gasto", "proyecto", "tipo_pago",
+      "especialista_externo", "tecnico_interno", "n_de_acta",
+      "ejecutivo_atencion_al_cliente", "set",
+    ];
+    for (const tn of metaUpdates) {
+      rawDb.prepare("UPDATE catalog_meta SET is_custom = 0 WHERE table_name = ?").run(tn);
+    }
+  } catch (e: unknown) {
+    console.warn("[DB] Failed to update catalog_meta:", e instanceof Error ? e.message : e);
   }
 }
 

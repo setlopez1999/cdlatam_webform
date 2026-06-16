@@ -164,7 +164,12 @@ export function drawPagoTable(
   const maxCuotas = Math.min(4, Math.max(1, ...formas.map(i => i.nCuotas || 0)));
   const head = ["#", "Tipo Venta", "N° Cuotas"];
   for (let i = 0; i < maxCuotas; i++) {
-    const cuotaLabel = variant === "mantencion" ? `Cuota ${i + 1}` : `${i + 1}\u00aa Cuota`;
+    const esUltima = i === maxCuotas - 1 && maxCuotas > 1;
+    const cuotaLabel = variant === "mantencion" && esUltima
+      ? `Cuota ${i + 1} en adelante`
+      : variant === "mantencion"
+        ? `Cuota ${i + 1}`
+        : `${i + 1}\u00aa Cuota`;
     head.push(cuotaLabel, "Fecha");
   }
 

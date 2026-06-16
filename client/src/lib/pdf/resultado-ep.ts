@@ -79,7 +79,7 @@ function buildResultadoHTML(
     .kpi-label { font-size: 7pt; color: #6b7280; text-transform: uppercase; }
     .kpi-value { font-size: 12pt; font-weight: bold; color: ${BRAND_COLOR}; margin-top: 2px; }
     .page-footer { margin-top: 16px; padding-top: 8px; border-top: 1px solid #e5e7eb; display: flex; justify-content: space-between; font-size: 7pt; color: #9ca3af; }
-    @page { size: A4; margin: 0; }
+    @page { size: Letter; margin: 0; }
     @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
   </style>
 </head>

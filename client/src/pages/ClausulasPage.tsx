@@ -1,4 +1,4 @@
-import { useState, useRef, useMemo } from "react";
+﻿import { useState, useRef, useMemo } from "react";
 import { trpc } from "@/lib/trpc";
 import { FileText, Upload, Download, Trash2, Search, FileCheck, Pencil, RefreshCw, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -22,7 +22,7 @@ interface Clausula {
   fileSize?: number | null;
   activo: number;
   siempreIncluir?: number;
-  /** 'clausula' | 'features' | 'anexo_soporte' */
+  /** 'clausula' | 'anexo_soporte' */
   tipo?: string;
   /** Número de orden en el PDF final (editable) */
   ordenGlobal?: number;
@@ -32,7 +32,6 @@ interface Clausula {
 /** Etiqueta visual por tipo de documento */
 const TIPO_LABELS: Record<string, { label: string; color: string }> = {
   clausula:       { label: "Cláusula",       color: "bg-blue-500/10 text-blue-300 border-blue-500/20" },
-  features:       { label: "Features",        color: "bg-amber-500/10 text-amber-300 border-amber-500/20" },
   anexo_soporte:  { label: "Anexo Soporte",   color: "bg-violet-500/10 text-violet-300 border-violet-500/20" },
 };
 
@@ -50,7 +49,7 @@ export default function ClausulasPage() {
   const [editing, setEditing] = useState<Clausula | null>(null);
   const [editNombre, setEditNombre] = useState("");
   const [editUnidad, setEditUnidad] = useState<string>(SIN_UNIDAD);
-  const [editTipo, setEditTipo] = useState<"clausula" | "features" | "anexo_soporte">("clausula");
+  const [editTipo, setEditTipo] = useState<"clausula" | "anexo_soporte">("clausula");
   const [editOrden, setEditOrden] = useState<number>(50);
 
   // Estado del dialog de reemplazo de PDF
@@ -143,7 +142,7 @@ export default function ClausulasPage() {
     setEditing(c);
     setEditNombre(c.valor);
     setEditUnidad(c.unidadNegocioId == null ? SIN_UNIDAD : String(c.unidadNegocioId));
-    setEditTipo((c.tipo ?? "clausula") as "clausula" | "features" | "anexo_soporte");
+    setEditTipo((c.tipo ?? "clausula") as "clausula" | "anexo_soporte");
     setEditOrden(c.ordenGlobal ?? 50);
   };
 
@@ -206,19 +205,16 @@ export default function ClausulasPage() {
             <div className="text-xs text-slate-400 space-y-1">
               <p className="font-medium text-slate-300">Orden de ensamblado del PDF final</p>
               <p>
-                <span className="text-white font-medium">1. Acta</span> — siempre primero (generada automáticamente)
+                <span className="text-white font-medium">1. Acta</span> â€” siempre primero (generada automáticamente)
               </p>
               <p>
-                <span className="text-amber-300 font-medium">2. Features</span> — tipo <code className="bg-white/5 px-1 rounded">features</code>, orden 10 (siempre incluido)
+                <span className="text-slate-300 font-medium">2. Features Resumido</span> â€” generado dinámicamente desde la pestaña de Implementación del expediente
               </p>
               <p>
-                <span className="text-slate-300 font-medium">3. Features Resumido</span> — generado dinámicamente desde la pestaña de Implementación del expediente
+                <span className="text-blue-300 font-medium">3. Cláusulas</span> â€” tipo <code className="bg-white/5 px-1 rounded">clausula</code>, ordenadas por <strong>Orden Global</strong> (20â€“29 por convención). Se incluyen según la Unidad de Negocio del servicio.
               </p>
               <p>
-                <span className="text-blue-300 font-medium">4. Cláusulas</span> — tipo <code className="bg-white/5 px-1 rounded">clausula</code>, ordenadas por <strong>Orden Global</strong> (20–29 por convención). Se incluyen según la Unidad de Negocio del servicio.
-              </p>
-              <p>
-                <span className="text-violet-300 font-medium">5. Anexo de Soporte</span> — tipo <code className="bg-white/5 px-1 rounded">anexo_soporte</code>, orden 99 (siempre al final)
+                <span className="text-violet-300 font-medium">4. Anexo de Soporte</span> â€” tipo <code className="bg-white/5 px-1 rounded">anexo_soporte</code>, orden 99 (siempre al final)
               </p>
               <p className="text-slate-500 pt-1">
                 El campo <strong>Orden Global</strong> es editable. Números menores aparecen antes. El Acta siempre es posición 0 (no configurable).
@@ -345,7 +341,7 @@ export default function ClausulasPage() {
                           }`}
                           title={c.siempreIncluir ? 'Quitar de siempre incluir' : 'Marcar como siempre incluir'}
                         >
-                          {c.siempreIncluir ? '✦ Siempre' : 'No'}
+                          {c.siempreIncluir ? 'âœ¦ Siempre' : 'No'}
                         </button>
                       </td>
                       <td className="px-4 py-3 text-right">
@@ -439,11 +435,10 @@ export default function ClausulasPage() {
                 <label className="text-xs text-slate-400">Tipo de documento</label>
                 <select
                   value={editTipo}
-                  onChange={(e) => setEditTipo(e.target.value as "clausula" | "features" | "anexo_soporte")}
+                  onChange={(e) => setEditTipo(e.target.value as "clausula" | "anexo_soporte")}
                   className="w-full bg-[#242b3d] border border-white/10 text-white rounded-md px-3 py-2 text-sm"
                 >
                   <option value="clausula">Cláusula</option>
-                  <option value="features">Features</option>
                   <option value="anexo_soporte">Anexo de Soporte</option>
                 </select>
               </div>
@@ -519,3 +514,4 @@ export default function ClausulasPage() {
     </PageLayout>
   );
 }
+

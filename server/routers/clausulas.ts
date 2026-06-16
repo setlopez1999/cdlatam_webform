@@ -1,4 +1,4 @@
-import { z } from "zod";
+﻿import { z } from "zod";
 import { publicProcedure, protectedProcedure, router } from "../_core/trpc";
 import {
   ds_getClausulas,
@@ -17,7 +17,7 @@ import { requireRole } from "../rbac";
 import { recordAuditFromTrpc } from "../audit/record";
 
 export const clausulasRouter = router({
-  // ─── Queries ───────────────────────────────────────────────
+  // â”€â”€â”€ Queries â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   list: protectedProcedure.query(async ({ ctx }) => {
     await requireRole(ctx, "admin");
     return await ds_getClausulas();
@@ -38,11 +38,11 @@ export const clausulasRouter = router({
     }),
 
   /**
-   * Devuelve cláusulas activas para un conjunto de unidades de negocio.
-   * Pensado para que F1 (export PDF) las anexe automáticamente al final del
+   * Devuelve clÃ¡usulas activas para un conjunto de unidades de negocio.
+   * Pensado para que F1 (export PDF) las anexe automÃ¡ticamente al final del
    * Acta. Es `protectedProcedure` (NO admin) porque cualquier usuario que
-   * pueda ver F1 debe poder exportar su acta con cláusulas. Solo expone los
-   * campos mínimos necesarios.
+   * pueda ver F1 debe poder exportar su acta con clÃ¡usulas. Solo expone los
+   * campos mÃ­nimos necesarios.
    */
   getByUnidades: protectedProcedure
     .input(z.object({ unidadNegocioIds: z.array(z.number().int()) }))
@@ -60,7 +60,7 @@ export const clausulasRouter = router({
     }),
 
   /**
-   * Devuelve cláusulas activas con siempre_incluir=1.
+   * Devuelve clÃ¡usulas activas con siempre_incluir=1.
    * Cualquier usuario autenticado puede acceder (para adjuntar al Acta).
    */
   getSiempreIncluir: protectedProcedure.query(async () => {
@@ -80,7 +80,7 @@ export const clausulasRouter = router({
     return await ds_getUnidadesNegocioForSelect();
   }),
 
-  // ─── Mutations ──────────────────────────────────────────────
+  // â”€â”€â”€ Mutations â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   create: protectedProcedure
     .input(z.object({
       valor: z.string().min(1),
@@ -111,8 +111,8 @@ export const clausulasRouter = router({
       unidadNegocioId: z.number().optional().nullable(),
       activo: z.number().min(0).max(1).optional(),
       /** Tipo de documento: 'clausula' | 'features' | 'anexo_soporte' */
-      tipo: z.enum(["clausula", "features", "anexo_soporte"]).optional(),
-      /** Orden de aparición en el PDF final (editable) */
+      tipo: z.enum(["clausula", "anexo_soporte"]).optional(),
+      /** Orden de apariciÃ³n en el PDF final (editable) */
       ordenGlobal: z.number().int().min(1).max(999).optional(),
     }))
     .mutation(async ({ ctx, input }) => {
@@ -173,3 +173,4 @@ export const clausulasRouter = router({
       return updated;
     }),
 });
+

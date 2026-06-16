@@ -104,7 +104,7 @@ export function estimateTotalHeight(
 }
 
 export function findBestScale(acta: ActaData, doc: jsPDF, opts: ActaPdfExportOpts): number {
-  const pageHeight = 297;
+  const pageHeight = 279;
   const SIG_HEIGHT = 14;
   const usableHeight = pageHeight - 12 * 2 - 10 - SIG_HEIGHT;
   for (let s = 1.0; s >= 0.6; s -= 0.04) {
