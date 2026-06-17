@@ -1,6 +1,6 @@
 /**
  * dataSource.ts
- * Capa de abstracción de fuente de datos para catálogos y usuarios.
+ * Capa de abstracción de fuente de datos — ÚNICA puerta de entrada para routers.ts.
  *
  * USE_API=false (default) → SQLite local via db.ts
  * USE_API=true            → fetch a API_URL externa
@@ -8,15 +8,35 @@
  * La API externa debe devolver el mismo shape que SQLite.
  *
  * Cláusulas legales: ver dataSource-clausulas.ts (mismo patrón ds_*, capa aparte).
+ *
+ * SECCIONES:
+ *  1. Catálogos — CRUD genérico
+ *  2. Catálogos — opciones para comboboxes
+ *  3. Catálogos — resumen para BaseDatos
+ *  4. Catálogos — búsqueda
+ *  5. Usuarios
+ *  6. Roles
+ *  7. Catálogos — Metadatos y tablas dinámicas
+ *  8. User-Roles (RBAC N:N)
+ *  9. Actas (F1)
+ * 10. Evaluaciones (F2)
+ * 11. Resultados (F3)
+ * 12. Implementación (checklist)
+ * 13. Expedientes
+ * 14. Gestor de Horarios
+ * 15. Audit Log
+ * 16. Utilidades SQLite (diagnóstico)
  */
 
 import {
+  // Catálogos
   getCatalogList,
   createCatalogRecord,
   updateCatalogRecord,
   deleteCatalogRecord,
   bulkUpdateCatalogRecords,
   bulkDeleteCatalogRecords,
+  // Usuarios
   getUsers,
   createUser,
   findUserByUsername,
@@ -25,14 +45,78 @@ import {
   updateUser,
   updateUserCredentials,
   deleteUserById,
+  // Roles
   getRoles,
   getRoleById,
   createRole,
   updateRole,
   deleteRole,
   getUsersByRoleId,
-  getDb,
+  // User-Roles (RBAC N:N)
+  getUserRoles,
+  getUserRoleNames,
+  assignRoleToUser,
+  revokeRoleFromUser,
+  setUserRoles,
+  toggleHorariosEasterEgg,
+  // Actas (F1)
+  getActasByUserId,
+  getActaById,
+  createActa,
+  updateActa,
+  deleteActa,
+  getActaByExpedienteId,
+  // Evaluaciones (F2)
+  getEvaluacionesByUserId,
+  getEvaluacionById,
+  createEvaluacion,
+  updateEvaluacion,
+  deleteEvaluacion,
+  getEvaluacionByExpedienteId,
+  // Resultados (F3)
+  upsertResultadoExpediente,
+  // Implementación
+  listImplementacionesByExpedienteId,
+  upsertImplementacionCheck,
+  listImplementacionCatalogActivos,
+  isActiveImplementacionCatalogKey,
+  // Expedientes
+  crearExpedienteConActa,
+  getExpedientesByUser,
+  getExpedienteById,
+  updateExpediente,
+  deleteExpedienteCascadeById,
+  moverExpedienteAPapelera,
+  restaurarExpedienteDePapelera,
+  getExpedientesEnPapelera,
+  listExpedientesResumen,
+  listExpedientesResumenGlobal,
+  getExpedienteDetalle,
+  getExpedienteDetalleGlobal,
+  // Horarios
+  getEmpleados,
+  getEmpleadoById,
+  createEmpleado,
+  updateEmpleado,
+  toggleEmpleadoStatus,
+  deleteEmpleado,
+  getContratosByEmpleado,
+  getContratoActivoByEmpleado,
+  createContrato,
+  updateContrato,
+  getBloquesByContrato,
+  setBloques,
+  getBloquesSemanales,
+  // Búsqueda
+  searchRegistros,
+  // Audit Log
+  getAuditLogFiltered,
+  type AuditLogQueryFilter,
+  // Utilidades SQLite
+  getSqliteDbPath,
+  getRawDb,
   // Catálogos dinámicos y meta
+  getDb,
   listCatalogMeta,
   createCatalogTable,
   renameCatalogTable,
@@ -383,3 +467,235 @@ export async function ds_allCounts(): Promise<Record<string, number>> {
   }
   return counts;
 }
+
+// ─── 8. User-Roles (RBAC N:N) ────────────────────────────────────────────────
+// Nota: estas operaciones son siempre SQLite-local (no tienen equivalente API externa).
+
+export async function ds_getUserRoles(userId: number) {
+  return getUserRoles(userId);
+}
+
+export async function ds_getUserRoleNames(userId: number) {
+  return getUserRoleNames(userId);
+}
+
+export async function ds_assignRoleToUser(userId: number, roleId: number) {
+  return assignRoleToUser(userId, roleId);
+}
+
+export async function ds_revokeRoleFromUser(userId: number, roleId: number) {
+  return revokeRoleFromUser(userId, roleId);
+}
+
+export async function ds_setUserRoles(userId: number, roleIds: number[]) {
+  return setUserRoles(userId, roleIds);
+}
+
+export async function ds_toggleHorariosEasterEgg(userId: number) {
+  return toggleHorariosEasterEgg(userId);
+}
+
+// ─── 9. Actas (F1) ───────────────────────────────────────────────────────────
+
+export async function ds_getActasByUserId(userId: number) {
+  return getActasByUserId(userId);
+}
+
+export async function ds_getActaById(id: number) {
+  return getActaById(id);
+}
+
+export async function ds_createActa(data: Parameters<typeof createActa>[0]) {
+  return createActa(data);
+}
+
+export async function ds_updateActa(id: number, data: Parameters<typeof updateActa>[1]) {
+  return updateActa(id, data);
+}
+
+export async function ds_deleteActa(id: number) {
+  return deleteActa(id);
+}
+
+export async function ds_getActaByExpedienteId(expedienteId: number) {
+  return getActaByExpedienteId(expedienteId);
+}
+
+// ─── 10. Evaluaciones (F2) ───────────────────────────────────────────────────
+
+export async function ds_getEvaluacionesByUserId(userId: number) {
+  return getEvaluacionesByUserId(userId);
+}
+
+export async function ds_getEvaluacionById(id: number) {
+  return getEvaluacionById(id);
+}
+
+export async function ds_createEvaluacion(data: Parameters<typeof createEvaluacion>[0]) {
+  return createEvaluacion(data);
+}
+
+export async function ds_updateEvaluacion(id: number, data: Parameters<typeof updateEvaluacion>[1]) {
+  return updateEvaluacion(id, data);
+}
+
+export async function ds_deleteEvaluacion(id: number) {
+  return deleteEvaluacion(id);
+}
+
+export async function ds_getEvaluacionByExpedienteId(expedienteId: number) {
+  return getEvaluacionByExpedienteId(expedienteId);
+}
+
+// ─── 11. Resultados (F3) ─────────────────────────────────────────────────────
+
+export async function ds_upsertResultadoExpediente(data: Parameters<typeof upsertResultadoExpediente>[0]) {
+  return upsertResultadoExpediente(data);
+}
+
+// ─── 12. Implementación (checklist) ──────────────────────────────────────────
+
+export async function ds_listImplementacionesByExpedienteId(expedienteId: number) {
+  return listImplementacionesByExpedienteId(expedienteId);
+}
+
+export async function ds_upsertImplementacionCheck(expedienteId: number, checkKey: string, estado: boolean) {
+  return upsertImplementacionCheck(expedienteId, checkKey, estado);
+}
+
+export async function ds_listImplementacionCatalogActivos() {
+  return listImplementacionCatalogActivos();
+}
+
+export async function ds_isActiveImplementacionCatalogKey(key: string) {
+  return isActiveImplementacionCatalogKey(key);
+}
+
+// ─── 13. Expedientes ─────────────────────────────────────────────────────────
+
+export async function ds_crearExpedienteConActa(data: Parameters<typeof crearExpedienteConActa>[0]) {
+  return crearExpedienteConActa(data);
+}
+
+export async function ds_getExpedientesByUser(userId: number) {
+  return getExpedientesByUser(userId);
+}
+
+export async function ds_getExpedienteById(id: number) {
+  return getExpedienteById(id);
+}
+
+export async function ds_updateExpediente(id: number, data: Parameters<typeof updateExpediente>[1]) {
+  return updateExpediente(id, data);
+}
+
+export async function ds_deleteExpedienteCascadeById(id: number) {
+  return deleteExpedienteCascadeById(id);
+}
+
+export async function ds_moverExpedienteAPapelera(id: number) {
+  return moverExpedienteAPapelera(id);
+}
+
+export async function ds_restaurarExpedienteDePapelera(id: number) {
+  return restaurarExpedienteDePapelera(id);
+}
+
+export async function ds_getExpedientesEnPapelera(userId: number) {
+  return getExpedientesEnPapelera(userId);
+}
+
+export async function ds_listExpedientesResumen(userId: number) {
+  return listExpedientesResumen(userId);
+}
+
+export async function ds_listExpedientesResumenGlobal() {
+  return listExpedientesResumenGlobal();
+}
+
+export async function ds_getExpedienteDetalle(id: number, userId: number) {
+  return getExpedienteDetalle(id, userId);
+}
+
+export async function ds_getExpedienteDetalleGlobal(id: number) {
+  return getExpedienteDetalleGlobal(id);
+}
+
+// ─── 14. Gestor de Horarios ───────────────────────────────────────────────────
+
+export async function ds_getEmpleados() {
+  return getEmpleados();
+}
+
+export async function ds_getEmpleadoById(id: number) {
+  return getEmpleadoById(id);
+}
+
+export async function ds_createEmpleado(data: Parameters<typeof createEmpleado>[0]) {
+  return createEmpleado(data);
+}
+
+export async function ds_updateEmpleado(id: number, data: Parameters<typeof updateEmpleado>[1]) {
+  return updateEmpleado(id, data);
+}
+
+export async function ds_toggleEmpleadoStatus(id: number, activo: number) {
+  return toggleEmpleadoStatus(id, activo);
+}
+
+export async function ds_deleteEmpleado(id: number) {
+  return deleteEmpleado(id);
+}
+
+export async function ds_getContratosByEmpleado(empleadoId: number) {
+  return getContratosByEmpleado(empleadoId);
+}
+
+export async function ds_getContratoActivoByEmpleado(empleadoId: number) {
+  return getContratoActivoByEmpleado(empleadoId);
+}
+
+export async function ds_createContrato(data: Parameters<typeof createContrato>[0]) {
+  return createContrato(data);
+}
+
+export async function ds_updateContrato(id: number, data: Parameters<typeof updateContrato>[1]) {
+  return updateContrato(id, data);
+}
+
+export async function ds_getBloquesByContrato(contratoId: number) {
+  return getBloquesByContrato(contratoId);
+}
+
+export async function ds_setBloques(contratoId: number, bloques: Parameters<typeof setBloques>[1]) {
+  return setBloques(contratoId, bloques);
+}
+
+export async function ds_getBloquesSemanales() {
+  return getBloquesSemanales();
+}
+
+// ─── 15. Búsqueda ─────────────────────────────────────────────────────────────
+
+export async function ds_searchRegistros(userId: number, query: string) {
+  return searchRegistros(userId, query);
+}
+
+// ─── 16. Audit Log ───────────────────────────────────────────────────────────
+
+export async function ds_getAuditLogFiltered(f: AuditLogQueryFilter) {
+  return getAuditLogFiltered(f);
+}
+
+// ─── 17. Utilidades SQLite (diagnóstico) ─────────────────────────────────────
+// Solo disponibles cuando USE_API=false (SQLite local).
+// En producción con PostgreSQL estas funciones no aplican.
+
+export function ds_getSqliteDbPath(): string {
+  return getSqliteDbPath();
+}
+
+export function ds_getRawDb() {
+  return getRawDb();
+}
+// Nota: ds_findUserById está definido en la sección Usuarios (ver más arriba).

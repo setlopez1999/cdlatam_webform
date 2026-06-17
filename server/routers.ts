@@ -9,43 +9,9 @@ import { clausulasRouter } from "./routers/clausulas";
 import { buildActaCodigo } from "./documentCodes";
 import { mayAccessAllExpedientes } from "./expedienteAccess";
 
-// 1. IMPORTACIONES (actas/evaluaciones/búsqueda — siempre SQLite)
+// IMPORTACIONES — todas las operaciones de BD pasan por dataSource (puerta única)
 import {
-  getActasByUserId, getActaById, createActa, updateActa, deleteActa,
-  getEvaluacionesByUserId, getEvaluacionById, createEvaluacion, updateEvaluacion, deleteEvaluacion,
-  searchRegistros,
-  getUserRoles, getUserRoleNames, setUserRoles, assignRoleToUser, revokeRoleFromUser,
-  toggleHorariosEasterEgg,
-  getEmpleados, getEmpleadoById, createEmpleado, updateEmpleado, toggleEmpleadoStatus, deleteEmpleado,
-  getContratosByEmpleado, getContratoActivoByEmpleado, createContrato, updateContrato,
-  getBloquesByContrato, setBloques, getBloquesSemanales,
-  // Expedientes y Audit Log
-  getExpedientesByUser, getExpedienteById,
-  updateExpediente, getAuditLogFiltered,
-  crearExpedienteConActa,
-  // Actas por expediente
-  getActaByExpedienteId,
-  getEvaluacionByExpedienteId,
-  upsertResultadoExpediente,
-  deleteExpedienteCascadeById,
-  moverExpedienteAPapelera,
-  restaurarExpedienteDePapelera,
-  getExpedientesEnPapelera,
-  listExpedientesResumen,
-  listExpedientesResumenGlobal,
-  getExpedienteDetalle,
-  getExpedienteDetalleGlobal,
-  listImplementacionesByExpedienteId,
-  upsertImplementacionCheck,
-  listImplementacionCatalogActivos,
-  getSqliteDbPath,
-  getRawDb,
-  isActiveImplementacionCatalogKey,
-  findUserById,
-} from "./db";
-
-// dataSource — abstracción SQLite / API externa (controlado por USE_API en .env)
-import {
+  // Catálogos
   ds_getCatalogOptions,
   ds_getCatalogSummary,
   ds_searchCatalogs,
@@ -55,20 +21,81 @@ import {
   ds_deleteCatalogRecord,
   ds_bulkUpdateCatalogRecords,
   ds_bulkDeleteCatalogRecords,
+  // Usuarios
   ds_getUsers,
   ds_findUserByUsername,
+  ds_findUserById,
   ds_createUser,
   ds_toggleUserStatus,
   ds_updateUser,
   ds_updateUserCredentials,
-  ds_findUserById,
   ds_deleteUser,
+  // Roles
   ds_getRoles,
   ds_createRole,
   ds_updateRole,
   ds_deleteRole,
   ds_getUsersByRoleId,
-  // Catálogos dinámicos y meta — ahora también pasan por dataSource
+  // User-Roles (RBAC N:N)
+  ds_getUserRoles,
+  ds_getUserRoleNames,
+  ds_setUserRoles,
+  ds_assignRoleToUser,
+  ds_revokeRoleFromUser,
+  ds_toggleHorariosEasterEgg,
+  // Actas (F1)
+  ds_getActasByUserId,
+  ds_getActaById,
+  ds_createActa,
+  ds_updateActa,
+  ds_deleteActa,
+  ds_getActaByExpedienteId,
+  // Evaluaciones (F2)
+  ds_getEvaluacionesByUserId,
+  ds_getEvaluacionById,
+  ds_createEvaluacion,
+  ds_updateEvaluacion,
+  ds_deleteEvaluacion,
+  ds_getEvaluacionByExpedienteId,
+  // Resultados (F3)
+  ds_upsertResultadoExpediente,
+  // Implementación
+  ds_listImplementacionesByExpedienteId,
+  ds_upsertImplementacionCheck,
+  ds_listImplementacionCatalogActivos,
+  ds_isActiveImplementacionCatalogKey,
+  // Expedientes
+  ds_crearExpedienteConActa,
+  ds_getExpedientesByUser,
+  ds_getExpedienteById,
+  ds_updateExpediente,
+  ds_deleteExpedienteCascadeById,
+  ds_moverExpedienteAPapelera,
+  ds_restaurarExpedienteDePapelera,
+  ds_getExpedientesEnPapelera,
+  ds_listExpedientesResumen,
+  ds_listExpedientesResumenGlobal,
+  ds_getExpedienteDetalle,
+  ds_getExpedienteDetalleGlobal,
+  // Horarios
+  ds_getEmpleados,
+  ds_getEmpleadoById,
+  ds_createEmpleado,
+  ds_updateEmpleado,
+  ds_toggleEmpleadoStatus,
+  ds_deleteEmpleado,
+  ds_getContratosByEmpleado,
+  ds_getContratoActivoByEmpleado,
+  ds_createContrato,
+  ds_updateContrato,
+  ds_getBloquesByContrato,
+  ds_setBloques,
+  ds_getBloquesSemanales,
+  // Búsqueda
+  ds_searchRegistros,
+  // Audit Log
+  ds_getAuditLogFiltered,
+  // Catálogos dinámicos y meta
   ds_listCatalogMeta,
   ds_createCatalogTable,
   ds_renameCatalogTable,
@@ -79,6 +106,9 @@ import {
   ds_deleteCatalogRecordGeneric,
   ds_bulkDeleteCatalogRecordsGeneric,
   ds_allCounts,
+  // Utilidades SQLite (diagnóstico)
+  ds_getSqliteDbPath,
+  ds_getRawDb,
 } from "./dataSource";
 
 // 2. IMPORTACIONES DE LOCALAUTH (Solo para cifrado/tokens, NO BD)
@@ -264,7 +294,7 @@ export const appRouter = router({
               createdAt: new Date(input.cursor.createdAtSec * 1000),
             }
           : undefined;
-        return getAuditLogFiltered({
+        return ds_getAuditLogFiltered({
           from: input.fromSec != null ? new Date(input.fromSec * 1000) : undefined,
           to: input.toSec != null ? new Date(input.toSec * 1000) : undefined,
           actions: input.actions,
@@ -658,12 +688,12 @@ export const appRouter = router({
       .input(z.object({ userId: z.number() }))
       .query(async ({ ctx, input }) => {
         await requireRole(ctx, "admin");
-        return await getUserRoles(input.userId);
+        return await ds_getUserRoles(input.userId);
       }),
 
     /** Obtiene los nombres de roles del usuario autenticado (para el cliente) */
     myRoles: protectedProcedure.query(async ({ ctx }) => {
-      return await getUserRoleNames(ctx.user.id);
+      return await ds_getUserRoleNames(ctx.user.id);
     }),
 
     /** Reemplaza todos los roles de un usuario por un nuevo set */
@@ -671,7 +701,7 @@ export const appRouter = router({
       .input(z.object({ userId: z.number(), roleIds: z.array(z.number()) }))
       .mutation(async ({ ctx, input }) => {
         await requireRole(ctx, "admin");
-        await setUserRoles(input.userId, input.roleIds);
+        await ds_setUserRoles(input.userId, input.roleIds);
         return { success: true };
       }),
 
@@ -680,7 +710,7 @@ export const appRouter = router({
       .input(z.object({ userId: z.number(), roleId: z.number() }))
       .mutation(async ({ ctx, input }) => {
         await requireRole(ctx, "admin");
-        await assignRoleToUser(input.userId, input.roleId);
+        await ds_assignRoleToUser(input.userId, input.roleId);
         return { success: true };
       }),
 
@@ -689,7 +719,7 @@ export const appRouter = router({
       .input(z.object({ userId: z.number(), roleId: z.number() }))
       .mutation(async ({ ctx, input }) => {
         await requireRole(ctx, "admin");
-        await revokeRoleFromUser(input.userId, input.roleId);
+        await ds_revokeRoleFromUser(input.userId, input.roleId);
         return { success: true };
       }),
     /**
@@ -698,7 +728,7 @@ export const appRouter = router({
      * El frontend lo activa con 5 clicks seguidos en el ícono del Dashboard.
      */
     toggleHorarios: protectedProcedure.mutation(async ({ ctx }) => {
-      return await toggleHorariosEasterEgg(ctx.user.id);
+      return await ds_toggleHorariosEasterEgg(ctx.user.id);
     }),
   }),
 
@@ -712,13 +742,13 @@ export const appRouter = router({
   // ─── Actas (siempre SQLite) ───────────────────────────────────────────────
   actas: router({
     list: protectedProcedure.query(async ({ ctx }) => {
-      return getActasByUserId(ctx.user.id);
+      return ds_getActasByUserId(ctx.user.id);
     }),
 
     getById: protectedProcedure
       .input(z.object({ id: z.number() }))
       .query(async ({ ctx, input }) => {
-        const acta = await getActaById(input.id);
+        const acta = await ds_getActaById(input.id);
         if (!acta || acta.userId !== ctx.user.id) throw new Error("Acta no encontrada");
         return acta;
       }),
@@ -727,7 +757,7 @@ export const appRouter = router({
       .input(ActaInputSchema)
       .mutation(async ({ ctx, input }) => {
         const { f1SavedAt: f1s, ...restIn } = input;
-        const result = await createActa({
+        const result = await ds_createActa({
           userId: ctx.user.id,
           ...restIn,
           fecha: input.fecha ? new Date(input.fecha) : undefined,
@@ -742,10 +772,10 @@ export const appRouter = router({
     update: protectedProcedure
       .input(z.object({ id: z.number(), data: ActaInputSchema }))
       .mutation(async ({ ctx, input }) => {
-        const acta = await getActaById(input.id);
+        const acta = await ds_getActaById(input.id);
         if (!acta || acta.userId !== ctx.user.id) throw new Error("Acta no encontrada");
         const { f1SavedAt: f1s, ...dataRest } = input.data;
-        return updateActa(input.id, {
+        return ds_updateActa(input.id, {
           ...dataRest,
           fecha: input.data.fecha ? new Date(input.data.fecha) : undefined,
           f1SavedAt: f1s ? new Date(f1s) : undefined,
@@ -755,9 +785,9 @@ export const appRouter = router({
     delete: protectedProcedure
       .input(z.object({ id: z.number() }))
       .mutation(async ({ ctx, input }) => {
-        const acta = await getActaById(input.id);
+        const acta = await ds_getActaById(input.id);
         if (!acta || acta.userId !== ctx.user.id) throw new Error("Acta no encontrada");
-        return deleteActa(input.id);
+        return ds_deleteActa(input.id);
       }),
 
     /**
@@ -770,7 +800,7 @@ export const appRouter = router({
         expedienteId: z.number().min(1),
       }))
       .mutation(async ({ ctx, input }) => {
-        const expedienteRow = await getExpedienteById(input.expedienteId);
+        const expedienteRow = await ds_getExpedienteById(input.expedienteId);
         if (!expedienteRow) {
           throw new TRPCError({ code: "NOT_FOUND", message: "Expediente no encontrado" });
         }
@@ -787,7 +817,7 @@ export const appRouter = router({
           return o;
         };
         const f1DatosMerged = f1DatosSinFirma(actaRest.f1Datos);
-        const existing = await getActaByExpedienteId(expedienteId);
+        const existing = await ds_getActaByExpedienteId(expedienteId);
         let acta;
         if (existing) {
           const prevF1 = f1DatosSinFirma(existing.f1Datos);
@@ -796,13 +826,13 @@ export const appRouter = router({
           let nroActaFix: number | undefined;
           let codigoFix: string | undefined;
           if (!existing.nroActa || existing.nroActa < 10001) {
-            const rawDb = getRawDb();
+            const rawDb = ds_getRawDb();
             const maxRow2 = rawDb.prepare(`SELECT COALESCE(MAX(nro_acta), 0) as max_nro FROM actas WHERE id != ?`).get(existing.id) as { max_nro: number };
             nroActaFix = Math.max((maxRow2.max_nro ?? 0) + 1, 10001);
             const primerServicioFix = ((actaRest.serviciosContratados ?? existing.serviciosContratados ?? []) as Array<{ unidadNegocio?: string }>)[0];
             codigoFix = buildActaCodigo("", nroActaFix, primerServicioFix?.unidadNegocio ?? "");
           }
-          await updateActa(existing.id, {
+          await ds_updateActa(existing.id, {
             ...actaRest,
             fecha: actaRest.fecha ? new Date(actaRest.fecha) : undefined,
             serviciosContratados: actaRest.serviciosContratados ?? existing.serviciosContratados,
@@ -813,9 +843,9 @@ export const appRouter = router({
             f1SavedAt: f1SavedAt ?? existing.f1SavedAt ?? undefined,
             ...(nroActaFix ? { nroActa: nroActaFix, codigo: codigoFix, noActa: codigoFix } : {}),
           });
-          acta = await getActaById(existing.id);
+          acta = await ds_getActaById(existing.id);
         } else {
-          const raw = getRawDb();
+          const raw = ds_getRawDb();
           const maxRow = raw.prepare(`SELECT COALESCE(MAX(nro_acta), 0) as max_nro FROM actas`).get() as { max_nro: number };
           // Garantizar que el primer nroActa sea al menos 10001
           const nextNroActa = Math.max(maxRow.max_nro + 1, 10001);
@@ -823,7 +853,7 @@ export const appRouter = router({
           const primerServicio = (actaRest.serviciosContratados ?? [])[0] as { unidadNegocio?: string } | undefined;
           const unidadNegocioActa = primerServicio?.unidadNegocio ?? "";
           const codigoActa = buildActaCodigo("", nextNroActa, unidadNegocioActa);
-          acta = await createActa({
+          acta = await ds_createActa({
             userId: ownerUserId,
             expedienteId,
             nroActa: nextNroActa,
@@ -847,25 +877,25 @@ export const appRouter = router({
     getByExpedienteId: protectedProcedure
       .input(z.object({ expedienteId: z.number().min(1) }))
       .query(async ({ ctx, input }) => {
-        const expediente = await getExpedienteById(input.expedienteId);
+        const expediente = await ds_getExpedienteById(input.expedienteId);
         if (!expediente) return null;
         if (!mayAccessAllExpedientes(ctx.user.role) && expediente.creadorId !== ctx.user.id) {
           throw new TRPCError({ code: "FORBIDDEN", message: "No autorizado" });
         }
-        return getActaByExpedienteId(input.expedienteId);
+        return ds_getActaByExpedienteId(input.expedienteId);
       }),
   }),
 
   // ─── Evaluaciones (siempre SQLite) ───────────────────────────────────────
   evaluaciones: router({
     list: protectedProcedure.query(async ({ ctx }) => {
-      return getEvaluacionesByUserId(ctx.user.id);
+      return ds_getEvaluacionesByUserId(ctx.user.id);
     }),
 
     getById: protectedProcedure
       .input(z.object({ id: z.number() }))
       .query(async ({ ctx, input }) => {
-        const ev = await getEvaluacionById(input.id);
+        const ev = await ds_getEvaluacionById(input.id);
         if (!ev || ev.userId !== ctx.user.id) throw new Error("Evaluación no encontrada");
         return ev;
       }),
@@ -873,7 +903,7 @@ export const appRouter = router({
     create: protectedProcedure
       .input(EvaluacionInputSchema)
       .mutation(async ({ ctx, input }) => {
-        return createEvaluacion({
+        return ds_createEvaluacion({
           userId: ctx.user.id,
           ...input,
           fechaEntrega: input.fechaEntrega ? new Date(input.fechaEntrega) : undefined,
@@ -895,9 +925,9 @@ export const appRouter = router({
     update: protectedProcedure
       .input(z.object({ id: z.number(), data: EvaluacionInputSchema }))
       .mutation(async ({ ctx, input }) => {
-        const ev = await getEvaluacionById(input.id);
+        const ev = await ds_getEvaluacionById(input.id);
         if (!ev || ev.userId !== ctx.user.id) throw new Error("Evaluación no encontrada");
-        return updateEvaluacion(input.id, {
+        return ds_updateEvaluacion(input.id, {
           ...input.data,
           fechaEntrega: input.data.fechaEntrega ? new Date(input.data.fechaEntrega) : undefined,
           montoProyecto: input.data.montoProyecto,
@@ -914,9 +944,9 @@ export const appRouter = router({
     delete: protectedProcedure
       .input(z.object({ id: z.number() }))
       .mutation(async ({ ctx, input }) => {
-        const ev = await getEvaluacionById(input.id);
+        const ev = await ds_getEvaluacionById(input.id);
         if (!ev || ev.userId !== ctx.user.id) throw new Error("Evaluación no encontrada");
-        return deleteEvaluacion(input.id);
+        return ds_deleteEvaluacion(input.id);
       }),
 
     /**
@@ -930,7 +960,7 @@ export const appRouter = router({
         data: EvaluacionInputSchema,
       }))
       .mutation(async ({ ctx, input }) => {
-        const expediente = await getExpedienteById(input.expedienteId);
+        const expediente = await ds_getExpedienteById(input.expedienteId);
         if (!expediente) {
           throw new TRPCError({ code: "NOT_FOUND", message: "Expediente no encontrado" });
         }
@@ -938,8 +968,8 @@ export const appRouter = router({
           throw new TRPCError({ code: "FORBIDDEN", message: "No autorizado" });
         }
         const ownerUserId = expediente.creadorId;
-        const acta = await getActaByExpedienteId(input.expedienteId);
-        const existing = await getEvaluacionByExpedienteId(input.expedienteId);
+        const acta = await ds_getActaByExpedienteId(input.expedienteId);
+        const existing = await ds_getEvaluacionByExpedienteId(input.expedienteId);
         const d = input.data;
         const stripLabel = <T extends { label?: unknown }>(row: T) => {
           const { label: _l, ...rest } = row;
@@ -981,10 +1011,10 @@ export const appRouter = router({
         };
         let row;
         if (existing) {
-          await updateEvaluacion(existing.id, basePatch);
-          row = await getEvaluacionById(existing.id);
+          await ds_updateEvaluacion(existing.id, basePatch);
+          row = await ds_getEvaluacionById(existing.id);
         } else {
-          row = await createEvaluacion({
+          row = await ds_createEvaluacion({
             userId: ownerUserId,
             ...basePatch,
           });
@@ -998,7 +1028,7 @@ export const appRouter = router({
     global: protectedProcedure
       .input(z.object({ query: z.string().min(1) }))
       .query(async ({ ctx, input }) => {
-        return searchRegistros(ctx.user.id, input.query);
+        return ds_searchRegistros(ctx.user.id, input.query);
       }),
   }),
 
@@ -1189,14 +1219,14 @@ export const appRouter = router({
     // Empleados
     listEmpleados: protectedProcedure.query(async ({ ctx }) => {
       await requireAnyRole(ctx, ["admin", "gestor_horarios"]);
-      return getEmpleados();
+      return ds_getEmpleados();
     }),
 
     getEmpleado: protectedProcedure
       .input(z.object({ id: z.number() }))
       .query(async ({ ctx, input }) => {
         await requireAnyRole(ctx, ["admin", "gestor_horarios"]);
-        return getEmpleadoById(input.id);
+        return ds_getEmpleadoById(input.id);
       }),
 
     createEmpleado: protectedProcedure
@@ -1207,7 +1237,7 @@ export const appRouter = router({
       }))
       .mutation(async ({ ctx, input }) => {
         await requireAnyRole(ctx, ["admin", "gestor_horarios"]);
-        return createEmpleado(input);
+        return ds_createEmpleado(input);
       }),
 
     updateEmpleado: protectedProcedure
@@ -1220,7 +1250,7 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         await requireAnyRole(ctx, ["admin", "gestor_horarios"]);
         const { id, ...data } = input;
-        await updateEmpleado(id, data);
+        await ds_updateEmpleado(id, data);
         return { success: true };
       }),
 
@@ -1228,7 +1258,7 @@ export const appRouter = router({
       .input(z.object({ id: z.number(), activo: z.number().min(0).max(1) }))
       .mutation(async ({ ctx, input }) => {
         await requireAnyRole(ctx, ["admin", "gestor_horarios"]);
-        await toggleEmpleadoStatus(input.id, input.activo);
+        await ds_toggleEmpleadoStatus(input.id, input.activo);
         return { success: true };
       }),
 
@@ -1236,7 +1266,7 @@ export const appRouter = router({
       .input(z.object({ id: z.number().int().positive() }))
       .mutation(async ({ ctx, input }) => {
         await requireAnyRole(ctx, ["admin", "gestor_horarios"]);
-        await deleteEmpleado(input.id);
+        await ds_deleteEmpleado(input.id);
         return { success: true };
       }),
 
@@ -1245,14 +1275,14 @@ export const appRouter = router({
       .input(z.object({ empleadoId: z.number() }))
       .query(async ({ ctx, input }) => {
         await requireAnyRole(ctx, ["admin", "gestor_horarios"]);
-        return getContratosByEmpleado(input.empleadoId);
+        return ds_getContratosByEmpleado(input.empleadoId);
       }),
 
     getContratoActivo: protectedProcedure
       .input(z.object({ empleadoId: z.number() }))
       .query(async ({ ctx, input }) => {
         await requireAnyRole(ctx, ["admin", "gestor_horarios"]);
-        return getContratoActivoByEmpleado(input.empleadoId) ?? null;
+        return ds_getContratoActivoByEmpleado(input.empleadoId) ?? null;
       }),
 
     createContrato: protectedProcedure
@@ -1267,7 +1297,7 @@ export const appRouter = router({
       }))
       .mutation(async ({ ctx, input }) => {
         await requireAnyRole(ctx, ["admin", "gestor_horarios"]);
-        return createContrato(input);
+        return ds_createContrato(input);
       }),
 
     updateContrato: protectedProcedure
@@ -1283,7 +1313,7 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         await requireAnyRole(ctx, ["admin", "gestor_horarios"]);
         const { id, ...data } = input;
-        await updateContrato(id, data);
+        await ds_updateContrato(id, data);
         return { success: true };
       }),
 
@@ -1292,7 +1322,7 @@ export const appRouter = router({
       .input(z.object({ contratoId: z.number() }))
       .query(async ({ ctx, input }) => {
         await requireAnyRole(ctx, ["admin", "gestor_horarios"]);
-        return getBloquesByContrato(input.contratoId);
+        return ds_getBloquesByContrato(input.contratoId);
       }),
 
     setBloques: protectedProcedure
@@ -1306,14 +1336,14 @@ export const appRouter = router({
       }))
       .mutation(async ({ ctx, input }) => {
         await requireAnyRole(ctx, ["admin", "gestor_horarios"]);
-        await setBloques(input.contratoId, input.bloques);
+        await ds_setBloques(input.contratoId, input.bloques);
         return { success: true };
       }),
 
     // Vista semanal general
     bloquesSemanales: protectedProcedure.query(async ({ ctx }) => {
       await requireAnyRole(ctx, ["admin", "gestor_horarios"]);
-      return getBloquesSemanales();
+      return ds_getBloquesSemanales();
     }),
   }),
 
@@ -1321,8 +1351,8 @@ export const appRouter = router({
   dashboard: router({
     stats: protectedProcedure.query(async ({ ctx }) => {
       const [userActas, userEvaluaciones] = await Promise.all([
-        getActasByUserId(ctx.user.id),
-        getEvaluacionesByUserId(ctx.user.id),
+        ds_getActasByUserId(ctx.user.id),
+        ds_getEvaluacionesByUserId(ctx.user.id),
       ]);
 
       return {
@@ -1350,7 +1380,7 @@ export const appRouter = router({
       }))
       .mutation(async ({ ctx, input }) => {
         const userId = ctx.user!.id;
-        const result = await crearExpedienteConActa({
+        const result = await ds_crearExpedienteConActa({
           nombre: input.nombre,
           creadorId: userId,
         });
@@ -1367,13 +1397,13 @@ export const appRouter = router({
     /** Lista expedientes del usuario actual (sin listado global). */
     listar: protectedProcedure.query(async ({ ctx }) => {
       const userId = Number(ctx.localUser?.id);
-      return getExpedientesByUser(userId);
+      return ds_getExpedientesByUser(userId);
     }),
 
     /** Lista expedientes con acta, evaluación y resultado (historial: solo del usuario autenticado). */
     listarResumen: protectedProcedure.query(async ({ ctx }) => {
       if (!ctx.user) throw new Error("No autenticado");
-      return listExpedientesResumen(ctx.user.id);
+      return ds_listExpedientesResumen(ctx.user.id);
     }),
 
     /**
@@ -1385,12 +1415,12 @@ export const appRouter = router({
       if (!mayAccessAllExpedientes(ctx.user.role)) {
         throw new TRPCError({ code: "FORBIDDEN", message: "No autorizado" });
       }
-      const rows = await listExpedientesResumenGlobal();
+      const rows = await ds_listExpedientesResumenGlobal();
       const ids = Array.from(new Set(rows.map(r => r.expediente.creadorId)));
       // Map: id → { label, exists }
       const userMap = new Map<number, { label: string; exists: boolean }>();
       for (const id of ids) {
-        const u = await findUserById(id);
+        const u = await ds_findUserById(id);
         if (u) {
           userMap.set(id, { label: u.displayName?.trim() || u.username || `#${id}`, exists: true });
         } else {
@@ -1416,8 +1446,8 @@ export const appRouter = router({
       .query(async ({ ctx, input }) => {
         if (!ctx.user) throw new Error("No autenticado");
         return mayAccessAllExpedientes(ctx.user.role)
-          ? getExpedienteDetalleGlobal(input.id)
-          : getExpedienteDetalle(input.id, ctx.user.id);
+          ? ds_getExpedienteDetalleGlobal(input.id)
+          : ds_getExpedienteDetalle(input.id, ctx.user.id);
       }),
 
     implementacion: router({
@@ -1427,19 +1457,19 @@ export const appRouter = router({
           if (!ctx.user) throw new Error("No autenticado");
           try {
             const det = mayAccessAllExpedientes(ctx.user.role)
-              ? await getExpedienteDetalleGlobal(input.id)
-              : await getExpedienteDetalle(input.id, ctx.user.id);
+              ? await ds_getExpedienteDetalleGlobal(input.id)
+              : await ds_getExpedienteDetalle(input.id, ctx.user.id);
             if (!det) {
               throw new TRPCError({ code: "NOT_FOUND", message: "Expediente no encontrado" });
             }
-            const catalog = await listImplementacionCatalogActivos();
-            const rows = await listImplementacionesByExpedienteId(det.expediente.id);
+            const catalog = await ds_listImplementacionCatalogActivos();
+            const rows = await ds_listImplementacionesByExpedienteId(det.expediente.id);
             return mergeImplementacionFromCatalog(catalog, rows);
           } catch (err: unknown) {
             if (err instanceof TRPCError) throw err;
             const msg = err instanceof Error ? err.message : String(err);
             if (/malformed|SQLITE_CORRUPT|database disk image/i.test(msg)) {
-              const path = getSqliteDbPath();
+              const path = ds_getSqliteDbPath();
               console.error("[implementacion.listar] SQLite corrupta o ilegible:", path, err);
               throw new TRPCError({
                 code: "INTERNAL_SERVER_ERROR",
@@ -1461,16 +1491,16 @@ export const appRouter = router({
         )
         .mutation(async ({ ctx, input }) => {
           if (!ctx.user) throw new Error("No autenticado");
-          if (!(await isActiveImplementacionCatalogKey(input.checkKey))) {
+          if (!(await ds_isActiveImplementacionCatalogKey(input.checkKey))) {
             throw new TRPCError({ code: "BAD_REQUEST", message: "checkKey inválido o inactivo" });
           }
           const det = mayAccessAllExpedientes(ctx.user.role)
-            ? await getExpedienteDetalleGlobal(input.id)
-            : await getExpedienteDetalle(input.id, ctx.user.id);
+            ? await ds_getExpedienteDetalleGlobal(input.id)
+            : await ds_getExpedienteDetalle(input.id, ctx.user.id);
           if (!det) {
             throw new TRPCError({ code: "NOT_FOUND", message: "Expediente no encontrado" });
           }
-          await upsertImplementacionCheck(det.expediente.id, input.checkKey, input.estado);
+          await ds_upsertImplementacionCheck(det.expediente.id, input.checkKey, input.estado);
           await recordAuditFromTrpc(ctx, {
             action: "UPDATE",
             entity: "implementacion",
@@ -1492,10 +1522,10 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         if (!ctx.user) throw new Error("No autenticado");
         const det = mayAccessAllExpedientes(ctx.user.role)
-          ? await getExpedienteDetalleGlobal(input.expedienteId)
-          : await getExpedienteDetalle(input.expedienteId, ctx.user.id);
+          ? await ds_getExpedienteDetalleGlobal(input.expedienteId)
+          : await ds_getExpedienteDetalle(input.expedienteId, ctx.user.id);
         if (!det) throw new Error("Expediente no encontrado");
-        await upsertResultadoExpediente({
+        await ds_upsertResultadoExpediente({
           expedienteId: input.expedienteId,
           payload: input.payload,
           f3FormStatus: input.f3FormStatus,
@@ -1518,12 +1548,12 @@ export const appRouter = router({
       }))
       .mutation(async ({ ctx, input }) => {
         if (!ctx.user) throw new Error("No autenticado");
-        const row = await getExpedienteById(input.id);
+        const row = await ds_getExpedienteById(input.id);
         if (!row) throw new Error("Expediente no encontrado");
         if (row.creadorId !== ctx.user.id && !mayAccessAllExpedientes(ctx.user.role)) {
           throw new Error("No autorizado");
         }
-        const updated = await updateExpediente(row.id, { nombre: input.nombre });
+        const updated = await ds_updateExpediente(row.id, { nombre: input.nombre });
         await recordAuditFromTrpc(ctx, {
           action: "UPDATE",
           entity: "expediente",
@@ -1539,12 +1569,12 @@ export const appRouter = router({
       .input(z.object({ id: z.number() }))
       .mutation(async ({ ctx, input }) => {
         if (!ctx.user) throw new Error("No autenticado");
-        const row = await getExpedienteById(input.id);
+        const row = await ds_getExpedienteById(input.id);
         if (!row) throw new Error("Expediente no encontrado");
         if (row.creadorId !== ctx.user.id && !mayAccessAllExpedientes(ctx.user.role)) {
           throw new Error("No autorizado");
         }
-        await deleteExpedienteCascadeById(input.id);
+        await ds_deleteExpedienteCascadeById(input.id);
         await recordAuditFromTrpc(ctx, {
           action: "DELETE",
           entity: "expediente",
@@ -1559,12 +1589,12 @@ export const appRouter = router({
       .input(z.object({ id: z.number() }))
       .mutation(async ({ ctx, input }) => {
         if (!ctx.user) throw new Error("No autenticado");
-        const row = await getExpedienteById(input.id);
+        const row = await ds_getExpedienteById(input.id);
         if (!row) throw new Error("Expediente no encontrado");
         if (row.creadorId !== ctx.user.id && !mayAccessAllExpedientes(ctx.user.role)) {
           throw new Error("No autorizado");
         }
-        await moverExpedienteAPapelera(input.id);
+        await ds_moverExpedienteAPapelera(input.id);
         await recordAuditFromTrpc(ctx, {
           action: "UPDATE",
           entity: "expediente",
@@ -1580,12 +1610,12 @@ export const appRouter = router({
       .input(z.object({ id: z.number() }))
       .mutation(async ({ ctx, input }) => {
         if (!ctx.user) throw new Error("No autenticado");
-        const row = await getExpedienteById(input.id);
+        const row = await ds_getExpedienteById(input.id);
         if (!row) throw new Error("Expediente no encontrado");
         if (row.creadorId !== ctx.user.id && !mayAccessAllExpedientes(ctx.user.role)) {
           throw new Error("No autorizado");
         }
-        await restaurarExpedienteDePapelera(input.id);
+        await ds_restaurarExpedienteDePapelera(input.id);
         await recordAuditFromTrpc(ctx, {
           action: "UPDATE",
           entity: "expediente",
@@ -1599,7 +1629,7 @@ export const appRouter = router({
     /** Lista expedientes en papelera del usuario actual. */
     listarPapelera: protectedProcedure.query(async ({ ctx }) => {
       if (!ctx.user) throw new Error("No autenticado");
-      return getExpedientesEnPapelera(ctx.user.id);
+      return ds_getExpedientesEnPapelera(ctx.user.id);
     }),
 
   }),
