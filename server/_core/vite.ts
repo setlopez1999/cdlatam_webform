@@ -71,17 +71,28 @@ export function serveStatic(app: Express) {
     );
   }
 
-  app.use(express.static(distPath));
+  // En producción el frontend vive bajo /sga/ (base path de Vite)
+  // Nginx hace proxy de /sga/* al Node.js, por eso servimos bajo /sga/
+  const staticPrefix = process.env.NODE_ENV === "production" ? "/sga" : "";
 
-  // Endpoint /config.js para producción (modo static)
-  app.get("/config.js", (_req, res) => {
+  app.use(staticPrefix, express.static(distPath));
+
+  // Endpoint /config.js para producción (modo static) — accesible bajo /sga/config.js
+  app.get(`${staticPrefix}/config.js`, (_req, res) => {
     res.setHeader("Content-Type", "application/javascript");
     res.setHeader("Cache-Control", "no-store");
     res.send(`window.__ENV__ = ${JSON.stringify(runtimeEnv())};`);
   });
 
-  // fall through to index.html if the file doesn't exist
-  app.use("*", (_req, res) => {
+  // SPA fallback: cualquier ruta bajo /sga/* que no sea un archivo → index.html
+  app.use(`${staticPrefix}/*`, (_req, res) => {
     res.sendFile(path.resolve(distPath, "index.html"));
   });
+
+  // Compatibilidad: ruta raíz también responde con index.html del SGA
+  if (staticPrefix) {
+    app.use("*", (_req, res) => {
+      res.sendFile(path.resolve(distPath, "index.html"));
+    });
+  }
 }
