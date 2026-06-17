@@ -3,9 +3,10 @@ import type { ClausulaParaPdf, ActaPdfExportOpts, DocEntry } from "./types";
 import { effectiveNoActaForPdf, resolveLayout, findBestScale } from "./layout";
 import { drawHeaderSection, drawEncabezado, drawInfoLegal, drawContactSection, drawServiciosTable, drawFormasPagoSection, drawConsideracionesSection, drawClausulasSection, drawFirmaBlock, drawFooter } from "./acta-sections";
 import { getCurrencyCode, formatCurrency } from "../formatters";
-import { drawSharedHeader } from "./draw-header";
 import { jsPDF } from "jspdf";
 import { PDFDocument } from "pdf-lib";
+import { LOGO_NATURAL_W_PX, LOGO_NATURAL_H_PX, fitImagePreserveAspectMm } from "./constants";
+import cdlatamLogoOnBrand from "@/assets/cdlatam-logo-on-brand.png";
 
 async function buildActaPdfBytes(acta: ActaData, opts: ActaPdfExportOpts = {}): Promise<Uint8Array> {
   const doc = new jsPDF({ unit: "mm", format: "letter" });
@@ -105,25 +106,18 @@ export async function createActaPdfBlob(
         const pdf = await PDFDocument.load(bytes, { ignoreEncryption: true });
         // Escalar páginas importadas a Letter para que mantengan el mismo tamaño que el acta
         const copied = await merged.copyPages(pdf, pdf.getPageIndices());
-        // Generar header completo (con logo y banda) una vez para reusar en cada página
-        let headerEmbed = null;
-        const HEADER_MM = 11; // topM(2) + band(5) + botG(4)
+        // Logo CDLatam (ya trae fondo azul en el PNG) — mismo tamaño que acta/features
+        const { drawW: logoWmm, drawH: logoHmm } = fitImagePreserveAspectMm(LOGO_NATURAL_W_PX, LOGO_NATURAL_H_PX, 72, 18);
+        const logoHPt = logoHmm * 72 / 25.4;
+        const HEADER_MM = 14; // padding 2mm arriba/abajo + logo ~10mm
         const HEADER_PT = HEADER_MM * 72 / 25.4;
+        let headerLogo: any = null;
         if (c.tipo === "clausula") {
-          const tempDoc = new jsPDF({ unit: "mm", format: "letter" });
-          const tempLo = resolveLayout(tempDoc, { compact: true });
-          const pw = tempDoc.internal.pageSize.getWidth();
-          drawSharedHeader(tempDoc, tempLo, "CDLatam", [], 15, pw, 0, {
-            bandHeightMm: 5,
-            topMarginMm: 2,
-            bottomGapMm: 4,
-          });
-          const hdrBytes = tempDoc.output("arraybuffer") as Uint8Array;
-          const hdrPdf = await PDFDocument.load(hdrBytes);
-          const hdrPage = hdrPdf.getPage(0);
-          const box = hdrPage.getMediaBox();
-          hdrPage.setMediaBox(box.x, box.height - HEADER_PT, box.width, HEADER_PT);
-          [headerEmbed] = await merged.embedPdf(hdrPdf, [0]);
+          try {
+            const logoResp = await fetch(cdlatamLogoOnBrand);
+            const logoBytes = new Uint8Array(await logoResp.arrayBuffer());
+            headerLogo = await merged.embedPng(logoBytes);
+          } catch { /* omitir logo si falla */ }
         }
         for (const page of copied) {
           const { width: srcW, height: srcH } = page.getSize();
@@ -131,8 +125,11 @@ export async function createActaPdfBlob(
           page.scale(s, s);
           page.setSize(PAGE_W, PAGE_H);
           merged.addPage(page);
-          if (headerEmbed) {
-            page.drawPage(headerEmbed, { x: 0, y: PAGE_H - HEADER_PT, width: PAGE_W, height: HEADER_PT });
+          if (headerLogo) {
+            const logoWPt = logoWmm * 72 / 25.4;
+            const logoX = 15 * 72 / 25.4;
+            const logoY = PAGE_H - HEADER_PT + (HEADER_PT - logoHPt) / 2;
+            page.drawImage(headerLogo, { x: logoX, y: logoY, width: logoWPt, height: logoHPt });
           }
         }
       } catch (err) {
