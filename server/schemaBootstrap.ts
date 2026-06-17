@@ -11,10 +11,6 @@
  * Tablas dinámicas `catalog_custom_*` no se crean aquí (se generan en runtime).
  */
 
-import { sqlSeedConsideracionesComerciales } from "./seeds/consideracionesComercialesSeed";
-import { sqlSeedImplementacionItems } from "./seeds/implementacionItemsSeed";
-import { sqlSeedImplementacionDescripciones } from "./seeds/implementacionDescripcionesSeed";
-
 /** Todas las sentencias CREATE en orden seguro (FK desactivadas por defecto en SQLite). */
 export const BOOTSTRAP_ALL_PROJECT_TABLES_SQL = `
 CREATE TABLE IF NOT EXISTS roles (
@@ -386,12 +382,5 @@ export interface SqliteExecLike {
  */
 export function ensureAllProjectTables(sqlite: SqliteExecLike): void {
   sqlite.exec(BOOTSTRAP_ALL_PROJECT_TABLES_SQL);
-  sqlite.exec(sqlSeedConsideracionesComerciales());
-  sqlite.exec(sqlSeedImplementacionItems());
-  // Seed de descripciones técnicas (extraídas del PDF de features)
-  // Solo actualiza registros con descripcion vacía para no sobreescribir ediciones manuales
-  sqlite.exec(sqlSeedImplementacionDescripciones());
-  // Inicializar autoincrement de actas desde 10000 → primer nroActa = 10001
-  // INSERT OR IGNORE no sobreescribe si ya existe un valor mayor (BDs con actas previas)
   sqlite.exec(`INSERT OR IGNORE INTO sqlite_sequence (name, seq) VALUES ('actas', 10000);`);
 }

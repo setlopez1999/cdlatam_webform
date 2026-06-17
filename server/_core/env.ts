@@ -17,6 +17,8 @@ function validateSecret(value: string, name: string): string {
   return value;
 }
 
+console.log(`[ENV] Config loaded — NODE_ENV=${process.env.NODE_ENV ?? "(not set)"}`);
+
 export const ENV = {
   cookieSecret: validateSecret(
     process.env.JWT_SECRET ?? (() => { throw new Error("JWT_SECRET no configurado"); })(),

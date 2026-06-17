@@ -129,18 +129,20 @@ export function seedCatalogMeta() {
   rawDb.exec(`
     CREATE TABLE IF NOT EXISTS catalog_meta (
       id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
-      table_name TEXT NOT NULL UNIQUE,
+      table_name TEXT NOT NULL,
       title TEXT NOT NULL,
       is_custom INTEGER DEFAULT 0 NOT NULL,
       linked_field TEXT,
       created_at INTEGER DEFAULT (strftime('%s', 'now')) NOT NULL
     );
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_catalog_meta_table_name ON catalog_meta(table_name);
   `);
-  const upsert = rawDb.prepare(
-    `INSERT INTO catalog_meta (table_name, title, is_custom) VALUES (?, ?, 0)
-     ON CONFLICT(table_name) DO NOTHING`
+  const insert = rawDb.prepare(
+    `INSERT OR IGNORE INTO catalog_meta (table_name, title, is_custom) VALUES (?, ?, 0)`
   );
-  for (const c of FIXED_CATALOGS) upsert.run(c.tableName, c.title);
+  for (const c of FIXED_CATALOGS) {
+    insert.run(c.tableName, c.title);
+  }
 }
 
 export async function listCatalogMeta() {
@@ -544,95 +546,6 @@ export async function runMigrations() {
   tryAlter(`CREATE INDEX IF NOT EXISTS idx_audit_log_created_at ON audit_log(createdAt)`, "Index audit_log createdAt");
   tryAlter(`CREATE INDEX IF NOT EXISTS idx_audit_log_user_created ON audit_log(userId, createdAt)`, "Index audit_log userId+createdAt");
 
-  // Garantizar roles nuevos en BDs ya migradas
-  // INSERT OR IGNORE es idempotente — seguro de correr siempre al arrancar
-  try {
-    sqlite.exec(`
-      INSERT OR IGNORE INTO roles (nombre, label, descripcion, activo) VALUES
-        ('gestor_horarios',       'Gestor de Horarios',    'Acceso al modulo de gestion de horarios', 1),
-        ('perfil_full',           'Perfil Full',           'Acceso completo: F1-Acta, F2-EP, Resultados e Implementacion', 1),
-        ('perfil_ventas',         'Perfil Ventas',         'Acceso restringido unicamente al modulo F1-Acta', 1),
-        ('perfil_implementacion', 'Perfil Implementacion', 'Acceso restringido unicamente al modulo de Implementacion', 1);
-      -- Eliminar roles obsoletos (viewer y manager ya no se usan)
-      DELETE FROM roles WHERE nombre IN ('viewer', 'manager');
-    `);
-    console.log("[DB] Profile roles ensured (INSERT OR IGNORE)");
-  } catch (rolesErr: any) {
-    console.warn("[DB] Could not ensure profile roles:", rolesErr?.message ?? rolesErr);
-  }
-
-  // Migrar datos de catálogos dinámicos (catalog_custom_*) → fijos (catalog_*)
-  // Idempotente: solo copia si la tabla custom existe y la fija está vacía.
-  migrateDynamicCatalogsToFixed(sqlite);
-}
-
-/** Migración idempotente: copia datos de tablas catalog_custom_* a catalog_* fijas. */
-function migrateDynamicCatalogsToFixed(rawDb: Database.Database): void {
-  const conversions: Array<{ shortName: string; fixedTable: string; customTable: string }> = [
-    { shortName: "preventas",                fixedTable: "catalog_preventas",              customTable: "catalog_custom_campo_de_preventa" },
-    { shortName: "concepto_gasto",           fixedTable: "catalog_conceptos_gasto",        customTable: "catalog_custom_concepto_gasto" },
-    { shortName: "gerencias",                fixedTable: "catalog_gerencias",              customTable: "catalog_custom_gerencias" },
-    { shortName: "solicitante",              fixedTable: "catalog_solicitantes",           customTable: "catalog_custom_solicitante" },
-    { shortName: "flujo_aprobacion",         fixedTable: "catalog_flujos_aprobacion",      customTable: "catalog_custom_flujo_aprobacion" },
-    { shortName: "tipo_gasto",               fixedTable: "catalog_tipos_gasto",            customTable: "catalog_custom_tipo_gasto" },
-    { shortName: "proyecto",                 fixedTable: "catalog_proyectos",              customTable: "catalog_custom_proyecto" },
-    { shortName: "tipo_pago",                fixedTable: "catalog_tipos_pago",             customTable: "catalog_custom_tipo_pago" },
-    { shortName: "especialista_externo",     fixedTable: "catalog_especialistas_externos", customTable: "catalog_custom_especialista_externo" },
-    { shortName: "tecnico_interno",          fixedTable: "catalog_tecnicos_internos",      customTable: "catalog_custom_tecnico_interno" },
-    { shortName: "n_de_acta",                fixedTable: "catalog_nros_acta",              customTable: "catalog_custom_n_de_acta" },
-    { shortName: "ejecutivo_atencion_al_cliente", fixedTable: "catalog_ejecutivos_atencion", customTable: "catalog_custom_ejecutivo_atencion_al_cliente" },
-    { shortName: "set",                      fixedTable: "catalog_sets",                   customTable: "catalog_custom_set" },
-  ];
-
-  for (const c of conversions) {
-    try {
-      // Verificar si la tabla custom existe
-      const row = rawDb.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name = ?").get(c.customTable) as { name: string } | undefined;
-      if (!row) continue;
-
-      // Verificar si la tabla fija está vacía
-      const count = rawDb.prepare(`SELECT COUNT(*) as cnt FROM "${c.fixedTable}"`).get() as { cnt: number };
-      if (count.cnt > 0) continue; // ya migrada
-
-      // Copiar datos
-      const customRows = rawDb.prepare(`SELECT * FROM "${c.customTable}"`).all() as Array<{ id: number; valor: string; activo: number }>;
-      if (customRows.length === 0) continue;
-
-      const insert = rawDb.prepare(`INSERT OR IGNORE INTO "${c.fixedTable}" (id, valor, activo) VALUES (?, ?, ?)`);
-      const tx = rawDb.transaction((rows: Array<{ id: number; valor: string; activo: number }>) => {
-        let count2 = 0;
-        for (const r of rows) {
-          const result = insert.run(r.id, r.valor, r.activo ?? 1);
-          if (result.changes > 0) count2++;
-        }
-        return count2;
-      });
-      const copied = tx(customRows);
-      if (copied > 0) {
-        console.log(`[DB] Migrated ${c.customTable} → ${c.fixedTable}: ${copied} rows`);
-      }
-    } catch (e: unknown) {
-      console.warn(`[DB] Migration ${c.customTable} → ${c.fixedTable}:`, e instanceof Error ? e.message : e);
-    }
-  }
-
-  // Actualizar catalog_meta: marcar como fijas y normalizar nombres
-  try {
-    // Para "preventas": eliminar la entrada antigua "campo_de_preventa" si existe
-    rawDb.prepare("DELETE FROM catalog_meta WHERE table_name = 'campo_de_preventa'").run();
-
-    const metaUpdates = [
-      "preventas", "concepto_gasto", "gerencias", "solicitante",
-      "flujo_aprobacion", "tipo_gasto", "proyecto", "tipo_pago",
-      "especialista_externo", "tecnico_interno", "n_de_acta",
-      "ejecutivo_atencion_al_cliente", "set",
-    ];
-    for (const tn of metaUpdates) {
-      rawDb.prepare("UPDATE catalog_meta SET is_custom = 0 WHERE table_name = ?").run(tn);
-    }
-  } catch (e: unknown) {
-    console.warn("[DB] Failed to update catalog_meta:", e instanceof Error ? e.message : e);
-  }
 }
 
 // --- USERS (Username/Password) ----------------------------------------------------

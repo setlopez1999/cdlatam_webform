@@ -13,7 +13,7 @@
 import bcrypt from "bcryptjs";
 import * as jose from "jose";
 import type { Express } from "express";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { getDb } from "./db";
 import { users, roles, userRoles, type User, type InsertUser } from "../drizzle/schema";
 import { ENV } from "./_core/env";
@@ -147,10 +147,12 @@ export async function seedDefaultRoles(): Promise<void> {
   if (!db) return;
 
   const defaultRoles: Array<{ nombre: string; label: string; descripcion: string }> = [
-    { nombre: "admin",            label: "Administrador",      descripcion: "Acceso total al sistema" },
-    { nombre: "viewer",           label: "Solo lectura",        descripcion: "Acceso de solo lectura" },
-    { nombre: "user",             label: "Usuario",             descripcion: "Acceso basico al sistema" },
-    { nombre: "gestor_horarios",  label: "Gestor de Horarios",  descripcion: "Acceso a la pantalla de gestion de horarios" },
+    { nombre: "admin",                  label: "Administrador",           descripcion: "Acceso total al sistema" },
+    { nombre: "user",                   label: "Usuario",                descripcion: "Acceso basico al sistema" },
+    { nombre: "gestor_horarios",        label: "Gestor de Horarios",     descripcion: "Acceso a la pantalla de gestion de horarios" },
+    { nombre: "perfil_full",            label: "Perfil Full",            descripcion: "Acceso completo: F1-Acta, F2-EP, Resultados e Implementacion" },
+    { nombre: "perfil_ventas",          label: "Perfil Ventas",          descripcion: "Acceso restringido unicamente al modulo F1-Acta" },
+    { nombre: "perfil_implementacion",  label: "Perfil Implementacion",  descripcion: "Acceso restringido unicamente al modulo de Implementacion" },
   ];
 
   for (const r of defaultRoles) {
@@ -160,6 +162,9 @@ export async function seedDefaultRoles(): Promise<void> {
       console.log(`[LocalAuth] Created default role: ${r.nombre}`);
     }
   }
+
+  // Eliminar roles obsoletos
+  await db.delete(roles).where(inArray(roles.nombre, ['viewer', 'manager']));
 }
 
 function generateRandomPassword(): string {
@@ -172,13 +177,10 @@ function generateRandomPassword(): string {
 }
 
 /**
- * Crea los usuarios predefinidos si no existen y sincroniza sus roles en user_roles.
- * Se llama al iniciar el servidor.
+ * Crea el usuario admin si no existe y le asigna el rol admin.
  *
- * Las contraseñas se toman de variables de entorno:
- *   DEFAULT_ADMIN_PASSWORD → contraseña para admin
- *   DEFAULT_USER_PASSWORD  → contraseña para usuario
- * Si no están definidas, se generan aleatoriamente y se muestran en consola.
+ * La contraseña se toma de la variable de entorno DEFAULT_ADMIN_PASSWORD.
+ * Si no está definida, se genera aleatoriamente y se muestra en consola.
  */
 export async function seedDefaultUsers(): Promise<void> {
   const db = await getDb();
@@ -188,36 +190,28 @@ export async function seedDefaultUsers(): Promise<void> {
   }
 
   const adminPwd = ENV.defaultAdminPassword || generateRandomPassword();
-  const userPwd = ENV.defaultUserPassword || generateRandomPassword();
 
-  const defaultUsers: Array<{ username: string; password: string; displayName: string; role: "admin" | "user" }> = [
-    { username: "admin",   password: adminPwd, displayName: "Administrador",  role: "admin" },
-    { username: "usuario", password: userPwd, displayName: "Usuario Regular", role: "user"  },
-  ];
-
-  for (const u of defaultUsers) {
-    let dbUser = await findUserByUsername(u.username);
-    if (!dbUser) {
-      const passwordHash = await hashPassword(u.password);
-      await createUser({
-        username: u.username,
-        passwordHash,
-        displayName: u.displayName,
-        role: u.role,
-        isActive: 1,
-      });
-      dbUser = await findUserByUsername(u.username);
-      console.log(`[LocalAuth] Created default user: ${u.username} (${u.role})`);
-    }
-    if (dbUser) {
-      const roleRow = await db.select().from(roles).where(eq(roles.nombre, u.role)).limit(1);
-      if (roleRow.length > 0) {
-        const existing = await db.select().from(userRoles)
-          .where(eq(userRoles.userId, dbUser.id)).limit(1);
-        if (existing.length === 0) {
-          await db.insert(userRoles).values({ userId: dbUser.id, roleId: roleRow[0].id });
-          console.log(`[LocalAuth] Assigned role '${u.role}' to user '${u.username}' in user_roles`);
-        }
+  let dbUser = await findUserByUsername("admin");
+  if (!dbUser) {
+    const passwordHash = await hashPassword(adminPwd);
+    await createUser({
+      username: "admin",
+      passwordHash,
+      displayName: "Administrador",
+      role: "admin",
+      isActive: 1,
+    });
+    dbUser = await findUserByUsername("admin");
+    console.log(`[LocalAuth] Created default user: admin`);
+  }
+  if (dbUser) {
+    const roleRow = await db.select().from(roles).where(eq(roles.nombre, "admin")).limit(1);
+    if (roleRow.length > 0) {
+      const existing = await db.select().from(userRoles)
+        .where(eq(userRoles.userId, dbUser.id)).limit(1);
+      if (existing.length === 0) {
+        await db.insert(userRoles).values({ userId: dbUser.id, roleId: roleRow[0].id });
+        console.log(`[LocalAuth] Assigned role 'admin' to user 'admin' in user_roles`);
       }
     }
   }
@@ -225,10 +219,6 @@ export async function seedDefaultUsers(): Promise<void> {
   if (!ENV.defaultAdminPassword) {
     console.log(`[LocalAuth] 🔑 Admin password (no persistirá entre reinicios): ${adminPwd}`);
     console.log(`[LocalAuth] 🔑 Defina DEFAULT_ADMIN_PASSWORD en .env para fijarla`);
-  }
-  if (!ENV.defaultUserPassword) {
-    console.log(`[LocalAuth] 🔑 Usuario password (no persistirá entre reinicios): ${userPwd}`);
-    console.log(`[LocalAuth] 🔑 Defina DEFAULT_USER_PASSWORD en .env para fijarla`);
   }
 }
 

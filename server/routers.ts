@@ -282,7 +282,7 @@ export const appRouter = router({
     me: publicProcedure.query(opts => opts.ctx.user),
     logout: publicProcedure.mutation(({ ctx }) => {
       const cookieOptions = getSessionCookieOptions(ctx.req);
-      ctx.res.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 });
+      ctx.res.clearCookie(COOKIE_NAME, cookieOptions);
       return { success: true } as const;
     }),
   }),
@@ -364,7 +364,7 @@ export const appRouter = router({
         }
       }
       const ip = getClientIp(ctx.req);
-      ctx.res.clearCookie(LOCAL_AUTH_COOKIE, { ...cookieOpts, maxAge: -1 });
+      ctx.res.clearCookie(LOCAL_AUTH_COOKIE, cookieOpts);
       if (userId != null) {
         await recordAuditDirect({
           userId,

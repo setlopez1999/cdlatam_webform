@@ -69,7 +69,7 @@ function f2InfoGeneralPropsEqual(prev: Props, next: Props): boolean {
 function F2InfoGeneralInner({ data, onUpdate, catalogs, f1Suggestions, onImportarDesdeF1 }: Props) {
   const totalClp = data.montoProyecto * (data.tipoCambio || 1);
 
-  // Ejecutivo Comercial desde catalog_nombres, Preventa desde catalog_custom_preventas
+  // Ejecutivo Comercial desde catalog_nombres, Preventa desde catalog_preventas
   const nombresForSelect = catalogs?.nombres;
   const preventasForSelect = catalogs?.preventas;
 
@@ -215,7 +215,7 @@ function F2InfoGeneralInner({ data, onUpdate, catalogs, f1Suggestions, onImporta
           )}
         </FieldGroup>
 
-        {/* Preventa — select desde catalog_custom_preventas */}
+        {/* Preventa — select desde catalog_preventas */}
         <FieldGroup label="Preventa">
           {preventasForSelect?.length ? (
             <Select value={data.preventa} onValueChange={v => onUpdate({ preventa: v })}>
