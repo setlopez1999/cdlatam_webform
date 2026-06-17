@@ -159,24 +159,16 @@ const FIXED_CATALOGS = [
 ];
 
 // Seed de catalog_meta al arrancar
-export function seedCatalogMeta() {
-  const rawDb = sqlite;
-  rawDb.exec(`
-    CREATE TABLE IF NOT EXISTS catalog_meta (
-      id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
-      table_name TEXT NOT NULL,
-      title TEXT NOT NULL,
-      is_custom INTEGER DEFAULT 0 NOT NULL,
-      linked_field TEXT,
-      created_at INTEGER DEFAULT (strftime('%s', 'now')) NOT NULL
-    );
-    CREATE UNIQUE INDEX IF NOT EXISTS idx_catalog_meta_table_name ON catalog_meta(table_name);
-  `);
-  const insert = rawDb.prepare(
-    `INSERT OR IGNORE INTO catalog_meta (table_name, title, is_custom) VALUES (?, ?, 0)`
-  );
+export async function seedCatalogMeta() {
+  const db = await getDb();
+  // Insertar catálogos fijos usando Drizzle (funciona en SQLite y PostgreSQL)
+  // ON CONFLICT DO NOTHING — idempotente
   for (const c of FIXED_CATALOGS) {
-    insert.run(c.tableName, c.title);
+    try {
+      await db.insert(catalogMeta).values({ tableName: c.tableName, title: c.title, isCustom: 0 });
+    } catch {
+      // Ya existe — ignorar conflicto de UNIQUE
+    }
   }
 }
 
@@ -189,9 +181,13 @@ export async function createCatalogTable(tableName: string, title: string) {
   // Validar nombre: solo letras, números y guiones bajos
   if (!/^[a-z0-9_]+$/.test(tableName)) throw new Error("Nombre inválido: solo letras minúsculas, números y guiones bajos");
   const realTable = `catalog_custom_${tableName}`;
-  const rawDb = sqlite;
-  rawDb.exec(`CREATE TABLE IF NOT EXISTS ${realTable} (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, valor TEXT NOT NULL, activo INTEGER DEFAULT 1 NOT NULL)`);
   const db = await getDb();
+  // Crear tabla dinámica con SQL compatible (PG usa SERIAL, SQLite usa INTEGER PRIMARY KEY)
+  if (USE_POSTGRES) {
+    await db.execute(sql.raw(`CREATE TABLE IF NOT EXISTS "${realTable}" (id SERIAL PRIMARY KEY NOT NULL, valor TEXT NOT NULL, activo INTEGER DEFAULT 1 NOT NULL)`));
+  } else {
+    await db.execute(sql.raw(`CREATE TABLE IF NOT EXISTS "${realTable}" (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, valor TEXT NOT NULL, activo INTEGER DEFAULT 1 NOT NULL)`));
+  }
   await db.insert(catalogMeta).values({ tableName, title, isCustom: 1 });
   return { tableName, title, isCustom: 1 };
 }
@@ -207,7 +203,7 @@ export async function deleteCatalogTable(tableName: string) {
   if (!rows.length) throw new Error("Catálogo no encontrado");
   if (!rows[0].isCustom) throw new Error("No se pueden eliminar catálogos del sistema");
   const realTable = `catalog_custom_${tableName}`;
-  sqlite.exec(`DROP TABLE IF EXISTS ${realTable}`);
+  await db.execute(sql.raw(`DROP TABLE IF EXISTS "${realTable}"`) );
   await db.delete(catalogMeta).where(eq(catalogMeta.tableName, tableName));
 }
 
@@ -252,11 +248,11 @@ function getCatalogTable(tableName: string) {
   return null;
 }
 
-// CRUD genérico que soporta tablas fijas (Drizzle) y dinámicas (SQL raw)
+// CRUD genérico que soporta tablas fijas (Drizzle) y dinámicas (SQL raw compatible PG+SQLite)
 export async function getCatalogListGeneric(tableName: string) {
   const table = catalogMap[tableName];
+  const db = await getDb();
   if (table) {
-    const db = await getDb();
     if (tableName === "impl_items") {
       return db
         .select()
@@ -265,10 +261,12 @@ export async function getCatalogListGeneric(tableName: string) {
     }
     return db.select().from(table);
   }
-  // Tabla dinámica
+  // Tabla dinámica — SQL raw compatible con PG y SQLite
   const realTable = `catalog_custom_${tableName}`;
   try {
-    return sqlite.prepare(`SELECT * FROM ${realTable} ORDER BY id`).all();
+    const result = await db.execute(sql.raw(`SELECT * FROM "${realTable}" ORDER BY id`));
+    // Drizzle PG devuelve { rows: [...] }, SQLite devuelve array directo
+    return Array.isArray(result) ? result : (result as any).rows ?? [];
   } catch {
     return [];
   }
@@ -276,51 +274,47 @@ export async function getCatalogListGeneric(tableName: string) {
 
 export async function createCatalogRecordGeneric(tableName: string, data: any) {
   const table = catalogMap[tableName];
+  const db = await getDb();
   if (table) {
-    const db = await getDb();
     return db.insert(table).values(data).returning();
   }
   const realTable = `catalog_custom_${tableName}`;
-  sqlite.exec(`CREATE TABLE IF NOT EXISTS ${realTable} (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, valor TEXT NOT NULL, activo INTEGER DEFAULT 1 NOT NULL)`);
-  const stmt = sqlite.prepare(`INSERT INTO ${realTable} (valor, activo) VALUES (?, ?) RETURNING *`);
-  return [stmt.get(data.valor ?? 'Nuevo', data.activo ?? 1)];
+  const result = await db.execute(
+    sql.raw(`INSERT INTO "${realTable}" (valor, activo) VALUES ('${String(data.valor ?? 'Nuevo').replace(/'/g, "''")}', ${data.activo ?? 1}) RETURNING *`)
+  );
+  return Array.isArray(result) ? result : (result as any).rows ?? [];
 }
 
 export async function updateCatalogRecordGeneric(tableName: string, id: number, data: any) {
   const table = catalogMap[tableName];
+  const db = await getDb();
   if (table) {
-    const db = await getDb();
     return db.update(table).set(data).where(eq(table.id, id));
   }
   const realTable = `catalog_custom_${tableName}`;
-  sqlite.exec(`CREATE TABLE IF NOT EXISTS ${realTable} (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, valor TEXT NOT NULL, activo INTEGER DEFAULT 1 NOT NULL)`);
-  const sets = Object.keys(data).map(k => `${k} = ?`).join(', ');
-  const vals = [...Object.values(data), id];
-  sqlite.prepare(`UPDATE ${realTable} SET ${sets} WHERE id = ?`).run(...vals);
+  const sets = Object.keys(data).map(k => `"${k}" = '${String((data as any)[k]).replace(/'/g, "''")}' `).join(', ');
+  await db.execute(sql.raw(`UPDATE "${realTable}" SET ${sets} WHERE id = ${id}`));
 }
 
 export async function deleteCatalogRecordGeneric(tableName: string, id: number) {
   const table = catalogMap[tableName];
+  const db = await getDb();
   if (table) {
-    const db = await getDb();
     return db.delete(table).where(eq(table.id, id));
   }
   const realTable = `catalog_custom_${tableName}`;
-  sqlite.exec(`CREATE TABLE IF NOT EXISTS ${realTable} (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, valor TEXT NOT NULL, activo INTEGER DEFAULT 1 NOT NULL)`);
-  sqlite.prepare(`DELETE FROM ${realTable} WHERE id = ?`).run(id);
+  await db.execute(sql.raw(`DELETE FROM "${realTable}" WHERE id = ${id}`));
 }
 
 export async function bulkDeleteCatalogRecordsGeneric(tableName: string, ids: number[]) {
   if (!ids.length) return;
   const table = catalogMap[tableName];
+  const db = await getDb();
   if (table) {
-    const db = await getDb();
     return db.delete(table).where(inArray(table.id, ids));
   }
   const realTable = `catalog_custom_${tableName}`;
-  sqlite.exec(`CREATE TABLE IF NOT EXISTS ${realTable} (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, valor TEXT NOT NULL, activo INTEGER DEFAULT 1 NOT NULL)`);
-  const placeholders = ids.map(() => '?').join(',');
-  sqlite.prepare(`DELETE FROM ${realTable} WHERE id IN (${placeholders})`).run(...ids);
+  await db.execute(sql.raw(`DELETE FROM "${realTable}" WHERE id IN (${ids.join(',')})`) );
 }
 
 export async function getCatalogList(tableName: string) {
@@ -370,17 +364,14 @@ export async function deleteCatalogRecord(tableName: string, id: number) {
 export async function bulkUpdateCatalogRecords(tableName: string, ids: number[], data: any) {
   if (!ids.length) return;
   const table = getCatalogTable(tableName);
+  const db = await getDb();
   if (!table) {
-    // Tablas dinámicas (catalog_custom_*): usar SQL raw
+    // Tablas dinámicas (catalog_custom_*): SQL raw compatible PG+SQLite
     const realTable = tableName.startsWith('catalog_custom_') ? tableName : `catalog_custom_${tableName}`;
-    sqlite.exec(`CREATE TABLE IF NOT EXISTS "${realTable}" (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, valor TEXT NOT NULL, activo INTEGER DEFAULT 1 NOT NULL)`);
-    const sets = Object.keys(data).map(k => `${k} = ?`).join(', ');
-    const placeholders = ids.map(() => '?').join(',');
-    const vals = [...Object.values(data), ...ids];
-    sqlite.prepare(`UPDATE "${realTable}" SET ${sets} WHERE id IN (${placeholders})`).run(...vals);
+    const sets = Object.keys(data).map(k => `"${k}" = '${String((data as any)[k]).replace(/'/g, "''")}' `).join(', ');
+    await db.execute(sql.raw(`UPDATE "${realTable}" SET ${sets} WHERE id IN (${ids.join(',')})`) );
     return;
   }
-  const db = await getDb();
   return await db.update(table).set(data).where(inArray(table.id, ids));
 }
 
@@ -407,6 +398,11 @@ export async function bulkDeleteCatalogRecords(tableName: string, ids: number[])
  * Es idempotente: si ya tiene el schema v2, no hace nada.
  */
 function autoMigrateUsersSchemaIfNeeded(): void {
+  // En modo PostgreSQL, las migraciones PG ya manejan el schema correctamente
+  if (USE_POSTGRES) {
+    console.log("[DB] autoMigrateUsersSchemaIfNeeded: skipped (PostgreSQL mode)");
+    return;
+  }
   try {
     // Leer las columnas actuales de la tabla users
     const cols = sqlite
