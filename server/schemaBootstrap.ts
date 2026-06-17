@@ -28,8 +28,6 @@ CREATE TABLE IF NOT EXISTS users (
   username TEXT NOT NULL UNIQUE,
   passwordHash TEXT NOT NULL,
   displayName TEXT,
-  role TEXT DEFAULT 'user' NOT NULL,
-  roleId INTEGER,
   isActive INTEGER DEFAULT 1 NOT NULL,
   createdAt INTEGER DEFAULT (strftime('%s', 'now')) NOT NULL,
   updatedAt INTEGER DEFAULT (strftime('%s', 'now')) NOT NULL,

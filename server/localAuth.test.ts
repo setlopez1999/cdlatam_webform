@@ -17,8 +17,6 @@ function createCtx(role: "admin" | "user" = "admin", localUser?: LocalAuthPayloa
     username: role,
     passwordHash: "hash",
     displayName: role === "admin" ? "Administrador" : "Usuario Regular",
-    role,
-    roleId: null,
     isActive: 1,
     createdAt: new Date(),
     updatedAt: new Date(),
@@ -31,7 +29,6 @@ function createCtx(role: "admin" | "user" = "admin", localUser?: LocalAuthPayloa
       id: 1,
       username: role,
       displayName: role === "admin" ? "Administrador" : "Usuario Regular",
-      role,
     },
     req: { protocol: "https", headers: {} } as TrpcContext["req"],
     res: {
@@ -86,30 +83,26 @@ describe("JWT Local Auth", () => {
     id: 1,
     username: "admin",
     displayName: "Administrador",
-    role: "admin",
   };
 
   const userPayload: LocalAuthPayload = {
     id: 2,
     username: "usuario",
     displayName: "Usuario Regular",
-    role: "user",
   };
 
-  it("firma y verifica un JWT de admin correctamente", async () => {
+  it("firma y verifica un JWT correctamente", async () => {
     const token = await signLocalJWT(adminPayload);
     expect(token).toBeTruthy();
     const decoded = await verifyLocalJWT(token);
     expect(decoded).not.toBeNull();
     expect(decoded?.username).toBe("admin");
-    expect(decoded?.role).toBe("admin");
     expect(decoded?.id).toBe(1);
   });
 
   it("firma y verifica un JWT de usuario regular", async () => {
     const token = await signLocalJWT(userPayload);
     const decoded = await verifyLocalJWT(token);
-    expect(decoded?.role).toBe("user");
     expect(decoded?.username).toBe("usuario");
   });
 
@@ -173,7 +166,6 @@ describe("Control de Acceso por Rol", () => {
         username: "testuser_vitest_" + Date.now(),
         password: "test1234",
         displayName: "Test Vitest",
-        role: "user",
       });
     } catch (e: unknown) {
       errorMessage = e instanceof Error ? e.message : String(e);
@@ -189,7 +181,6 @@ describe("Control de Acceso por Rol", () => {
       caller.localAuth.createUser({
         username: "testuser2",
         password: "test1234",
-        role: "user",
       })
     ).rejects.toThrow("Acceso denegado");
   });
@@ -200,14 +191,14 @@ describe("Control de Acceso por Rol", () => {
 describe("localAuth.me", () => {
   it("retorna el usuario local autenticado", async () => {
     const payload: LocalAuthPayload = {
-      id: 1, username: "admin", displayName: "Admin", role: "admin",
+      id: 1, username: "admin", displayName: "Admin",
     };
     const ctx = createCtx("admin", payload);
     const caller = appRouter.createCaller(ctx);
     const me = await caller.localAuth.me();
     expect(me).not.toBeNull();
     expect(me?.username).toBe("admin");
-    expect(me?.role).toBe("admin");
+    expect(me?.displayName).toBe("Admin");
   });
 
   it("retorna null cuando no hay sesión local", async () => {

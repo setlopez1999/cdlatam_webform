@@ -4,15 +4,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
-import { Pencil, Shield, User, Loader2 } from "lucide-react";
+import { Pencil, Loader2 } from "lucide-react";
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 type UserItem = {
   id: number; username: string; displayName?: string | null;
-  role: string; roleId?: number | null; isActive: number;
+  isActive: number;
 };
 type RoleItem = {
   id: number; nombre: string; label: string;
@@ -48,8 +47,6 @@ export function EditUserModal({ user, roles, onClose, onSaved }: Props) {
   // Estado del formulario
   const [form, setForm] = useState({
     displayName: user.displayName ?? "",
-    role: user.role as "user" | "admin",
-    roleId: user.roleId ?? null as number | null,
   });
 
   // Checkboxes RBAC — inicializados desde currentRoles cuando llegan
@@ -84,8 +81,6 @@ export function EditUserModal({ user, roles, onClose, onSaved }: Props) {
       await updateUserMut.mutateAsync({
         id: user.id,
         displayName: form.displayName,
-        role: form.role,
-        roleId: form.roleId,
       });
       await setUserRolesMut.mutateAsync({
         userId: user.id,
@@ -93,7 +88,6 @@ export function EditUserModal({ user, roles, onClose, onSaved }: Props) {
       });
       toast.success("Usuario actualizado");
       onSaved();
-      onClose();
     } catch {
       // Los errores ya se muestran con toast en onError de cada mutation
     }
@@ -121,35 +115,12 @@ export function EditUserModal({ user, roles, onClose, onSaved }: Props) {
             />
           </div>
 
-          {/* Permiso base */}
-          <div className="space-y-2">
-            <Label>Permiso base</Label>
-            <Select
-              value={form.role}
-              onValueChange={(v) => setForm(f => ({ ...f, role: v as "user" | "admin" }))}
-            >
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="user">
-                  <div className="flex items-center gap-2">
-                    <User className="w-3.5 h-3.5 text-blue-500" />Usuario
-                  </div>
-                </SelectItem>
-                <SelectItem value="admin">
-                  <div className="flex items-center gap-2">
-                    <Shield className="w-3.5 h-3.5 text-amber-500" />Administrador
-                  </div>
-                </SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Roles RBAC */}
+          {/* Roles */}
           {roles.length > 0 && (
             <div className="space-y-2">
               <Label>
-                Roles RBAC{" "}
-                <span className="text-muted-foreground text-xs">(acceso a pantallas específicas)</span>
+                Roles{" "}
+                <span className="text-muted-foreground text-xs">(acceso a pantallas del sistema)</span>
               </Label>
               <div className="rounded-lg border border-border p-3 space-y-2 max-h-40 overflow-y-auto">
                 {loadingRoles ? (

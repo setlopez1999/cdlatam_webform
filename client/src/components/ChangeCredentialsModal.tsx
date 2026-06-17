@@ -16,7 +16,6 @@ type UserItem = {
   id: number;
   username: string;
   displayName?: string | null;
-  role: string;
 };
 
 type Props = {

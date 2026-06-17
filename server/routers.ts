@@ -89,7 +89,7 @@ import {
 import { recordAuditFromTrpc, recordAuditDirect, getClientIp } from "./audit/record";
 
 // 3. RBAC — verificación de roles
-import { requireRole, requireAnyRole } from "./rbac";
+import { requireRole, requireAnyRole, checkRole } from "./rbac";
 import { getSessionCookieOptions as getCookieOpts } from "./_core/cookies";
 
 // ─── Zod Schemas ──────────────────────────────────────────────────────────────
@@ -324,7 +324,6 @@ export const appRouter = router({
           id: user.id,
           username: user.username,
           displayName: user.displayName,
-          role: user.role as "user" | "admin",
         });
         const cookieOpts = getCookieOpts(ctx.req);
         ctx.res.cookie(LOCAL_AUTH_COOKIE, token, {
@@ -344,7 +343,6 @@ export const appRouter = router({
             id: user.id,
             username: user.username,
             displayName: user.displayName,
-            role: user.role,
           },
         };
       }),
@@ -400,8 +398,6 @@ export const appRouter = router({
         username: z.string().min(3).max(64),
         password: z.string().min(4),
         displayName: z.string().optional(),
-        role: z.enum(["user", "admin"]).default("user"),
-        roleId: z.number().optional().nullable(),
       }))
       .mutation(async ({ ctx, input }) => {
         await requireRole(ctx, "admin");
@@ -412,15 +408,13 @@ export const appRouter = router({
           username: input.username,
           passwordHash,
           displayName: input.displayName,
-          role: input.role,
-          roleId: input.roleId ?? null,
         });
         const created = await ds_findUserByUsername(input.username);
         await recordAuditFromTrpc(ctx, {
           action: "CREATE",
           entity: "user",
           entityId: created?.id,
-          changes: { after: { username: input.username, role: input.role } },
+          changes: { after: { username: input.username } },
         });
         return { success: true };
       }),
@@ -429,8 +423,6 @@ export const appRouter = router({
       .input(z.object({
         id: z.number(),
         displayName: z.string().optional(),
-        roleId: z.number().nullable().optional(),
-        role: z.enum(["user", "admin"]).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         await requireRole(ctx, "admin");
@@ -475,8 +467,8 @@ export const appRouter = router({
         confirmPassword: z.string().min(4),
       }))
       .mutation(async ({ ctx, input }) => {
-        const isAdmin = ctx.localUser?.role === "admin";
         const isSelf = Number(ctx.localUser?.id) === Number(input.targetUserId);
+        const isAdmin = await checkRole(ctx, "admin");
 
         // Solo admin puede cambiar la contraseña de otro usuario
         if (!isSelf && !isAdmin) {
@@ -526,8 +518,8 @@ export const appRouter = router({
           .regex(/^[a-zA-Z0-9_.-]+$/, "Solo se permiten letras, números, puntos, guiones y guiones bajos"),
       }))
       .mutation(async ({ ctx, input }) => {
-        const isAdmin = ctx.localUser?.role === "admin";
         const isSelf = Number(ctx.localUser?.id) === Number(input.targetUserId);
+        const isAdmin = await checkRole(ctx, "admin");
 
         // Solo admin puede cambiar el username de otro usuario
         if (!isSelf && !isAdmin) {
@@ -635,10 +627,6 @@ export const appRouter = router({
       .input(z.object({ id: z.number() }))
       .mutation(async ({ ctx, input }) => {
         await requireRole(ctx, "admin");
-        const affected = await ds_getUsersByRoleId(input.id);
-        for (const u of affected) {
-          await ds_updateUser(u.id, { roleId: null });
-        }
         await ds_deleteRole(input.id);
         return { success: true };
       }),
@@ -774,7 +762,7 @@ export const appRouter = router({
         if (!expedienteRow) {
           throw new TRPCError({ code: "NOT_FOUND", message: "Expediente no encontrado" });
         }
-        if (!mayAccessAllExpedientes(ctx.user.role) && expedienteRow.creadorId !== ctx.user.id) {
+        if (!await mayAccessAllExpedientes(ctx.user.id) && expedienteRow.creadorId !== ctx.user.id) {
           throw new TRPCError({ code: "FORBIDDEN", message: "No autorizado" });
         }
         const ownerUserId = expedienteRow.creadorId;
@@ -849,7 +837,7 @@ export const appRouter = router({
       .query(async ({ ctx, input }) => {
         const expediente = await getExpedienteById(input.expedienteId);
         if (!expediente) return null;
-        if (!mayAccessAllExpedientes(ctx.user.role) && expediente.creadorId !== ctx.user.id) {
+        if (!await mayAccessAllExpedientes(ctx.user.id) && expediente.creadorId !== ctx.user.id) {
           throw new TRPCError({ code: "FORBIDDEN", message: "No autorizado" });
         }
         return getActaByExpedienteId(input.expedienteId);
@@ -934,7 +922,7 @@ export const appRouter = router({
         if (!expediente) {
           throw new TRPCError({ code: "NOT_FOUND", message: "Expediente no encontrado" });
         }
-        if (!mayAccessAllExpedientes(ctx.user.role) && expediente.creadorId !== ctx.user.id) {
+        if (!await mayAccessAllExpedientes(ctx.user.id) && expediente.creadorId !== ctx.user.id) {
           throw new TRPCError({ code: "FORBIDDEN", message: "No autorizado" });
         }
         const ownerUserId = expediente.creadorId;
@@ -1382,7 +1370,7 @@ export const appRouter = router({
      */
     listarResumenWorkspace: protectedProcedure.query(async ({ ctx }) => {
       if (!ctx.user) throw new Error("No autenticado");
-      if (!mayAccessAllExpedientes(ctx.user.role)) {
+      if (!await mayAccessAllExpedientes(ctx.user.id)) {
         throw new TRPCError({ code: "FORBIDDEN", message: "No autorizado" });
       }
       const rows = await listExpedientesResumenGlobal();
@@ -1415,7 +1403,7 @@ export const appRouter = router({
       .input(z.object({ id: z.number() }))
       .query(async ({ ctx, input }) => {
         if (!ctx.user) throw new Error("No autenticado");
-        return mayAccessAllExpedientes(ctx.user.role)
+        return await mayAccessAllExpedientes(ctx.user.id)
           ? getExpedienteDetalleGlobal(input.id)
           : getExpedienteDetalle(input.id, ctx.user.id);
       }),
@@ -1426,7 +1414,7 @@ export const appRouter = router({
         .query(async ({ ctx, input }) => {
           if (!ctx.user) throw new Error("No autenticado");
           try {
-            const det = mayAccessAllExpedientes(ctx.user.role)
+            const det = await mayAccessAllExpedientes(ctx.user.id)
               ? await getExpedienteDetalleGlobal(input.id)
               : await getExpedienteDetalle(input.id, ctx.user.id);
             if (!det) {
@@ -1464,7 +1452,7 @@ export const appRouter = router({
           if (!(await isActiveImplementacionCatalogKey(input.checkKey))) {
             throw new TRPCError({ code: "BAD_REQUEST", message: "checkKey inválido o inactivo" });
           }
-          const det = mayAccessAllExpedientes(ctx.user.role)
+          const det = await mayAccessAllExpedientes(ctx.user.id)
             ? await getExpedienteDetalleGlobal(input.id)
             : await getExpedienteDetalle(input.id, ctx.user.id);
           if (!det) {
@@ -1491,7 +1479,7 @@ export const appRouter = router({
       }))
       .mutation(async ({ ctx, input }) => {
         if (!ctx.user) throw new Error("No autenticado");
-        const det = mayAccessAllExpedientes(ctx.user.role)
+        const det = await mayAccessAllExpedientes(ctx.user.id)
           ? await getExpedienteDetalleGlobal(input.expedienteId)
           : await getExpedienteDetalle(input.expedienteId, ctx.user.id);
         if (!det) throw new Error("Expediente no encontrado");
@@ -1520,7 +1508,7 @@ export const appRouter = router({
         if (!ctx.user) throw new Error("No autenticado");
         const row = await getExpedienteById(input.id);
         if (!row) throw new Error("Expediente no encontrado");
-        if (row.creadorId !== ctx.user.id && !mayAccessAllExpedientes(ctx.user.role)) {
+        if (row.creadorId !== ctx.user.id && !await mayAccessAllExpedientes(ctx.user.id)) {
           throw new Error("No autorizado");
         }
         const updated = await updateExpediente(row.id, { nombre: input.nombre });
@@ -1541,7 +1529,7 @@ export const appRouter = router({
         if (!ctx.user) throw new Error("No autenticado");
         const row = await getExpedienteById(input.id);
         if (!row) throw new Error("Expediente no encontrado");
-        if (row.creadorId !== ctx.user.id && !mayAccessAllExpedientes(ctx.user.role)) {
+        if (row.creadorId !== ctx.user.id && !await mayAccessAllExpedientes(ctx.user.id)) {
           throw new Error("No autorizado");
         }
         await deleteExpedienteCascadeById(input.id);
@@ -1561,7 +1549,7 @@ export const appRouter = router({
         if (!ctx.user) throw new Error("No autenticado");
         const row = await getExpedienteById(input.id);
         if (!row) throw new Error("Expediente no encontrado");
-        if (row.creadorId !== ctx.user.id && !mayAccessAllExpedientes(ctx.user.role)) {
+        if (row.creadorId !== ctx.user.id && !await mayAccessAllExpedientes(ctx.user.id)) {
           throw new Error("No autorizado");
         }
         await moverExpedienteAPapelera(input.id);
@@ -1582,7 +1570,7 @@ export const appRouter = router({
         if (!ctx.user) throw new Error("No autenticado");
         const row = await getExpedienteById(input.id);
         if (!row) throw new Error("Expediente no encontrado");
-        if (row.creadorId !== ctx.user.id && !mayAccessAllExpedientes(ctx.user.role)) {
+        if (row.creadorId !== ctx.user.id && !await mayAccessAllExpedientes(ctx.user.id)) {
           throw new Error("No autorizado");
         }
         await restaurarExpedienteDePapelera(input.id);

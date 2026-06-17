@@ -21,7 +21,7 @@ import { ChangeCredentialsModal } from "@/components/ChangeCredentialsModal";
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 type UserItem = {
   id: number; username: string; displayName?: string | null;
-  role: string; roleId?: number | null; isActive: number;
+  isActive: number;
   createdAt?: Date | null; lastSignedIn?: Date | null;
 };
 type RoleItem = {
@@ -140,7 +140,6 @@ export default function Usuarios() {
 
   // ── Stats ──
   const totalUsers = users?.length ?? 0;
-  const adminCount = users?.filter(u => u.role === "admin").length ?? 0;
   const totalRoles = roles?.length ?? 0;
 
   // ── Guards ──
@@ -157,12 +156,9 @@ export default function Usuarios() {
     </div>
   );
 
-  const getRoleBadge = (u: UserItem) => {
-    const r = roles?.find(r => r.id === u.roleId);
-    if (r) return <Badge variant="outline" className="text-xs h-5 border-violet-300 text-violet-700 bg-violet-50"><Tag className="w-2.5 h-2.5 mr-1" />{r.label}</Badge>;
-    if (u.role === "admin") return <Badge variant="default" className="text-xs h-5 bg-amber-500/15 text-amber-700 border-amber-200"><Shield className="w-2.5 h-2.5 mr-1" />Admin</Badge>;
-    return <Badge variant="secondary" className="text-xs h-5"><User className="w-2.5 h-2.5 mr-1" />Usuario</Badge>;
-  };
+  const getRoleBadge = (_u: UserItem) => (
+    <Badge variant="secondary" className="text-xs h-5"><User className="w-2.5 h-2.5 mr-1" />Activo</Badge>
+  );
 
   return (
     <PageLayout
@@ -182,10 +178,9 @@ export default function Usuarios() {
       }
     >
       {/* Stats */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 gap-4">
         {[
           { label: "Total usuarios", value: totalUsers, icon: Users, color: "primary" },
-          { label: "Administradores", value: adminCount, icon: Shield, color: "amber" },
           { label: "Roles definidos", value: totalRoles, icon: Tag, color: "violet" },
         ].map(({ label, value, icon: Icon, color }) => (
           <Card key={label}>
@@ -227,7 +222,7 @@ export default function Usuarios() {
                   {users.map((u: UserItem) => (
                     <div key={u.id} className="flex items-center gap-3 p-3 rounded-lg border border-border hover:bg-muted/30 transition-colors">
                       <Avatar className="w-9 h-9">
-                        <AvatarFallback className={u.role === "admin" ? "bg-amber-500/15 text-amber-600 text-xs font-semibold" : "bg-blue-500/15 text-blue-600 text-xs font-semibold"}>
+                        <AvatarFallback className="bg-blue-500/15 text-blue-600 text-xs font-semibold">
                           {initials(u)}
                         </AvatarFallback>
                       </Avatar>
@@ -289,7 +284,6 @@ export default function Usuarios() {
               ) : (
                 <div className="space-y-2">
                   {roles.map((r: RoleItem) => {
-                    const assignedCount = users?.filter(u => u.roleId === r.id).length ?? 0;
                     return (
                       <div key={r.id} className="flex items-center gap-3 p-3 rounded-lg border border-border hover:bg-muted/30 transition-colors">
                         <div className="w-9 h-9 rounded-lg bg-violet-500/10 flex items-center justify-center flex-shrink-0">
@@ -302,9 +296,6 @@ export default function Usuarios() {
                             {r.activo !== 1 && <Badge variant="destructive" className="text-xs h-5">Inactivo</Badge>}
                           </div>
                           {r.descripcion && <p className="text-xs text-muted-foreground truncate">{r.descripcion}</p>}
-                        </div>
-                        <div className="text-right text-xs text-muted-foreground hidden sm:block">
-                          <p>{assignedCount} usuario{assignedCount !== 1 ? "s" : ""} asignado{assignedCount !== 1 ? "s" : ""}</p>
                         </div>
                         <Button variant="ghost" size="icon" onClick={() => openEditRole(r)} title="Editar rol"
                           className="h-8 w-8 text-muted-foreground hover:text-foreground">

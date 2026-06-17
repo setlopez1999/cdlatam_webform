@@ -28,7 +28,6 @@ export interface LocalAuthPayload {
   id: number;
   username: string;
   displayName: string | null;
-  role: "user" | "admin";
 }
 
 // ─── Helpers de contraseña ────────────────────────────────────────────────────
@@ -122,8 +121,6 @@ export async function getAllUsers(): Promise<Omit<User, "passwordHash">[]> {
       id: users.id,
       username: users.username,
       displayName: users.displayName,
-      role: users.role,
-      roleId: users.roleId,
       isActive: users.isActive,
       createdAt: users.createdAt,
       updatedAt: users.updatedAt,
@@ -198,7 +195,6 @@ export async function seedDefaultUsers(): Promise<void> {
       username: "admin",
       passwordHash,
       displayName: "Administrador",
-      role: "admin",
       isActive: 1,
     });
     dbUser = await findUserByUsername("admin");

@@ -4,10 +4,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
-import { Plus, Shield, User, Loader2 } from "lucide-react";
+import { Plus, Loader2 } from "lucide-react";
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 type RoleItem = {
@@ -30,8 +29,7 @@ type Props = {
  * Permite crear un usuario con:
  * - username y password
  * - displayName opcional
- * - permiso base (admin/user)
- * - múltiples roles RBAC seleccionados mediante checkboxes
+ * - roles RBAC seleccionados mediante checkboxes
  *
  * Al crear el usuario, primero inserta en `users` y luego
  * asigna los roles seleccionados en `user_roles`.
@@ -41,7 +39,6 @@ export function CreateUserModal({ roles, onClose, onCreated }: Props) {
     username: "",
     password: "",
     displayName: "",
-    role: "user" as "user" | "admin",
   });
   const [selectedRoleIds, setSelectedRoleIds] = useState<number[]>([]);
   const [saving, setSaving] = useState(false);
@@ -74,7 +71,6 @@ export function CreateUserModal({ roles, onClose, onCreated }: Props) {
         username: form.username,
         password: form.password,
         displayName: form.displayName || undefined,
-        role: form.role,
       });
 
       // 2. Obtener el id del usuario recién creado para asignar roles
@@ -92,7 +88,6 @@ export function CreateUserModal({ roles, onClose, onCreated }: Props) {
 
       toast.success("Usuario creado correctamente");
       onCreated();
-      onClose();
     } catch {
       // Los errores ya se muestran con toast en onError de cada mutation
     } finally {
@@ -147,35 +142,12 @@ export function CreateUserModal({ roles, onClose, onCreated }: Props) {
             />
           </div>
 
-          {/* Permiso base */}
-          <div className="space-y-2">
-            <Label>Permiso base</Label>
-            <Select
-              value={form.role}
-              onValueChange={(v) => setForm(f => ({ ...f, role: v as "user" | "admin" }))}
-            >
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="user">
-                  <div className="flex items-center gap-2">
-                    <User className="w-3.5 h-3.5 text-blue-500" />Usuario
-                  </div>
-                </SelectItem>
-                <SelectItem value="admin">
-                  <div className="flex items-center gap-2">
-                    <Shield className="w-3.5 h-3.5 text-amber-500" />Administrador
-                  </div>
-                </SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
           {/* Roles RBAC */}
           {roles.length > 0 && (
             <div className="space-y-2">
               <Label>
-                Roles RBAC{" "}
-                <span className="text-muted-foreground text-xs">(acceso a pantallas específicas)</span>
+                Roles{" "}
+                <span className="text-muted-foreground text-xs">(acceso a pantallas del sistema)</span>
               </Label>
               <div className="rounded-lg border border-border p-3 space-y-2 max-h-40 overflow-y-auto">
                 {roles.map((r) => (

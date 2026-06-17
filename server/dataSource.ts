@@ -246,7 +246,7 @@ export async function ds_findUserById(id: number) {
 /** @deprecated Usar ds_findUserById */
 export const ds_findLocalUserById = ds_findUserById;
 
-export async function ds_createUser(user: { username: string; passwordHash: string; displayName?: string; role: string; roleId?: number | null }) {
+export async function ds_createUser(user: { username: string; passwordHash: string; displayName?: string }) {
   if (USE_API) return apiFetch<any>(`/users`, { method: "POST", body: JSON.stringify(user) });
   return createUser(user);
 }
@@ -260,7 +260,7 @@ export async function ds_toggleUserStatus(id: number, isActive: number) {
 /** @deprecated Usar ds_toggleUserStatus */
 export const ds_toggleLocalUserStatus = ds_toggleUserStatus;
 
-export async function ds_updateUser(id: number, data: { displayName?: string; roleId?: number | null; role?: string }) {
+export async function ds_updateUser(id: number, data: { displayName?: string }) {
   if (USE_API) return apiFetch<any>(`/users/${id}`, { method: "PUT", body: JSON.stringify(data) });
   return updateUser(id, data);
 }

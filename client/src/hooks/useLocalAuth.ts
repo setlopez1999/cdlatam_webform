@@ -6,20 +6,16 @@
  *
  * ─── SISTEMA DE ROLES ────────────────────────────────────────────────────────
  * Fuente única de verdad: `myRoles` (array de strings desde user_roles en BD via tRPC).
- * El campo legacy `currentUser.role` solo se usa como fallback para isAdmin durante
- * la ventana de carga inicial antes de que myRoles llegue del servidor.
  *
  * Jerarquía de verificación:
- *   1. isAdmin  → myRoles.includes("admin") || currentUser.role === "admin" (legacy fallback)
+ *   1. isAdmin  → myRoles.includes("admin")
  *   2. hasRole  → isAdmin || myRoles.includes(roleName)
  *   3. useCan() → evaluatePermission() de permissions.ts (fuente de verdad de permisos)
- *
- * NO usar `currentUser.role` directamente en componentes — usar isAdmin, hasRole() o useCan().
  *
  * Provee:
  *  - currentUser: usuario autenticado
  *  - isAuthenticated: boolean
- *  - isAdmin: boolean — true si el usuario tiene el rol "admin" (RBAC o campo legacy)
+ *  - isAdmin: boolean — true si el usuario tiene el rol "admin" (RBAC)
  *  - hasRole(roleName): boolean — verifica si el usuario tiene un rol específico
  *  - hasAnyRole(roleNames[]): boolean — verifica si el usuario tiene alguno de los roles
  *  - myRoles: string[] — lista de roles RBAC del usuario (fuente primaria)
@@ -38,8 +34,6 @@ export interface AuthUser {
   id: number | string;
   username: string;
   displayName?: string | null;
-  /** Campo legacy del JWT — solo usar para isAdmin, no para lógica de permisos en componentes */
-  role: "user" | "admin" | string;
 }
 
 export function useLocalAuth() {
@@ -95,10 +89,9 @@ export function useLocalAuth() {
   /**
    * isAdmin — true si el usuario tiene el rol "admin".
    *
-   * Fuente primaria: myRoles (RBAC desde user_roles en BD).
-   * Fallback: campo legacy `role` del JWT (ventana de carga inicial antes de que myRoles llegue).
+   * Fuente única: myRoles (RBAC desde user_roles en BD).
    */
-  const isAdmin = myRoles.includes("admin") || currentUser?.role === "admin";
+  const isAdmin = myRoles.includes("admin");
 
   /**
    * hasRole — verifica si el usuario tiene un rol específico.

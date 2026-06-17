@@ -20,7 +20,7 @@ async function verifyAdmin(req: Request): Promise<{ ok: true; userId: number; us
   if (!payload) return { ok: false, status: 401, error: "Sesión inválida o expirada" };
   const user = await findUserById(payload.id);
   if (!user || user.isActive !== 1) return { ok: false, status: 401, error: "Usuario no válido" };
-  const isAdmin = user.role === "admin" || (await userHasRole(user.id, "admin"));
+  const isAdmin = await userHasRole(user.id, "admin");
   if (!isAdmin) return { ok: false, status: 403, error: "Solo administradores pueden modificar cláusulas" };
   return { ok: true, userId: user.id, username: user.username };
 }

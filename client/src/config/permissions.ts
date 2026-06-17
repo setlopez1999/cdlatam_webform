@@ -46,7 +46,7 @@ export const ROLE_ANY = "*" as const;
 export const ROLE_ADMIN = "admin" as const;
 
 export type SpecialRole = typeof ROLE_ANY | typeof ROLE_ADMIN;
-export type RbacRole = "user" | "gestor_horarios" | "viewer" | "perfil_full" | "perfil_ventas" | "perfil_implementacion";
+export type RbacRole = "user" | "gestor_horarios" | "perfil_full" | "perfil_ventas" | "perfil_implementacion";
 export type AppRole = SpecialRole | RbacRole;
 
 export interface RoutePermission {
@@ -128,7 +128,7 @@ export const ROUTE_PERMISSIONS: Record<string, RoutePermission> = {
    * Ampliar esta lista o usar matriz de permisos en BD cuando corresponda.
    */
   "/historial": {
-    roles: ["user", "perfil_full", "perfil_ventas", "perfil_implementacion", "viewer"],
+    roles: ["user", "perfil_full", "perfil_ventas", "perfil_implementacion"],
     label: "Historial",
     icon: "History",
     showInNav: true,
@@ -263,11 +263,11 @@ export const ACTION_PERMISSIONS: Record<string, ActionPermission> = {
     description: "Ver tab F1-Acta (todos los usuarios)",
   },
   "expediente:tab_f2": {
-    roles: [ROLE_ADMIN, "perfil_full", "viewer"],
+    roles: [ROLE_ADMIN, "perfil_full"],
     description: "Ver tab F2-EP (no disponible para perfil_ventas ni perfil_implementacion)",
   },
   "expediente:tab_resultados": {
-    roles: [ROLE_ADMIN, "perfil_full", "viewer"],
+    roles: [ROLE_ADMIN, "perfil_full"],
     description: "Ver tab Resultados",
   },
   "expediente:tab_implementacion": {

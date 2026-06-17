@@ -31,9 +31,6 @@ export async function requireRole(ctx: Context, roleName: string): Promise<void>
     throw new TRPCError({ code: "UNAUTHORIZED", message: "Debes iniciar sesión" });
   }
 
-  // Fallback: si el usuario tiene role="admin" en el campo legacy, siempre tiene acceso total
-  if (ctx.user.role === "admin" && roleName === "admin") return;
-
   const hasIt = await userHasRole(ctx.user.id, roleName);
   if (!hasIt) {
     throw new TRPCError({
@@ -52,9 +49,6 @@ export async function requireAnyRole(ctx: Context, roleNames: string[]): Promise
     throw new TRPCError({ code: "UNAUTHORIZED", message: "Debes iniciar sesión" });
   }
 
-  // Fallback: admin legacy siempre tiene acceso total
-  if (ctx.user.role === "admin") return;
-
   const hasIt = await userHasAnyRole(ctx.user.id, roleNames);
   if (!hasIt) {
     throw new TRPCError({
@@ -70,7 +64,6 @@ export async function requireAnyRole(ctx: Context, roleNames: string[]): Promise
  */
 export async function checkRole(ctx: Context, roleName: string): Promise<boolean> {
   if (!ctx.user) return false;
-  if (ctx.user.role === "admin" && roleName === "admin") return true;
   return await userHasRole(ctx.user.id, roleName);
 }
 
@@ -79,6 +72,5 @@ export async function checkRole(ctx: Context, roleName: string): Promise<boolean
  */
 export async function checkAnyRole(ctx: Context, roleNames: string[]): Promise<boolean> {
   if (!ctx.user) return false;
-  if (ctx.user.role === "admin") return true;
   return await userHasAnyRole(ctx.user.id, roleNames);
 }

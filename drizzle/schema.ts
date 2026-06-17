@@ -145,8 +145,6 @@ export const users = sqliteTable("users", {
   username: text("username").notNull().unique(),
   passwordHash: text("passwordHash").notNull(),
   displayName: text("displayName"),
-  role: text("role").default("user").notNull(),   // fallback string
-  roleId: integer("roleId"),                       // FK blanda a roles.id
   isActive: integer("isActive").default(1).notNull(),
   createdAt: integer("createdAt", { mode: "timestamp" }).default(sql`(strftime('%s', 'now'))`).notNull(),
   updatedAt: integer("updatedAt", { mode: "timestamp" }).default(sql`(strftime('%s', 'now'))`).notNull(),

@@ -587,7 +587,7 @@ export async function toggleUserStatus(id: number, isActive: number) {
 /** @deprecated Usar toggleUserStatus */
 export const toggleLocalUserStatus = toggleUserStatus;
 
-export async function updateUser(id: number, data: { displayName?: string; roleId?: number | null; role?: string }) {
+export async function updateUser(id: number, data: { displayName?: string }) {
   const db = await getDb();
   return await db.update(users).set({ ...data, updatedAt: new Date() }).where(eq(users.id, id));
 }
@@ -645,14 +645,16 @@ export async function updateRole(id: number, data: Partial<InsertRole>) {
 
 export async function deleteRole(id: number) {
   const db = await getDb();
+  await db.delete(userRoles).where(eq(userRoles.roleId, id));
   return await db.delete(roles).where(eq(roles.id, id));
 }
 
 export async function getUsersByRoleId(roleId: number) {
   const db = await getDb();
   return await db.select({ id: users.id, username: users.username, displayName: users.displayName })
-    .from(users)
-    .where(eq(users.roleId, roleId));
+    .from(userRoles)
+    .innerJoin(users, eq(userRoles.userId, users.id))
+    .where(eq(userRoles.roleId, roleId));
 }
 
 // ─── USER_ROLES (RBAC N:N) ──────────────────────────────────────────────────

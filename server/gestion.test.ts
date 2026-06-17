@@ -25,8 +25,6 @@ function createMockContext(overrides?: Partial<TrpcContext>): TrpcContext {
     username: "test-user-001",
     passwordHash: "hash",
     displayName: "Test User",
-    role: "user",
-    roleId: null,
     isActive: 1,
     createdAt: new Date(),
     updatedAt: new Date(),
