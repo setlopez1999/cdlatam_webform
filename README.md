@@ -172,3 +172,76 @@ Se recomienda configurar un `cron` en el VPS para ejecutar `pg_dump` diariamente
 *   **Secretos:** Nunca subas el archivo `.env` al repositorio. El sistema fallará en producción si detecta que estás usando los secretos de ejemplo.
 *   **RBAC:** El acceso a rutas críticas (como Export/Import) está protegido por el middleware `requireAdminMiddleware`, que verifica tanto el token JWT como el rol en la base de datos.
 *   **Nginx:** La configuración incluye cabeceras de seguridad estrictas (HSTS, X-Frame-Options, X-XSS-Protection).
+
+---
+
+## 7. Variables de Entorno (`.env`)
+
+Copia `.env.example` a `.env` y completa los valores. El sistema **no arranca** si los secretos son los de ejemplo.
+
+| Variable | Descripción | Ejemplo |
+| :--- | :--- | :--- |
+| `DATABASE_URL` | URL de conexión a la BD | `postgresql://sga_user:pass@postgres:5432/sga_db` |
+| `JWT_SECRET` | Secreto para firmar tokens JWT (mín. 32 chars) | `openssl rand -hex 32` |
+| `COOKIE_SECRET` | Secreto para firmar cookies de sesión | `openssl rand -hex 32` |
+| `POSTGRES_USER` | Usuario de PostgreSQL | `sga_user` |
+| `POSTGRES_PASSWORD` | Contraseña de PostgreSQL | `openssl rand -hex 16` |
+| `POSTGRES_DB` | Nombre de la base de datos | `sga_db` |
+| `DEFAULT_ADMIN_PASSWORD` | Contraseña inicial del usuario admin | Cambiar tras primer login |
+| `NODE_ENV` | Entorno de ejecución | `production` |
+| `PORT` | Puerto interno del servidor Node.js | `3000` |
+
+---
+
+## 8. Notas Técnicas
+
+### 8.1. Driver Switch SQLite / PostgreSQL
+
+El sistema detecta automáticamente el motor de base de datos al arrancar:
+- Si `DATABASE_URL` empieza con `postgresql://` → usa **PostgreSQL** con migraciones de `drizzle/migrations-pg/`
+- Si `DATABASE_URL` empieza con `file:` o está vacía → usa **SQLite** con migraciones de `drizzle/migrations/`
+
+### 8.2. Migraciones PostgreSQL
+
+Las migraciones PG se generan con:
+```bash
+npx drizzle-kit generate --config=drizzle.config.pg.ts
+```
+El schema PG está en `drizzle/schema.pg.ts` y las migraciones en `drizzle/migrations-pg/`.
+
+### 8.3. Build del Servidor
+
+El servidor se compila con `esbuild`. Los imports de `vite` y `vite.config` son **dinámicos** (`await import()`) para que esbuild no los incluya en el bundle de producción (vite es solo una dependencia de desarrollo).
+
+### 8.4. Catálogos Dinámicos
+
+Las funciones de catálogos dinámicos (`catalog_custom_*`) usan `sql.raw()` de Drizzle ORM, compatible con PostgreSQL y SQLite.
+
+### 8.5. Export/Import de BD
+
+El endpoint de export/import está protegido con `requireAdminMiddleware`. Solo usuarios con rol `admin` pueden acceder. En modo PostgreSQL usa `pg_dump` / `psql`. En modo SQLite usa backup de archivo.
+
+---
+
+## 9. Estado del Deploy (VPS `173.212.250.43`)
+
+| Servicio | Estado | URL |
+| :--- | :--- | :--- |
+| Landing | ✅ Funcionando | `http://173.212.250.43/` |
+| SGA Frontend | ✅ Funcionando | `http://173.212.250.43/sga/` |
+| SGA Backend | ✅ Funcionando | `http://173.212.250.43/sga/api/` |
+| PostgreSQL | ✅ Healthy | Puerto 5432 (interno) |
+| SSL | ⏳ Pendiente | Activar cuando DNS apunte al VPS |
+
+**Credenciales iniciales del SGA:**
+- Usuario: `admin`
+- Contraseña: Ver `.env` en el VPS (`DEFAULT_ADMIN_PASSWORD`)
+- **Cambiar inmediatamente tras el primer login.**
+
+**Para activar SSL** (cuando el DNS `cd-latam.com` apunte a `173.212.250.43`):
+```bash
+# En el VPS:
+sudo certbot certonly --webroot -w /opt/sga/certbot -d cd-latam.com -d www.cd-latam.com
+# Luego descomentar el bloque HTTPS en nginx/conf.d/default.conf y reiniciar:
+docker exec sga_nginx nginx -s reload
+```
