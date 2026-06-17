@@ -1,7 +1,7 @@
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/NotFound";
-import { Route, Switch, Redirect } from "wouter";
+import { Route, Switch, Redirect, Router as WouterRouter } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import Dashboard from "./pages/Dashboard";
@@ -172,12 +172,16 @@ function Router() {
 }
 
 function App() {
+  // En producción el SGA vive bajo /sga/ — wouter necesita saber el base path
+  const base = import.meta.env.BASE_URL?.replace(/\/$/, "") || "";
   return (
     <ErrorBoundary>
       <ThemeProvider defaultTheme="light">
         <TooltipProvider>
           <Toaster position="top-right" richColors />
-          <Router />
+          <WouterRouter base={base}>
+            <Router />
+          </WouterRouter>
         </TooltipProvider>
       </ThemeProvider>
     </ErrorBoundary>
