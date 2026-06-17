@@ -1,200 +1,174 @@
-# Documentación del Proyecto: Gestión Administrativa CD-LATAM
+# SGA CDLatam — Sistema de Gestión Administrativa
 
-Este documento provee una guía completa sobre la arquitectura, seguridad, base de datos y despliegue del sistema de gestión administrativa.
+Este repositorio contiene el código fuente del **SGA CDLatam** (ERP) y la configuración de despliegue unificada para el **Landing Corporativo** y el **SGA** bajo el dominio `cd-latam.com`.
+
+## 1. Arquitectura del Sistema
+
+El sistema utiliza una arquitectura profesional basada en contenedores Docker, unificando dos proyectos distintos bajo un mismo dominio mediante Nginx.
+
+### 1.1. Componentes (VPS Único)
+
+| Componente | Tecnología | Función |
+| :--- | :--- | :--- |
+| **Proxy Inverso** | Nginx | Enruta el tráfico por URL, sirve el Landing estático y maneja SSL. |
+| **Landing** | React (Vite) | Sitio web corporativo estático (compilado). |
+| **SGA Frontend** | React (Vite) | Single Page Application (SPA) del ERP. |
+| **SGA Backend** | Node.js + Express + tRPC | API del ERP, lógica de negocio y autenticación. |
+| **Base de Datos** | PostgreSQL 16 | Motor de base de datos relacional para producción. |
+
+### 1.2. Enrutamiento (Nginx)
+
+Nginx expone los servicios en los puertos estándar HTTP (80) y HTTPS (443), eliminando la necesidad de usar puertos personalizados en las URLs.
+
+*   `https://cd-latam.com/` → **Landing Corporativo** (Archivos estáticos en `/var/www/landing`)
+*   `https://cd-latam.com/sga/` → **SGA Frontend** (Proxy al contenedor Node.js)
+*   `https://cd-latam.com/sga/api/` → **SGA Backend** (Proxy al contenedor Node.js)
 
 ---
 
-## 1. Visión General del Proyecto
+## 2. Base de Datos (PostgreSQL vs SQLite)
 
-El sistema es una aplicación full-stack diseñada para la gestión de formularios (Actas y Evaluaciones de Proyecto) y catálogos de datos maestros. Utiliza las siguientes tecnologías:
+El sistema soporta dos motores de base de datos, seleccionados automáticamente según la variable `DATABASE_URL` en el archivo `.env`.
 
-- **Frontend**: React 18 + TypeScript + Vite
-- **Backend**: Node.js + Express + tRPC
-- **Base de Datos**: SQLite con Drizzle ORM
-- **Despliegue**: Docker + Nginx (como proxy reverso con SSL)
+### 2.1. Producción (PostgreSQL)
+*   **Uso:** Obligatorio en el VPS.
+*   **Configuración:** `DATABASE_URL=postgresql://usuario:password@postgres:5432/sga_db`
+*   **Ventajas:** Concurrencia real, tipos de datos estrictos, copias de seguridad en caliente (`pg_dump`).
+
+### 2.2. Desarrollo Local (SQLite)
+*   **Uso:** Para pruebas rápidas en la máquina del desarrollador sin levantar Docker.
+*   **Configuración:** `DATABASE_URL=file:./gestion.db`
+*   **Ventajas:** Cero configuración, archivo local único.
+
+### 2.3. Cómo conectarse a la BD PostgreSQL (Producción)
+Para administrar la base de datos directamente (ej. DBeaver, TablePlus, pgAdmin):
+1.  Abre el puerto 5432 en el firewall del VPS (solo para tu IP, por seguridad).
+2.  **Host:** `173.212.250.43` (IP del VPS)
+3.  **Puerto:** `5432`
+4.  **Usuario:** El valor de `POSTGRES_USER` en tu `.env`
+5.  **Contraseña:** El valor de `POSTGRES_PASSWORD` en tu `.env`
+6.  **Base de datos:** El valor de `POSTGRES_DB` en tu `.env`
 
 ---
 
-## 2. Seguridad del Sistema
+## 3. Despliegue en VPS (Desde Cero)
 
-El sistema de autenticación fue diseñado para ser robusto y seguro para un entorno interno.
+Sigue estos pasos para instalar el sistema en un VPS nuevo (Ubuntu 24.04).
 
-### 2.1. Funcionamiento de la Autenticación
+### 3.1. Preparación del Servidor
+```bash
+# 1. Actualizar sistema e instalar dependencias
+sudo apt update && sudo apt upgrade -y
+sudo apt install -y docker.io docker-compose git certbot npm
 
-El flujo de inicio de sesión es el siguiente:
-
-1.  **Ingreso de Credenciales**: El usuario introduce su nombre de usuario y contraseña.
-2.  **Verificación en Servidor**: El backend busca el usuario en la tabla `users` de la base de datos SQLite.
-3.  **Hashing de Contraseña**: La contraseña enviada se compara con el hash almacenado usando **bcrypt**. Las contraseñas nunca se comparan en texto plano.
-4.  **Generación de Token**: Si las credenciales son válidas, el servidor firma un **JSON Web Token (JWT)** que contiene la información del usuario (ID, rol, etc.). Este token está firmado con una clave secreta (`JWT_SECRET`) definida en el archivo `.env`.
-5.  **Sesión del Cliente**: El JWT es enviado al cliente, que lo almacena y lo adjunta en el encabezado `Authorization` de cada petición subsecuente a la API.
-
-### 2.2. Almacenamiento de Contraseñas
-
-Las contraseñas **nunca se guardan como texto plano**. Se utiliza `bcryptjs` con 12 rondas de "salting", un estándar de la industria que hace que los hashes sean extremadamente difíciles de revertir por fuerza bruta.
-
+# 2. Instalar pnpm (requerido para compilar el landing)
+sudo npm install -g pnpm
 ```
-Contraseña "1234"  →  Hash almacenado: "$2b$12$xK9..." (irreversible)
+
+### 3.2. Clonar Repositorios
+```bash
+# 1. Clonar el SGA (este repositorio)
+git clone https://github.com/setlopez1999/cdlatam_webform.git /opt/sga
+cd /opt/sga
+git checkout main-full
+
+# 2. Clonar el Landing (requiere token de GitLab)
+git clone https://oauth2:TU_TOKEN_AQUI@gitlab.com/groupalnNet/cd-latam.git /opt/landing
 ```
 
-### 2.3. Expiración de Sesión
+### 3.3. Compilar el Landing
+```bash
+cd /opt/landing
+pnpm install
+pnpm build
+# El resultado quedará en /opt/landing/dist/public/
+```
 
-Los tokens JWT tienen una **expiración de 8 horas**. Una vez transcurrido este tiempo, el usuario deberá iniciar sesión nuevamente.
+### 3.4. Configurar Variables de Entorno
+```bash
+cd /opt/sga
+cp .env.example .env
+nano .env
+```
+**IMPORTANTE:** Genera secretos fuertes para `JWT_SECRET`, `COOKIE_SECRET` y `POSTGRES_PASSWORD` usando `openssl rand -hex 32`. Reemplaza `[DOMINIO]` en `nginx/conf.d/default.conf` por tu dominio real (`cd-latam.com`).
 
-### 2.4. Usuarios por Defecto (¡Importante!)
+### 3.5. Levantar Servicios
+```bash
+cd /opt/sga
+# Dar permisos de ejecución a los scripts
+chmod +x scripts/*.sh
 
-El sistema crea dos usuarios automáticamente si la base de datos está vacía. Es **crítico** cambiar sus contraseñas en el primer despliegue a producción.
+# Levantar contenedores (PostgreSQL, Node.js, Nginx)
+docker-compose up --build -d
+```
 
-| Usuario | Contraseña | Rol |
-| :-------- | :--------- | :---- |
-| `admin` | `1234` | **Admin**: Acceso total al sistema. |
-| `usuario` | `5678` | **User**: Acceso limitado a sus propios formularios. |
-
-### 2.5. Puntos a Mejorar en Producción
-
-- **Cambiar Contraseñas por Defecto**: Es la medida de seguridad más importante a tomar.
-- **Secretos Robustos**: Asegurarse de que `JWT_SECRET` y `COOKIE_SECRET` en el archivo `.env` sean cadenas de texto largas y aleatorias.
-- **Invalidación de Tokens**: El sistema de logout actual no invalida el token en el servidor. Si un token es robado, sigue siendo válido por hasta 8 horas. Para entornos de alta seguridad, se podría implementar una "blacklist" de tokens en la base de datos.
-
----
-
-## 3. Funcionamiento de la Base de Datos
-
-### 3.1. SQLite y Drizzle ORM
-
-El proyecto utiliza **SQLite** como motor de base de datos, lo que simplifica el despliegue al no requerir un servidor de base de datos separado. El archivo de la base de datos se encuentra en `data/gestion.db`.
-
-**Drizzle ORM** se utiliza para definir el esquema de la base de datos en TypeScript (`drizzle/schema.ts`) y para ejecutar las migraciones.
-
-### 3.2. Migraciones
-
-Las migraciones son scripts SQL que actualizan la estructura de la base de datos. El sistema de migraciones es robusto:
-
-1.  Al arrancar, el servidor intenta aplicar las migraciones de Drizzle (`drizzle/migrations`).
-2.  Si esto falla (por ejemplo, si una base de datos está a medio migrar), el sistema tiene un **mecanismo de fallback**: ejecuta comandos `CREATE TABLE IF NOT EXISTS` para asegurar que todas las tablas existan y el servidor pueda arrancar sin errores.
-
----
-
-## 4. Cómo Ejecutar el Proyecto
-
-### 4.1. Ejecución Local (Sin Docker)
-
-Ideal para desarrollo y pruebas rápidas.
-
-**Requisitos**: Node.js v20+
-
-1.  **Clonar y entrar al proyecto**:
-    ```bash
-    git clone https://github.com/setlopez1999/cdlatam_webform.git
-    cd cdlatam_webform
-    git checkout dev_manus
-    ```
-
-2.  **Instalar dependencias**:
-    ```bash
-    npm install --legacy-peer-deps
-    ```
-
-3.  **Crear archivo `.env`**:
-    Copia `.env.example` a `.env` y asegúrate de que contenga las claves básicas.
-
-4.  **Borrar BD antigua (si existe)**:
-    Si has corrido el proyecto antes, borra `gestion.db` para evitar conflictos de migración.
-
-5.  **Ejecutar el servidor de desarrollo**:
-    ```bash
-    npm run dev
-    ```
-
-6.  **Abrir en el navegador**: [http://localhost:3000](http://localhost:3000)
-
-### 4.2. Ejecución Local (Con Docker)
-
-Simula el entorno de producción en tu máquina local.
-
-**Requisitos**: Docker y Docker Compose
-
-1.  **Clonar y entrar al proyecto** (si no lo has hecho).
-
-2.  **Crear archivo `.env`** (si no existe).
-
-3.  **Parar contenedores antiguos** (si los hay ocupando el puerto):
-    ```bash
-    # Reemplaza <ID_DEL_CONTENEDOR> con el ID que ocupa el puerto 3002
-    docker stop <ID_DEL_CONTENEDOR>
-    ```
-
-4.  **Ejecutar el servicio `web` en el puerto 3002**:
-    ```bash
-    docker-compose run --rm -p 3002:3000 web
-    ```
-    - `run`: Ejecuta un comando único en un servicio.
-    - `--rm`: Elimina el contenedor cuando se detiene.
-    - `-p 3002:3000`: Mapea el puerto 3002 de tu PC al puerto 3000 del contenedor.
-
-5.  **Abrir en el navegador**: [http://localhost:3002](http://localhost:3002)
-
-    > **Nota**: Si el puerto 3002 está ocupado, puedes usar otro. Por ejemplo, para usar el 3003:
-    > `docker-compose run --rm -p 3003:3000 web`
+### 3.6. Configurar SSL (Certbot)
+Asegúrate de que el dominio ya apunte a la IP del VPS antes de ejecutar esto:
+```bash
+sudo certbot certonly --webroot -w /opt/sga/certbot -d cd-latam.com -d www.cd-latam.com
+```
+Una vez generados los certificados, descomenta el bloque HTTPS en `nginx/conf.d/default.conf` y reinicia Nginx:
+```bash
+docker-compose restart nginx
+```
 
 ---
 
-## 5. Documentacion por casos
+## 4. Flujos de Actualización
 
-Para cambios integrales (BD + backend + frontend + deploy), usa el indice central:
+El repositorio incluye scripts para actualizar el sistema sin tiempo de inactividad (downtime) o con downtime mínimo, dependiendo de la magnitud de los cambios.
 
-- [`docs/README.md`](./docs/README.md)
+### 4.1. Cambios Ligeros (Frontend o Lógica Node.js)
+*Sin downtime. Nginx sigue sirviendo mientras se compila.*
+```bash
+cd /opt/sga
+./scripts/update-sga.sh
+```
+Este script hace `git pull`, instala dependencias, compila el frontend y reinicia solo el contenedor de Node.js.
 
-## 6. Despliegue en Servidor de Producción
+### 4.2. Cambios Medios (Nuevas dependencias, Dockerfile)
+*Downtime de ~5 segundos.*
+```bash
+cd /opt/sga
+git pull
+docker-compose up --build -d sga
+```
 
-### 6.1. Configuración Inicial (Solo la primera vez)
+### 4.3. Cambios Pesados (Nginx, PostgreSQL, Variables de entorno)
+*Downtime de ~10 segundos.*
+```bash
+cd /opt/sga
+git pull
+docker-compose down
+docker-compose up --build -d
+```
 
-1.  **Clonar el repositorio**:
+---
+
+## 5. Gestión de Datos y Backups
+
+### 5.1. Exportar / Importar desde la Interfaz (SGA)
+El sistema incluye una herramienta profesional de Export/Import en la interfaz web, accesible **solo para usuarios con rol de Administrador**.
+*   **Exportar:** Descarga un archivo `.sql` (generado vía `pg_dump`) con toda la base de datos.
+*   **Importar:** Restaura la base de datos desde un archivo `.sql` (vía `psql`).
+
+### 5.2. Migración de SQLite a PostgreSQL
+Si tienes datos en un archivo `gestion.db` antiguo y quieres pasarlos al nuevo PostgreSQL:
+1.  Copia tu `gestion.db` a `/opt/sga/gestion.db`.
+2.  Ejecuta el script de migración dentro del contenedor:
     ```bash
-    git clone https://github.com/setlopez1999/cdlatam_webform.git
-    cd cdlatam_webform
-    git checkout dev_manus
+    docker exec -it sga_app npx tsx scripts/migrate-sqlite-to-pg.ts
     ```
+    *El script es idempotente (seguro de ejecutar varias veces) y respeta las claves foráneas.*
 
-2.  **Crear el archivo `.env`** con las variables de producción.
+### 5.3. Backups Automáticos (Recomendado)
+Se recomienda configurar un `cron` en el VPS para ejecutar `pg_dump` diariamente y subir el resultado a un almacenamiento externo (ej. Nextcloud, S3) usando `rclone`.
 
-3.  **Crear la carpeta de datos**:
-    ```bash
-    mkdir -p data
-    ```
+---
 
-4.  **Configurar Nginx y SSL**:
-    - Crea la carpeta `nginx/conf.d`.
-    - Crea el archivo `nginx/conf.d/default.conf` con la configuración del proxy reverso.
-    - Copia tus certificados `fullchain.pem` y `privkey.pem` a `nginx/conf.d/`.
+## 6. Seguridad
 
-### 6.2. Despliegue o Actualización
-
-Para desplegar cambios desde el repositorio:
-
-1.  **Entrar a la carpeta del proyecto**:
-    ```bash
-    cd /home/trapemn/cdlatam_webform
-    ```
-
-2.  **Traer los últimos cambios**:
-    ```bash
-    git pull origin dev_manus
-    ```
-
-3.  **Reconstruir y levantar los contenedores**:
-    ```bash
-    docker-compose down && docker-compose up --build -d
-    ```
-    - `down`: Detiene y elimina los contenedores actuales.
-    - `up`: Crea y levanta los nuevos contenedores.
-    - `--build`: Fuerza la reconstrucción de la imagen con el código más reciente.
-    - `-d`: Modo "detached" (se ejecuta en segundo plano).
-
-4.  **Verificar que todo funciona**:
-    ```bash
-    docker-compose ps
-    docker logs cdlatam_webform_web_1 --tail 20
-    ```
-
-5.  **Acceder a la aplicación**: `https://administracion.cd-latam.com:3002`
+*   **Contraseñas por defecto:** Cambia las contraseñas de los usuarios generados automáticamente en el primer inicio.
+*   **Secretos:** Nunca subas el archivo `.env` al repositorio. El sistema fallará en producción si detecta que estás usando los secretos de ejemplo.
+*   **RBAC:** El acceso a rutas críticas (como Export/Import) está protegido por el middleware `requireAdminMiddleware`, que verifica tanto el token JWT como el rol en la base de datos.
+*   **Nginx:** La configuración incluye cabeceras de seguridad estrictas (HSTS, X-Frame-Options, X-XSS-Protection).
