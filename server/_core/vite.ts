@@ -3,8 +3,7 @@ import fs from "fs";
 import { type Server } from "http";
 import { nanoid } from "nanoid";
 import path from "path";
-import { createServer as createViteServer } from "vite";
-import viteConfig from "../../vite.config";
+// vite y vite.config se importan dinámicamente para que esbuild no los bundlee en producción
 import { ENV } from "./env";
 
 /** Variables de entorno expuestas al cliente en runtime (sin rebuild) */
@@ -14,6 +13,10 @@ const runtimeEnv = () => ({
 });
 
 export async function setupVite(app: Express, server: Server) {
+  // Imports dinámicos — solo se ejecutan en desarrollo, no se bundlean por esbuild
+  const { createServer: createViteServer } = await import("vite");
+  const { default: viteConfig } = await import("../../vite.config");
+
   const serverOptions = {
     middlewareMode: true,
     hmr: { server },
