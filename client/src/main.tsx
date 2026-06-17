@@ -37,12 +37,10 @@ queryClient.getMutationCache().subscribe(event => {
   }
 });
 
-// En producción el SGA vive bajo /sga/ — la API está en /sga/api/trpc
-const apiBase = (import.meta.env.BASE_URL ?? "/").replace(/\/$/, "");
 const trpcClient = trpc.createClient({
   links: [
     httpBatchLink({
-      url: `${apiBase}/api/trpc`,
+      url: import.meta.env.BASE_URL + "api/trpc",
       transformer: superjson,
       fetch(input, init) {
         return globalThis.fetch(input, {
