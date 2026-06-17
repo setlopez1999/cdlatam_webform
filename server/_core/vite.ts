@@ -84,13 +84,15 @@ export function serveStatic(app: Express) {
     res.send(`window.__ENV__ = ${JSON.stringify(runtimeEnv())};`);
   });
 
-  // SPA fallback: cualquier ruta bajo /sga/* que no sea un archivo → index.html
-  app.use(`${staticPrefix}/*`, (_req, res) => {
-    res.sendFile(path.resolve(distPath, "index.html"));
-  });
-
-  // Compatibilidad: ruta raíz también responde con index.html del SGA
+  // SPA fallback: rutas bajo /sga/* que NO sean /sga/api/ → index.html
+  // IMPORTANTE: no interceptar la API ni archivos estáticos reales
   if (staticPrefix) {
+    app.use(`${staticPrefix}`, (req, res, next) => {
+      // Dejar pasar rutas de API al siguiente handler
+      if (req.path.startsWith("/api/")) return next();
+      res.sendFile(path.resolve(distPath, "index.html"));
+    });
+  } else {
     app.use("*", (_req, res) => {
       res.sendFile(path.resolve(distPath, "index.html"));
     });
