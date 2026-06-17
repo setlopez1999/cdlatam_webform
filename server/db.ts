@@ -19,7 +19,8 @@ if (USE_POSTGRES) {
 
 // Imports condicionales de Drizzle
 import { drizzle as drizzleSqlite } from "drizzle-orm/better-sqlite3";
-import { migrate } from "drizzle-orm/better-sqlite3/migrator";
+import { migrate as migrateSqlite } from "drizzle-orm/better-sqlite3/migrator";
+import { migrate as migratePg } from "drizzle-orm/node-postgres/migrator";
 import { drizzle as drizzlePg } from "drizzle-orm/node-postgres";
 import * as Database from 'better-sqlite3';
 import { Pool } from 'pg';
@@ -540,14 +541,28 @@ function autoMigrateUsersSchemaIfNeeded(): void {
 }
 
 export async function runMigrations() {
+  const db = await getDb();
+
+  if (USE_POSTGRES) {
+    // ── Modo PostgreSQL: usar migrador PG con migraciones de drizzle/migrations-pg ──
+    try {
+      await migratePg(db, { migrationsFolder: join(process.cwd(), "drizzle", "migrations-pg") });
+      console.log("[DB] PostgreSQL migrations applied successfully");
+    } catch (error: any) {
+      console.error("[DB] PostgreSQL migration failed:", error?.message ?? error);
+      throw error; // En PG no hay fallback — el schema debe estar correcto
+    }
+    return;
+  }
+
+  // ── Modo SQLite: flujo original ──────────────────────────────────────────────
   // Paso 0: Migrar schema viejo automáticamente si es necesario (idempotente)
   autoMigrateUsersSchemaIfNeeded();
 
   // Paso 1: Intentar migración estándar de Drizzle
   try {
-    const db = await getDb();
-    migrate(db, { migrationsFolder: join(process.cwd(), "drizzle", "migrations") });
-    console.log("[DB] Migrations applied successfully");
+    migrateSqlite(db, { migrationsFolder: join(process.cwd(), "drizzle", "migrations") });
+    console.log("[DB] SQLite migrations applied successfully");
   } catch (error: any) {
     // Si la migración falla (ej: BD parcialmente migrada), aplicar schema manualmente
     console.warn("[DB] Migration via Drizzle failed, applying schema manually:", error?.message ?? error);
@@ -566,10 +581,10 @@ export async function runMigrations() {
     console.warn("[DB] schemaBootstrap after migrate:", e instanceof Error ? e.message : e);
   }
 
-  // Indices de audit_log
-  const tryAlter = (sql: string, label: string) => {
+  // Índices y ALTER TABLE solo para SQLite
+  const tryAlter = (sqlStr: string, label: string) => {
     try {
-      sqlite.exec(sql);
+      sqlite.exec(sqlStr);
       console.log(`[DB] ${label}`);
     } catch {
       /* ya aplicado */
@@ -579,7 +594,6 @@ export async function runMigrations() {
   tryAlter(`ALTER TABLE catalog_implementacion_items ADD COLUMN descripcion TEXT DEFAULT '' NOT NULL`, "Add catalog_implementacion_items.descripcion");
   tryAlter(`CREATE INDEX IF NOT EXISTS idx_audit_log_created_at ON audit_log(createdAt)`, "Index audit_log createdAt");
   tryAlter(`CREATE INDEX IF NOT EXISTS idx_audit_log_user_created ON audit_log(userId, createdAt)`, "Index audit_log userId+createdAt");
-
 }
 
 // --- USERS (Username/Password) ----------------------------------------------------
