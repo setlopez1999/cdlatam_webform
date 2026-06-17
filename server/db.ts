@@ -1,14 +1,30 @@
 // server/db.ts
 import { eq, like, or, and, sql, desc, sum, count, inArray, lt, lte, gte, asc } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/better-sqlite3";
-import { migrate } from "drizzle-orm/better-sqlite3/migrator";
-import * as Database from 'better-sqlite3';
-import { join, dirname } from 'path';
-import { existsSync, mkdirSync } from 'fs';
+import { join } from 'path';
 import { buildActaCodigo } from "./documentCodes";
 import { ensureAllProjectTables } from "./schemaBootstrap";
-import { resolveDbPath } from "./_core/dbConfig";
-// Importamos los esquemas (asegúrate de que esta ruta sea correcta)
+import { resolveDbPath, isPostgresUrl } from "./_core/dbConfig";
+
+// ─── DRIVER SWITCH: PostgreSQL vs SQLite ────────────────────────────────────
+// Se selecciona en tiempo de arranque según DATABASE_URL.
+// PostgreSQL: DATABASE_URL=postgresql://user:pass@host:5432/dbname
+// SQLite:     DATABASE_URL=file:/app/data/gestion.db  (o vacío → ./gestion.db)
+const USE_POSTGRES = isPostgresUrl(process.env.DATABASE_URL);
+
+if (USE_POSTGRES) {
+  console.log("[DB] ✅ Driver: PostgreSQL (" + process.env.DATABASE_URL?.split("@")[1] + ")");
+} else {
+  console.log("[DB] ℹ️  Driver: SQLite");
+}
+
+// Imports condicionales de Drizzle
+import { drizzle as drizzleSqlite } from "drizzle-orm/better-sqlite3";
+import { migrate } from "drizzle-orm/better-sqlite3/migrator";
+import { drizzle as drizzlePg } from "drizzle-orm/node-postgres";
+import * as Database from 'better-sqlite3';
+import { Pool } from 'pg';
+
+// Importamos los esquemas (SQLite por defecto, PG cuando USE_POSTGRES=true)
 import {
   InsertUser, users, roles, type Role, type InsertRole,
   userRoles, type UserRole, type InsertUserRole,
@@ -41,38 +57,56 @@ import {
 // Variables de conexión (módulo-level, se reasignan en initDb/closeDb)
 let dbPath: string;
 let sqlite: Database.Database;
-let _db: ReturnType<typeof drizzle>;
+let pgPool: Pool;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let _db: any; // Drizzle SQLite | Drizzle PG — tipo unificado internamente
 
 /** Inicializa o reinicia la conexión a la base de datos. Idempotente. */
 export function initDb(): void {
-  if (sqlite) {
-    try { sqlite.close(); } catch { /* ignorar */ }
+  if (USE_POSTGRES) {
+    // PostgreSQL: pool de conexiones
+    if (pgPool) {
+      pgPool.end().catch(() => {});
+    }
+    pgPool = new Pool({ connectionString: process.env.DATABASE_URL });
+    _db = drizzlePg(pgPool);
+    console.log("[DB] Conexión PostgreSQL establecida.");
+  } else {
+    // SQLite: archivo local
+    if (sqlite) {
+      try { sqlite.close(); } catch { /* ignorar */ }
+    }
+    dbPath = resolveDbPath();
+    console.log(`[DB] Conectando a SQLite en: ${dbPath}`);
+    sqlite = new Database.default(dbPath);
+    sqlite.pragma("foreign_keys = ON");
+    _db = drizzleSqlite(sqlite);
   }
-  dbPath = resolveDbPath();
-  console.log(`[DB] Conectando a base de datos en: ${dbPath}`);
-  sqlite = new Database.default(dbPath);
-  sqlite.pragma("foreign_keys = ON");
-  _db = drizzle(sqlite);
 }
 
 /** Cierra la conexión actual a la base de datos. */
 export function closeDb(): void {
-  if (sqlite) {
-    try { sqlite.close(); } catch { /* ignorar */ }
+  if (USE_POSTGRES) {
+    if (pgPool) pgPool.end().catch(() => {});
+  } else {
+    if (sqlite) {
+      try { sqlite.close(); } catch { /* ignorar */ }
+    }
   }
 }
 
-/** Ruta efectiva del archivo SQLite (diagnóstico / integridad). */
+/** Ruta efectiva del archivo SQLite (diagnóstico / integridad). Solo SQLite. */
 export function getSqliteDbPath(): string {
-  return dbPath;
+  return dbPath ?? "(PostgreSQL mode — no SQLite path)";
 }
 
 export async function getDb() {
   return _db;
 }
 
-/** Retorna la instancia raw de better-sqlite3 (para operaciones directas). */
+/** Retorna la instancia raw de better-sqlite3 (para operaciones directas). Solo SQLite. */
 export function getRawDb(): Database.Database {
+  if (USE_POSTGRES) throw new Error("[DB] getRawDb() no disponible en modo PostgreSQL");
   return sqlite;
 }
 
