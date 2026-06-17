@@ -39,6 +39,9 @@ async function startServer() {
   const app = express();
   const server = createServer(app);
 
+  // Confiar en el proxy Nginx (necesario para express-rate-limit con X-Forwarded-For)
+  app.set("trust proxy", 1);
+
   // Seguridad HTTP
   app.use(helmet({
     contentSecurityPolicy: false,

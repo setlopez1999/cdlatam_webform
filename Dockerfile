@@ -17,6 +17,8 @@ COPY package*.json ./
 RUN npm install --legacy-peer-deps
 
 COPY . .
+# NODE_ENV=production es necesario para que vite.config.ts use base: "/sga/"
+ENV NODE_ENV=production
 RUN npm run build
 
 # ── Stage 2: Producción ───────────────────────────────────────────────────
