@@ -1,25 +1,92 @@
 version: '3.8'
 
+# ─────────────────────────────────────────────────────────────────────────────
+#  SGA CDLatam — Docker Compose
+#  Servicios: postgres (BD) + sga (Node.js) + nginx (proxy reverso)
+#
+#  Uso en producción:
+#    docker-compose up --build -d
+#
+#  Variables de entorno requeridas en .env:
+#    DATABASE_URL, JWT_SECRET, NODE_ENV, POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB
+# ─────────────────────────────────────────────────────────────────────────────
+
 services:
-  web:
-    build: .
+
+  # ── Base de datos PostgreSQL 16 ──────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: sga_postgres
+    restart: unless-stopped
     environment:
-      - NODE_ENV=production
+      POSTGRES_USER: ${POSTGRES_USER:-sga_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD requerido en .env}
+      POSTGRES_DB: ${POSTGRES_DB:-sga_db}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-sga_user} -d ${POSTGRES_DB:-sga_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - sga_internal
+
+  # ── Aplicación Node.js (SGA) ─────────────────────────────────────────────
+  sga:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: sga_app
+    restart: unless-stopped
     env_file:
       - .env
-    ports:
-      - "3000:3000"
+    environment:
+      NODE_ENV: production
+    depends_on:
+      postgres:
+        condition: service_healthy
     volumes:
-      - ./data:/app/data
-    restart: always
+      # Archivos de cláusulas PDF (persistentes)
+      - sga_clausulas:/app/data/clausulas
+    networks:
+      - sga_internal
+    # No expone puerto directamente — Nginx es el único punto de entrada
 
+  # ── Nginx (proxy reverso + landing + SSL) ────────────────────────────────
   nginx:
-    image: nginx:latest
-    container_name: webserver_nginx_3002
+    image: nginx:1.27-alpine
+    container_name: sga_nginx
+    restart: unless-stopped
     ports:
-      - "3002:3002"
+      - "80:80"
+      - "443:443"
     volumes:
       - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      # Landing compilado (cd-latam repo)
+      - /opt/landing/dist/public:/var/www/landing:ro
+      # Certificados SSL (generados por Certbot en el host)
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+      - /var/www/certbot:/var/www/certbot:ro
     depends_on:
-      - web
-    restart: always
+      - sga
+    networks:
+      - sga_internal
+    healthcheck:
+      test: ["CMD", "nginx", "-t"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+# ── Volúmenes persistentes ────────────────────────────────────────────────
+volumes:
+  postgres_data:
+    driver: local
+  sga_clausulas:
+    driver: local
+
+# ── Red interna (SGA ↔ Postgres, sin exponer puertos al exterior) ─────────
+networks:
+  sga_internal:
+    driver: bridge
