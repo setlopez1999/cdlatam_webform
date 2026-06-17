@@ -10,6 +10,67 @@ Migrar CD-LATAM SGA de SQLite monolitico a arquitectura profesional: PostgreSQL 
 
 ---
 
+## Estructura del proyecto SGA (cdlatam_webform)
+
+```
+cdlatam_webform/
+├── client/                     # Frontend React (SPA)
+│   ├── src/
+│   │   ├── components/         # Componentes reutilizables
+│   │   ├── features/           # Páginas por funcionalidad
+│   │   │   └── expedientes/    # F1 (Actas), F2 (Evaluación), F3 (Resultados)
+│   │   ├── hooks/              # useAuth, useSocket, etc.
+│   │   ├── pages/              # Layouts y páginas principales
+│   │   ├── lib/                # Utilidades, API client
+│   │   └── shared/             # Tipos compartidos
+│   └── index.html
+├── server/                     # Backend Express + tRPC
+│   ├── _core/                  # Núcleo: env, dbConfig, dbManagement
+│   ├── routers.ts              # Rutas de API (tRPC y Express)
+│   ├── db.ts                   # Acceso directo a SQLite (refactorizar a dataSource)
+│   ├── dataSource.ts           # Puerto único de datos (wip)
+│   ├── localAuth.ts            # Seeds de roles y usuarios
+│   └── schemaBootstrap.ts      # Creación de tablas
+├── drizzle/                    # Schema Drizzle ORM
+│   └── schema.ts
+├── docs/
+│   └── FINAL.md               ← ESTE DOCUMENTO
+├── .env                        # Variables de entorno (NO versionar en prod)
+└── package.json                # Monorepo con workspaces
+```
+
+---
+
+## Stack Tecnológico
+
+| Capa | Tecnología |
+|------|-----------|
+| Frontend | React 18 + TypeScript + Vite + Tailwind CSS + tRPC client |
+| Backend | Node.js 20 + Express 5 + TypeScript + tRPC server |
+| ORM | Drizzle ORM (dialecto SQLite local / PostgreSQL prod) |
+| Base de datos | SQLite (dev/local) → PostgreSQL 16 (producción) |
+| Autenticación | JWT + httpOnly cookies + bcrypt |
+| Proxy reverso | Nginx (alpine) |
+| Contenedores | Docker + Docker Compose |
+| Build | Turborepo / npm workspaces (monorepo) |
+| Repositorios | GitHub (SGA) + GitLab (landing corporativo) |
+
+---
+
+## Estado actual vs Estado deseado
+
+| Aspecto | Actual | Deseado |
+|---------|--------|---------|
+| Base de datos | SQLite (`gestion.db`) | PostgreSQL 16 |
+| Frontend | Sirve desde Express (`/siga/`) | Build estático servido por Nginx (`/sga/`) |
+| Landing | No existe o separado | Mismo VPS, ruta raíz `/` |
+| Despliegue | Manual, proceso frágil | Docker Compose, reproducible |
+| Acceso a datos | `db.ts` + `dataSource.ts` mezclados | Solo `dataSource.ts` como puerta única |
+| Seguridad | Passwords débiles, import/BD sin role check | Secrets fuertes, todo con middleware de roles |
+| Nombre ruta | `/siga/` (hardcodeado) | `/sga/` (configurable, documentado con `[DOMINIO]`) |
+
+---
+
 ## 1. PRERREQUISITO OBLIGATORIO — REFACTOR dataSource.ts
 
 Antes de tocar PostgreSQL, refactorizar el acceso a datos para que `server/dataSource.ts` sea el **ÚNICO punto de entrada**.
@@ -421,7 +482,186 @@ Cualquier script que inserte datos al arrancar debe ser:
 
 ---
 
-## 11. POSIBLES MEJORAS FUTURAS
+## 11. SEEDS AL ARRANQUE — Comportamiento actual
+
+### Roles (6 fijos)
+
+| nombre | label |
+|--------|-------|
+| `admin` | Administrador |
+| `user` | Usuario |
+| `gestor_horarios` | Gestor de Horarios |
+| `perfil_full` | Perfil Full |
+| `perfil_ventas` | Perfil Ventas |
+| `perfil_implementacion` | Perfil Implementacion |
+
+Idempotente: si el rol ya existe, no lo crea de nuevo.
+
+### Usuarios (1 fijo)
+
+| username | password | displayName |
+|----------|----------|-------------|
+| `admin` | `DEFAULT_ADMIN_PASSWORD` del `.env` | Administrador |
+
+Idempotente: si `admin` ya existe, lo deja intacto (no sobrescribe password ni datos).
+
+### Catálogos fijos
+
+Los 25+ catálogos (`catalog_preventas`, `catalog_gerencias`, etc.) se registran en `catalog_meta` al arrancar. Las tablas se crean vacías si no existen (solo estructura, sin datos semilla).
+
+### Lo que NO tiene seed
+
+- `catalog_preventas` — vacía, el usuario la llena desde la UI
+- `catalog_gerencias` — vacía
+- `catalog_consideraciones_comerciales` — solo desde import de BD
+- `catalog_implementacion_items` — solo desde import de BD
+
+---
+
+## 12. EXPORT / IMPORT de BD desde la UI
+
+### Ubicación actual
+
+`BaseDatos.tsx` tiene un botón oculto (opacity-20, 16x16px en esquina inferior derecha) que despliega:
+
+- **Exportar BD** → `GET /api/db/export` → descarga `gestion_backup.db`
+- **Importar BD** → `POST /api/db/import` → sube un archivo `.db` y reemplaza la BD actual
+
+### ¿Es profesional tenerlo en la UI?
+
+| Aspecto | Evaluación |
+|---------|-----------|
+| Tener export/import como funcionalidad | ✅ Sí, es profesional (útil para backups manuales, migraciones, restauración rápida) |
+| Botón oculto con opacity-20 | ❌ No profesional. Si es funcionalidad legítima, debe mostrarse con un botón normal (con icono y texto claro). Si no, debe protegerse con autenticación de admin, no con oscuridad. |
+| Sin verificación de rol en server | ❌ Grave. Cualquier usuario que sepa la URL puede importar/exportar la BD. |
+| Sobrescribe BD sin validación extra | ⚠️ El import reemplaza el archivo completo — debería pedir confirmación doble y hacer backup automático antes. |
+
+### Decisión
+
+**Mantener la funcionalidad** pero profesionalizarla:
+
+1. **Server:** Agregar middleware de role check (`requireRole("admin")`) en `dbManagement.ts` para proteger ambas rutas.
+2. **Frontend:** Mostrar el botón de forma visible (no oculto), pero solo renderizarlo si el usuario tiene rol admin.
+3. **Seguridad:** Antes de importar, hacer un backup automático de la BD actual.
+4. **UX:** Indicador de progreso en import (archivos grandes). Mensajes claros.
+
+### Pendiente
+
+- [ ] Agregar `requireRole("admin")` en `GET /api/db/export`
+- [ ] Agregar `requireRole("admin")` en `POST /api/db/import`
+- [ ] Hacer visible el botón de export/import solo para admin
+- [ ] Backup automático pre-import
+
+---
+
+## 13. SEGURIDAD — Credenciales expuestas en Frontend
+
+### Evaluación actual
+
+| Riesgo | Estado | Acción |
+|--------|--------|--------|
+| Passwords hardcodeadas en JS | ✅ No existe | Ninguna |
+| JWT visible para JS | ✅ No (httpOnly cookie) | Ninguna |
+| `window.__ENV__` expone secrets | ✅ No, solo `APP_DEBUG` y `USE_API` (booleans) | Ninguna |
+| API keys en bundle | ✅ No existe | Ninguna |
+| Admin password en `.env` (server) | ⚠️ `1234` | Cambiar antes de producción |
+| JWT_SECRET placeholder | ⚠️ `cambia_esto_...` | Generar uno real con `openssl rand -hex 32` |
+| Import/Export sin role check | ❌ Cualquier usuario puede | Agregar middleware (sección 12) |
+
+### Principio aplicado
+
+**Zero trust en el frontend.** Todo lo que se envía al navegador es visible por F12. Por lo tanto:
+
+1. **Nunca** poner secrets, tokens, passwords en código cliente.
+2. **Nunca** confiar en la ocultación por CSS (opacity, display:none) como seguridad.
+3. **Siempre** verificar permisos en el servidor, no en el cliente.
+4. **Siempre** usar cookies httpOnly para sesión, no localStorage.
+
+### Checklist de seguridad pre-producción
+
+- [ ] Generar `JWT_SECRET` fuerte (`openssl rand -hex 32`)
+- [ ] Generar `COOKIE_SECRET` fuerte (`openssl rand -hex 32`)
+- [ ] Cambiar `DEFAULT_ADMIN_PASSWORD` (> 8 caracteres, con números y símbolos)
+- [ ] Verificar que no hay secrets en `client/src/`
+- [ ] Agregar role check en rutas de import/export
+- [ ] Deshabilitar `APP_DEBUG` en producción (`.env` → `DEBUG=false`)
+
+---
+
+## 14. INFORMACIÓN REQUERIDA PARA EJECUTAR EL PLAN
+
+### Credenciales de servidores
+
+> **⚠️ CRÍTICO:** Estas credenciales están incluidas aquí para que la IA destino pueda ejecutar el plan automáticamente. **DEBEN rotarse (cambiarse) inmediatamente después del deploy** por seguridad.
+
+| Recurso | Dato |
+|---------|------|
+| IP VPS | `173.212.250.43` |
+| Puerto SSH | `22` |
+| Usuario | `root` |
+| Password | `0XYdUlIK0Zmb66KGq8V` |
+| Landing repo | `https://gitlab.com/groupalnNet/cd-latam` |
+| SGA repo | `https://github.com/setlopez1999/cdlatam_webform` |
+| Dominio | `cd-latam.com` / por confirmar |
+| SSL | Pendiente (Certbot o manual) |
+
+> ⚠️ **POST-DEPLOY:** Cambiar password root, rotar JWT_SECRET, COOKIE_SECRET, DEFAULT_ADMIN_PASSWORD. No dejar secrets por defecto.
+
+### Preguntas que quien ejecute el plan debe responder
+
+- [ ] ¿El dominio `cd-latam.com` apunta al VPS `173.212.250.43` o se usará otro dominio?
+- [ ] ¿El landing está en el repo de GitLab listo para copiar o necesita build?
+- [ ] ¿Se mantiene SQLite en local/dev o se fuerza PostgreSQL también en dev?
+- [ ] ¿Quién genera el SSL? ¿Certbot automático o certificado manual?
+- [ ] ¿Los backups de BD van a Nextcloud, S3, o disco local?
+
+---
+
+## 15. DATOS QUE DEBEN PERSISTIR (preservación, no importación)
+
+Este plan **no** es sobre importar datos nuevos. Es sobre **preservar los datos existentes** durante la migración. Las tablas críticas son:
+
+### Datos transaccionales (deben persistir siempre)
+
+| Tabla | Contenido | Prioridad |
+|-------|-----------|:---------:|
+| `expedientes` | Expedientes creados | 🔴 Crítica |
+| `actas` | Formulario F1 (Acta de Aceptación) | 🔴 Crítica |
+| `evaluaciones` | Formulario F2 (Evaluación de Proyecto) | 🔴 Crítica |
+| `resultados_expediente` | Formulario F3 (Resultados calculados) | 🔴 Crítica |
+| `implementaciones` | Checklist de implementación | 🟡 Alta |
+| `audit_log` | Registro de auditoría | 🟡 Alta |
+| `catalog_clausulas` | PDFs de cláusulas legales | 🟡 Alta |
+
+### Datos maestros (deben persistir)
+
+| Tabla | Contenido | Prioridad |
+|-------|-----------|:---------:|
+| `users` + `user_roles` | Usuarios y roles asignados | 🔴 Crítica |
+| `roles` | Roles del sistema | 🔴 Crítica |
+| `catalog_preventas` | Valores de preventa (si tiene datos) | 🟡 Alta |
+| `catalog_consideraciones_comerciales` | Consideraciones comerciales (si tiene datos) | 🟢 Media |
+| `catalog_implementacion_items` | Items de implementación (si tiene datos) | 🟢 Media |
+
+### Lo que se puede regenerar
+
+| Tabla | Motivo |
+|-------|--------|
+| `catalog_meta` | Se regenera con `seedCatalogMeta()` al arrancar |
+| `catalog_monedas`, `catalog_paises`, etc. | Catálogos base vacíos, se llenan desde UI o import |
+| Cláusulas PDF en `data/clauses/` | Archivos físicos, no están en la BD |
+
+### Regla de oro para la migración
+
+1. **Hacer backup completo del archivo `gestion.db`** antes de cualquier cambio.
+2. **Verificar integridad**: contar registros en cada tabla crítica antes y después.
+3. **No tocar datos transaccionales**: migrar tal cual, sin transformaciones.
+4. **Preservar IDs**: los IDs de expedientes, actas, usuarios deben mantenerse (hay referencias cruzadas).
+5. **Preservar archivos**: cláusulas PDF, firmas, uploads en `data/`.
+
+---
+
+## 16. POSIBLES MEJORAS FUTURAS
 
 - [ ] CI/CD con GitHub Actions (build + test + deploy automático)
 - [ ] Backup automático diario de PostgreSQL a S3/Nextcloud
