@@ -9,12 +9,32 @@ import { resolveDbPath, isPostgresUrl } from "./_core/dbConfig";
 // Se selecciona en tiempo de arranque según DATABASE_URL.
 // PostgreSQL: DATABASE_URL=postgresql://user:pass@host:5432/dbname
 // SQLite:     DATABASE_URL=file:/app/data/gestion.db  (o vacío → ./gestion.db)
-const USE_POSTGRES = isPostgresUrl(process.env.DATABASE_URL);
+export const USE_POSTGRES = isPostgresUrl(process.env.DATABASE_URL);
 
 if (USE_POSTGRES) {
   console.log("[DB] ✅ Driver: PostgreSQL (" + process.env.DATABASE_URL?.split("@")[1] + ")");
 } else {
   console.log("[DB] ℹ️  Driver: SQLite");
+}
+
+function tsVal(date: Date) {
+  return USE_POSTGRES
+    ? sql`to_timestamp(${Math.floor(date.getTime() / 1000)})`
+    : date;
+}
+
+function tsNow() {
+  return tsVal(new Date());
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function fixDates(data: any): any {
+  if (!data || typeof data !== "object") return data;
+  const result: any = {};
+  for (const [k, v] of Object.entries(data)) {
+    result[k] = v instanceof Date ? tsVal(v) : v;
+  }
+  return result;
 }
 
 // Imports condicionales de Drizzle
@@ -633,7 +653,7 @@ export const toggleLocalUserStatus = toggleUserStatus;
 
 export async function updateUser(id: number, data: { displayName?: string; roleId?: number | null; role?: string }) {
   const db = await getDb();
-  return await db.update(users).set({ ...data, updatedAt: new Date() }).where(eq(users.id, id));
+  return await db.update(users).set({ ...data, updatedAt: tsNow() }).where(eq(users.id, id));
 }
 
 /**
@@ -645,7 +665,7 @@ export async function updateUserCredentials(
   data: { username?: string; passwordHash?: string },
 ): Promise<void> {
   const db = await getDb();
-  await db.update(users).set({ ...data, updatedAt: new Date() }).where(eq(users.id, id));
+  await db.update(users).set({ ...data, updatedAt: tsNow() }).where(eq(users.id, id));
 }
 
 /**
@@ -684,7 +704,7 @@ export async function createRole(data: InsertRole) {
 
 export async function updateRole(id: number, data: Partial<InsertRole>) {
   const db = await getDb();
-  return await db.update(roles).set({ ...data, updatedAt: new Date() }).where(eq(roles.id, id));
+  return await db.update(roles).set({ ...data, updatedAt: tsNow() }).where(eq(roles.id, id));
 }
 
 export async function deleteRole(id: number) {
@@ -802,13 +822,13 @@ export async function getActaById(id: number) {
 
 export async function createActa(data: InsertActa) {
   const db = await getDb();
-  const result = await db.insert(actas).values(data).returning();
+  const result = await db.insert(actas).values(USE_POSTGRES ? fixDates(data) : data).returning();
   return result[0];
 }
 
 export async function updateActa(id: number, data: Partial<InsertActa>) {
   const db = await getDb();
-  return db.update(actas).set(data).where(eq(actas.id, id));
+  return db.update(actas).set(USE_POSTGRES ? fixDates(data) : data).where(eq(actas.id, id));
 }
 
 export async function deleteActa(id: number) {
@@ -837,13 +857,13 @@ export async function getEvaluacionById(id: number) {
 
 export async function createEvaluacion(data: InsertEvaluacion) {
   const db = await getDb();
-  const result = await db.insert(evaluaciones).values(data).returning();
+  const result = await db.insert(evaluaciones).values(USE_POSTGRES ? fixDates(data) : data).returning();
   return result[0];
 }
 
 export async function updateEvaluacion(id: number, data: Partial<InsertEvaluacion>) {
   const db = await getDb();
-  return db.update(evaluaciones).set(data).where(eq(evaluaciones.id, id));
+  return db.update(evaluaciones).set(USE_POSTGRES ? fixDates(data) : data).where(eq(evaluaciones.id, id));
 }
 
 export async function deleteEvaluacion(id: number) {
@@ -869,7 +889,10 @@ export async function upsertResultadoExpediente(data: {
   f3FormStatus: string;
 }) {
   const db = await getDb();
-  const now = new Date();
+  const nowEpoch = Math.floor(Date.now() / 1000);
+  const now = USE_POSTGRES
+    ? sql`to_timestamp(${nowEpoch})`
+    : new Date();
   await db
     .insert(resultadosExpediente)
     .values({
@@ -902,7 +925,7 @@ export async function listImplementacionesByExpedienteId(expedienteId: number) {
 
 export async function upsertImplementacionCheck(expedienteId: number, checkKey: string, estado: boolean) {
   const db = await getDb();
-  const now = new Date();
+  const now = tsNow();
   const val = estado ? 1 : 0;
   const existing = await db
     .select({ id: implementaciones.id })
@@ -1020,12 +1043,12 @@ export async function createEmpleado(data: InsertSchEmpleado): Promise<SchEmplea
 
 export async function updateEmpleado(id: number, data: Partial<InsertSchEmpleado>): Promise<void> {
   const db = await getDb();
-  await db.update(schEmpleados).set({ ...data, updatedAt: new Date() }).where(eq(schEmpleados.id, id));
+  await db.update(schEmpleados).set({ ...data, updatedAt: tsNow() }).where(eq(schEmpleados.id, id));
 }
 
 export async function toggleEmpleadoStatus(id: number, activo: number): Promise<void> {
   const db = await getDb();
-  await db.update(schEmpleados).set({ activo, updatedAt: new Date() }).where(eq(schEmpleados.id, id));
+  await db.update(schEmpleados).set({ activo, updatedAt: tsNow() }).where(eq(schEmpleados.id, id));
 }
 
 /**
@@ -1077,7 +1100,7 @@ export async function createContrato(data: InsertSchContrato): Promise<SchContra
 
 export async function updateContrato(id: number, data: Partial<InsertSchContrato>): Promise<void> {
   const db = await getDb();
-  await db.update(schContratos).set({ ...data, updatedAt: new Date() }).where(eq(schContratos.id, id));
+  await db.update(schContratos).set({ ...data, updatedAt: tsNow() }).where(eq(schContratos.id, id));
 }
 
 // Bloques de horario
@@ -1142,7 +1165,7 @@ export async function createExpediente(data: { nombre: string; creadorId: number
  */
 export async function crearExpedienteConActa(data: { nombre: string; creadorId: number }) {
   const db = await getDb();
-  const now = new Date();
+  const now = tsNow();
   // 1. Crear expediente
   const exp = await createExpediente(data);
   // 2. Calcular nro_acta consecutivo
@@ -1195,7 +1218,7 @@ export async function moverExpedienteAPapelera(id: number) {
   const db = await getDb();
   const now = Math.floor(Date.now() / 1000);
   const result = await db.update(expedientes)
-    .set({ deletedAt: now, updatedAt: new Date() })
+    .set({ deletedAt: now, updatedAt: tsNow() })
     .where(eq(expedientes.id, id))
     .returning();
   return result[0] ?? null;
@@ -1205,7 +1228,7 @@ export async function moverExpedienteAPapelera(id: number) {
 export async function restaurarExpedienteDePapelera(id: number) {
   const db = await getDb();
   const result = await db.update(expedientes)
-    .set({ deletedAt: null, updatedAt: new Date() })
+    .set({ deletedAt: null, updatedAt: tsNow() })
     .where(eq(expedientes.id, id))
     .returning();
   return result[0] ?? null;
@@ -1221,7 +1244,7 @@ export async function getExpedienteById(id: number) {
 export async function updateExpediente(id: number, data: Partial<Pick<Expediente, "nombre" | "status">>) {
   const db = await getDb();
   const result = await db.update(expedientes)
-    .set({ ...data, updatedAt: new Date() })
+    .set({ ...data, updatedAt: tsNow() })
     .where(eq(expedientes.id, id))
     .returning();
   return result[0] ?? null;

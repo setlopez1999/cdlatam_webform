@@ -13,8 +13,8 @@
 import bcrypt from "bcryptjs";
 import * as jose from "jose";
 import type { Express } from "express";
-import { eq, inArray } from "drizzle-orm";
-import { getDb } from "./db";
+import { eq, inArray, sql } from "drizzle-orm";
+import { getDb, USE_POSTGRES } from "./db";
 import { users, roles, userRoles, type User, type InsertUser } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 
@@ -110,7 +110,7 @@ export async function updateLastSignedIn(id: number): Promise<void> {
   if (!db) return;
   await db
     .update(users)
-    .set({ lastSignedIn: new Date() })
+    .set({ lastSignedIn: USE_POSTGRES ? sql`to_timestamp(${Math.floor(Date.now() / 1000)})` : new Date() })
     .where(eq(users.id, id));
 }
 
