@@ -1342,8 +1342,8 @@ export async function getAuditLogFiltered(f: AuditLogQueryFilter) {
   const db = await getDb();
   const conditions = [];
 
-  if (f.from) conditions.push(gte(auditLog.createdAt, f.from));
-  if (f.to) conditions.push(lte(auditLog.createdAt, f.to));
+  if (f.from) conditions.push(gte(auditLog.createdAt, sql`to_timestamp(${f.from.getTime() / 1000})`));
+  if (f.to) conditions.push(lte(auditLog.createdAt, sql`to_timestamp(${f.to.getTime() / 1000})`));
   if (f.actions?.length) conditions.push(inArray(auditLog.action, f.actions));
   if (f.entities?.length) conditions.push(inArray(auditLog.entity, f.entities));
   if (f.userId != null) conditions.push(eq(auditLog.userId, f.userId));
@@ -1358,7 +1358,7 @@ export async function getAuditLogFiltered(f: AuditLogQueryFilter) {
     const cAt = f.cursor.createdAt;
     const cId = f.cursor.id;
     conditions.push(
-      or(lt(auditLog.createdAt, cAt), and(eq(auditLog.createdAt, cAt), lt(auditLog.id, cId)))
+      or(lt(auditLog.createdAt, sql`to_timestamp(${cAt.getTime() / 1000})`), and(eq(auditLog.createdAt, sql`to_timestamp(${cAt.getTime() / 1000})`), lt(auditLog.id, cId)))
     );
   }
 
