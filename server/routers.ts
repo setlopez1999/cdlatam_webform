@@ -108,7 +108,7 @@ import {
   ds_allCounts,
   // Utilidades SQLite (diagnóstico)
   ds_getSqliteDbPath,
-  ds_getRawDb,
+  ds_getNextNroActa,
 } from "./dataSource";
 
 // 2. IMPORTACIONES DE LOCALAUTH (Solo para cifrado/tokens, NO BD)
@@ -826,9 +826,8 @@ export const appRouter = router({
           let nroActaFix: number | undefined;
           let codigoFix: string | undefined;
           if (!existing.nroActa || existing.nroActa < 10001) {
-            const rawDb = ds_getRawDb();
-            const maxRow2 = rawDb.prepare(`SELECT COALESCE(MAX(nro_acta), 0) as max_nro FROM actas WHERE id != ?`).get(existing.id) as { max_nro: number };
-            nroActaFix = Math.max((maxRow2.max_nro ?? 0) + 1, 10001);
+            const maxNroAct = await ds_getNextNroActa(existing.id);
+            nroActaFix = maxNroAct;
             const primerServicioFix = ((actaRest.serviciosContratados ?? existing.serviciosContratados ?? []) as Array<{ unidadNegocio?: string }>)[0];
             codigoFix = buildActaCodigo("", nroActaFix, primerServicioFix?.unidadNegocio ?? "");
           }
@@ -845,10 +844,7 @@ export const appRouter = router({
           });
           acta = await ds_getActaById(existing.id);
         } else {
-          const raw = ds_getRawDb();
-          const maxRow = raw.prepare(`SELECT COALESCE(MAX(nro_acta), 0) as max_nro FROM actas`).get() as { max_nro: number };
-          // Garantizar que el primer nroActa sea al menos 10001
-          const nextNroActa = Math.max(maxRow.max_nro + 1, 10001);
+          const nextNroActa = await ds_getNextNroActa();
           // Extraer la primera unidad de negocio para el prefijo VS/TX/IN/RD/HO
           const primerServicio = (actaRest.serviciosContratados ?? [])[0] as { unidadNegocio?: string } | undefined;
           const unidadNegocioActa = primerServicio?.unidadNegocio ?? "";

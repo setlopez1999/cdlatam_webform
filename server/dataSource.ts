@@ -115,6 +115,7 @@ import {
   // Utilidades SQLite
   getSqliteDbPath,
   getRawDb,
+  getNextNroActa,
   // Catálogos dinámicos y meta
   getDb,
   listCatalogMeta,
@@ -697,5 +698,9 @@ export function ds_getSqliteDbPath(): string {
 
 export function ds_getRawDb() {
   return getRawDb();
+}
+
+export async function ds_getNextNroActa(excludeId?: number) {
+  return getNextNroActa(excludeId);
 }
 // Nota: ds_findUserById está definido en la sección Usuarios (ver más arriba).

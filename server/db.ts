@@ -1234,6 +1234,19 @@ export async function restaurarExpedienteDePapelera(id: number) {
   return result[0] ?? null;
 }
 
+export async function getNextNroActa(excludeId?: number): Promise<number> {
+  const db = await getDb();
+  const query = db
+    .select({ maxNro: sql<number>`COALESCE(MAX(${actas.nroActa}), 0)` })
+    .from(actas);
+  if (excludeId !== undefined) {
+    query.where(sql`${actas.id} <> ${excludeId}`);
+  }
+  const [result] = await query.limit(1);
+  const next = result?.maxNro ?? 0;
+  return Math.max(next + 1, 10001);
+}
+
 export async function getExpedienteById(id: number) {
   const db = await getDb();
   const result = await db.select().from(expedientes).where(eq(expedientes.id, id)).limit(1);
@@ -1365,8 +1378,12 @@ export async function getAuditLogFiltered(f: AuditLogQueryFilter) {
   const db = await getDb();
   const conditions = [];
 
-  if (f.from) conditions.push(gte(auditLog.createdAt, sql`to_timestamp(${f.from.getTime() / 1000})`));
-  if (f.to) conditions.push(lte(auditLog.createdAt, sql`to_timestamp(${f.to.getTime() / 1000})`));
+  const tsFilter = (d: Date) => USE_POSTGRES
+    ? sql`to_timestamp(${d.getTime() / 1000})`
+    : sql`${Math.floor(d.getTime() / 1000)}`;
+
+  if (f.from) conditions.push(gte(auditLog.createdAt, tsFilter(f.from)));
+  if (f.to) conditions.push(lte(auditLog.createdAt, tsFilter(f.to)));
   if (f.actions?.length) conditions.push(inArray(auditLog.action, f.actions));
   if (f.entities?.length) conditions.push(inArray(auditLog.entity, f.entities));
   if (f.userId != null) conditions.push(eq(auditLog.userId, f.userId));
@@ -1381,7 +1398,7 @@ export async function getAuditLogFiltered(f: AuditLogQueryFilter) {
     const cAt = f.cursor.createdAt;
     const cId = f.cursor.id;
     conditions.push(
-      or(lt(auditLog.createdAt, sql`to_timestamp(${cAt.getTime() / 1000})`), and(eq(auditLog.createdAt, sql`to_timestamp(${cAt.getTime() / 1000})`), lt(auditLog.id, cId)))
+      or(lt(auditLog.createdAt, tsFilter(cAt)), and(eq(auditLog.createdAt, tsFilter(cAt)), lt(auditLog.id, cId)))
     );
   }
 
