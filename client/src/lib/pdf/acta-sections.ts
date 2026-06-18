@@ -281,16 +281,16 @@ export function drawFirmaBlock(
   const firmaY = pageHeight - margin - 10 - firmaHeight;
   doc.setDrawColor(...COLOR_TEXT);
   doc.setLineWidth(0.3);
-  doc.line(margin, firmaY, margin + firmaW, firmaY);
+  doc.line(pageWidth - margin - firmaW, firmaY, pageWidth - margin, firmaY);
   doc.setFontSize(lo.fontSize.body);
   doc.setFont("helvetica", "bold");
   doc.setTextColor(...COLOR_TEXT);
-  doc.text(representanteLegal || "___________________________", margin + firmaW / 2, firmaY + lineHeight, { align: "center" });
+  doc.text(representanteLegal || "___________________________", pageWidth - margin - firmaW / 2, firmaY + lineHeight, { align: "center" });
   doc.setFont("helvetica", "normal");
   doc.setFontSize(lo.fontSize.small);
   doc.setTextColor(...COLOR_GRAY);
-  doc.text("Representante Legal", margin + firmaW / 2, firmaY + lineHeight + lineHeight, { align: "center" });
-  doc.text(razonSocial || "", margin + firmaW / 2, firmaY + lineHeight + lineHeight + lineHeight, { align: "center" });
+  doc.text("Representante Legal", pageWidth - margin - firmaW / 2, firmaY + lineHeight + lineHeight, { align: "center" });
+  doc.text(razonSocial || "", pageWidth - margin - firmaW / 2, firmaY + lineHeight + lineHeight + lineHeight, { align: "center" });
 }
 
 export function drawFooter(
