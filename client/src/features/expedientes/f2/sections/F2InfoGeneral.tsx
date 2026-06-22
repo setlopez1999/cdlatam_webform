@@ -161,7 +161,7 @@ function F2InfoGeneralInner({ data, onUpdate, catalogs, f1Suggestions, onImporta
         <FieldGroup label="Tipo de Cambio">
           <Input type="number" step="any" className="text-right" placeholder="1.0000"
             value={data.tipoCambio ?? ""}
-            onChange={e => onUpdate({ tipoCambio: parseNumeric(e.target.value) })} />
+            onChange={e => { const n = e.target.valueAsNumber; if (!isNaN(n)) onUpdate({ tipoCambio: n }); }} />
         </FieldGroup>
 
         <FieldGroup label="Total CLP (calculado)">
