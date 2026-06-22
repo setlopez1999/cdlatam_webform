@@ -159,9 +159,14 @@ function F2InfoGeneralInner({ data, onUpdate, catalogs, f1Suggestions, onImporta
         </FieldGroup>
 
         <FieldGroup label="Tipo de Cambio">
-          <Input type="number" step="any" className="text-right" placeholder="1.0000"
+          <Input type="text" inputMode="decimal" className="text-right" placeholder="1.0000"
             value={data.tipoCambio ?? ""}
-            onChange={e => { const n = e.target.valueAsNumber; if (!isNaN(n)) onUpdate({ tipoCambio: n }); }} />
+            onChange={e => {
+              const raw = e.target.value.replace(/[^0-9.,\-]/g, "").replace(",", ".");
+              if (raw === "" || raw === "-" || raw.endsWith(".")) return;
+              const n = parseFloat(raw);
+              if (!isNaN(n)) onUpdate({ tipoCambio: n });
+            }} />
         </FieldGroup>
 
         <FieldGroup label="Total CLP (calculado)">
