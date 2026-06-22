@@ -194,8 +194,8 @@ export const F2CostTable = memo(function F2CostTable({
                 </Select>
               </td>
               <td className="px-1 py-1 min-w-[80px]">
-                <Input type="number" className="h-8 text-xs text-right w-full min-w-[62px]" placeholder="1"
-                  value={row.tipoCambio || ""}
+                <Input type="number" step="any" className="h-8 text-xs text-right w-full min-w-[62px]" placeholder="1"
+                  value={row.tipoCambio ?? ""}
                   onChange={e => onUpdate(row.id, "tipoCambio", parseNumeric(e.target.value))} />
               </td>
               <td className="px-1 py-1 min-w-[90px]">
@@ -317,8 +317,8 @@ export const F2RRHHTable = memo(function F2RRHHTable({
                 </Select>
               </td>
               <td className="px-1 py-1 min-w-[80px]">
-                <Input type="number" className="h-8 text-xs text-right w-full min-w-[62px]" placeholder="1"
-                  value={row.tipoCambio || ""}
+                <Input type="number" step="any" className="h-8 text-xs text-right w-full min-w-[62px]" placeholder="1"
+                  value={row.tipoCambio ?? ""}
                   onChange={e => onUpdate(row.id, "tipoCambio", parseNumeric(e.target.value))} />
               </td>
               <td className="px-1 py-1 min-w-[90px]">
@@ -438,8 +438,8 @@ export const F2OtrosTable = memo(function F2OtrosTable({
                 </Select>
               </td>
               <td className="px-1 py-1 min-w-[80px]">
-                <Input type="number" className="h-8 text-xs text-right w-full min-w-[62px]" placeholder="1"
-                  value={row.tipoCambio || ""}
+                <Input type="number" step="any" className="h-8 text-xs text-right w-full min-w-[62px]" placeholder="1"
+                  value={row.tipoCambio ?? ""}
                   onChange={e => onUpdate(row.id, "tipoCambio", parseNumeric(e.target.value))} />
               </td>
               <td className="px-1 py-1 min-w-[90px]">

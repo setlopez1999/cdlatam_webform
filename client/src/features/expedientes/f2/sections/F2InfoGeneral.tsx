@@ -159,8 +159,8 @@ function F2InfoGeneralInner({ data, onUpdate, catalogs, f1Suggestions, onImporta
         </FieldGroup>
 
         <FieldGroup label="Tipo de Cambio">
-          <Input type="number" className="text-right" placeholder="1.0000"
-            value={data.tipoCambio || ""}
+          <Input type="number" step="any" className="text-right" placeholder="1.0000"
+            value={data.tipoCambio ?? ""}
             onChange={e => onUpdate({ tipoCambio: parseNumeric(e.target.value) })} />
         </FieldGroup>
 
