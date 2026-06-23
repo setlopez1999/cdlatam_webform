@@ -20,9 +20,8 @@ El sistema utiliza una arquitectura profesional basada en contenedores Docker, u
 
 Nginx expone los servicios en los puertos estándar HTTP (80) y HTTPS (443), eliminando la necesidad de usar puertos personalizados en las URLs.
 
-*   `https://cd-latam.com/` → **Landing Corporativo** (Archivos estáticos en `/var/www/landing`)
-*   `https://cd-latam.com/sga/` → **SGA Frontend** (Proxy al contenedor Node.js)
-*   `https://cd-latam.com/sga/api/` → **SGA Backend** (Proxy al contenedor Node.js)
+*   `https://sga.cd-latam.com/` → **SGA Frontend** (Proxy al contenedor Node.js)
+*   `https://sga.cd-latam.com/api/` → **SGA Backend** (Proxy al contenedor Node.js)
 
 ---
 
@@ -105,42 +104,60 @@ docker-compose up --build -d
 ### 3.6. Configurar SSL (Certbot)
 Asegúrate de que el dominio ya apunte a la IP del VPS antes de ejecutar esto:
 ```bash
-sudo certbot certonly --webroot -w /opt/sga/certbot -d cd-latam.com -d www.cd-latam.com
+sudo certbot certonly --webroot -w /var/www/certbot -d sga.cd-latam.com
 ```
-Una vez generados los certificados, descomenta el bloque HTTPS en `nginx/conf.d/default.conf` y reinicia Nginx:
+Una vez generados los certificados, configura las rutas en `nginx/conf.d/default.conf` y reinicia Nginx:
 ```bash
-docker-compose restart nginx
+docker compose restart nginx
 ```
 
 ---
 
-## 4. Flujos de Actualización
+## 4. Mantenimiento y Actualización
 
-El repositorio incluye scripts para actualizar el sistema sin tiempo de inactividad (downtime) o con downtime mínimo, dependiendo de la magnitud de los cambios.
+### 4.1. Actualización sin cambios en BD
+Frontend, backend, configuraciones — todo lo que no modifica tablas/columnas.
 
-### 4.1. Cambios Ligeros (Frontend o Lógica Node.js)
-*Sin downtime. Nginx sigue sirviendo mientras se compila.*
 ```bash
 cd /opt/sga
-./scripts/update-sga.sh
-```
-Este script hace `git pull`, instala dependencias, compila el frontend y reinicia solo el contenedor de Node.js.
-
-### 4.2. Cambios Medios (Nuevas dependencias, Dockerfile)
-*Downtime de ~5 segundos.*
-```bash
-cd /opt/sga
-git pull
-docker-compose up --build -d sga
+git pull origin main-full
+docker compose up --build -d sga
 ```
 
-### 4.3. Cambios Pesados (Nginx, PostgreSQL, Variables de entorno)
-*Downtime de ~10 segundos.*
+> Sin downtime. Nginx sigue sirviendo mientras se compila el nuevo contenedor.
+
+### 4.2. Actualización con migraciones de BD
+Cuando se agregan/modifican tablas, columnas o índices.
+
 ```bash
 cd /opt/sga
-git pull
-docker-compose down
-docker-compose up --build -d
+
+# 1. Backup obligatorio
+docker compose exec postgres pg_dump -U sga_user sga_db > backup_$(date +%Y%m%d_%H%M).sql
+
+# 2. Pull + rebuild
+git pull origin main-full
+docker compose up --build -d sga
+
+# 3. Verificar migraciones automáticas (se aplican al arranque)
+docker compose logs sga --tail 20
+```
+
+> Downtime ~30s mientras se reinicia el contenedor.
+
+### 4.3. Sólo cambios en Nginx (SSL, dominio, rutas)
+Sin rebuild, solo restart.
+
+```bash
+cd /opt/sga
+docker compose restart nginx
+```
+
+### 4.4. Ver estado del sistema
+
+```bash
+docker compose ps
+docker compose logs sga --tail 10
 ```
 
 ---
@@ -227,21 +244,12 @@ El endpoint de export/import está protegido con `requireAdminMiddleware`. Solo 
 
 | Servicio | Estado | URL |
 | :--- | :--- | :--- |
-| Landing | ✅ Funcionando | `http://173.212.250.43/` |
-| SGA Frontend | ✅ Funcionando | `http://173.212.250.43/sga/` |
-| SGA Backend | ✅ Funcionando | `http://173.212.250.43/sga/api/` |
+| SGA | ✅ Funcionando | `https://sga.cd-latam.com/` |
+| API | ✅ Funcionando | `https://sga.cd-latam.com/api/` |
 | PostgreSQL | ✅ Healthy | Puerto 5432 (interno) |
-| SSL | ⏳ Pendiente | Activar cuando DNS apunte al VPS |
+| SSL (Let's Encrypt) | ✅ Activo | Certificado para `sga.cd-latam.com` |
 
 **Credenciales iniciales del SGA:**
 - Usuario: `admin`
 - Contraseña: Ver `.env` en el VPS (`DEFAULT_ADMIN_PASSWORD`)
 - **Cambiar inmediatamente tras el primer login.**
-
-**Para activar SSL** (cuando el DNS `cd-latam.com` apunte a `173.212.250.43`):
-```bash
-# En el VPS:
-sudo certbot certonly --webroot -w /opt/sga/certbot -d cd-latam.com -d www.cd-latam.com
-# Luego descomentar el bloque HTTPS en nginx/conf.d/default.conf y reiniciar:
-docker exec sga_nginx nginx -s reload
-```

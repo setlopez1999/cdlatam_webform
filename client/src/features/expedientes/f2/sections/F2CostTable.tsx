@@ -209,9 +209,9 @@ export const F2CostTable = memo(function F2CostTable({
                   onChange={e => onUpdate(row.id, valueField, parseNumeric(e.target.value))} />
               </td>
               <td className="px-1 py-1 min-w-[75px]">
-                <Input type="number" className="h-8 text-xs text-right w-full min-w-[58px]" placeholder="1"
+                <Input type="number" min="1" step="1" className="h-8 text-xs text-right w-full min-w-[58px]" placeholder="1"
                   value={row.cantidad || ""}
-                  onChange={e => onUpdate(row.id, "cantidad", parseNumeric(e.target.value))} />
+                  onChange={e => onUpdate(row.id, "cantidad", Math.max(1, parseNumeric(e.target.value)))} />
               </td>
               <td className="px-2 py-1 min-w-[90px] text-right font-mono">{fmt(row.totalNeto)}</td>
               <td className="px-1 py-1 min-w-[90px]">
@@ -337,9 +337,9 @@ export const F2RRHHTable = memo(function F2RRHHTable({
                   onChange={e => onUpdate(row.id, "valorSinImpuesto", parseNumeric(e.target.value))} />
               </td>
               <td className="px-1 py-1 min-w-[75px]">
-                <Input type="number" className="h-8 text-xs text-right w-full min-w-[58px]" placeholder="1"
+                <Input type="number" min="1" step="1" className="h-8 text-xs text-right w-full min-w-[58px]" placeholder="1"
                   value={row.cantidad || ""}
-                  onChange={e => onUpdate(row.id, "cantidad", parseNumeric(e.target.value))} />
+                  onChange={e => onUpdate(row.id, "cantidad", Math.max(1, parseNumeric(e.target.value)))} />
               </td>
               <td className="px-2 py-1 min-w-[90px] text-right font-mono">{fmt(row.totalNeto)}</td>
               <td className="px-1 py-1 min-w-[90px]">
@@ -463,9 +463,9 @@ export const F2OtrosTable = memo(function F2OtrosTable({
                   onChange={e => onUpdate(row.id, "valorNeto", parseNumeric(e.target.value))} />
               </td>
               <td className="px-1 py-1 min-w-[75px]">
-                <Input type="number" className="h-8 text-xs text-right w-full min-w-[58px]" placeholder="1"
+                <Input type="number" min="1" step="1" className="h-8 text-xs text-right w-full min-w-[58px]" placeholder="1"
                   value={row.cantidad || ""}
-                  onChange={e => onUpdate(row.id, "cantidad", parseNumeric(e.target.value))} />
+                  onChange={e => onUpdate(row.id, "cantidad", Math.max(1, parseNumeric(e.target.value)))} />
               </td>
               <td className="px-2 py-1 min-w-[90px] text-right font-mono">{fmt(row.totalNeto)}</td>
               <td className="px-1 py-1 min-w-[90px]">

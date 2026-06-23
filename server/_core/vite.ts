@@ -71,9 +71,7 @@ export function serveStatic(app: Express) {
     );
   }
 
-  // En producción el frontend vive bajo /sga/ (base path de Vite)
-  // Nginx hace proxy de /sga/* al Node.js, por eso servimos bajo /sga/
-  const staticPrefix = process.env.NODE_ENV === "production" ? "/sga" : "";
+  const staticPrefix = "";
 
   app.use(staticPrefix, express.static(distPath));
 

@@ -164,9 +164,7 @@ export default defineConfig({
   envDir: path.resolve(import.meta.dirname),
   root: path.resolve(import.meta.dirname, "client"),
   publicDir: path.resolve(import.meta.dirname, "client", "public"),
-  // El SGA siempre vive bajo /sga/ (prod y dev con proxy Nginx)
-  // Para dev local sin proxy: VITE_BASE=/ npm run dev
-  base: process.env.VITE_BASE ?? "/sga/",
+  base: process.env.VITE_BASE ?? "/",
   build: {
     outDir: path.resolve(import.meta.dirname, "dist/public"),
     emptyOutDir: true,

@@ -49,7 +49,7 @@ EXPOSE 3000
 USER node
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-  CMD curl -f http://localhost:3000/sga/api/health 2>/dev/null || \
+  CMD curl -f http://localhost:3000/api/health 2>/dev/null || \
       node -e "require('http').get('http://localhost:3000/', r => process.exit(r.statusCode < 500 ? 0 : 1)).on('error', () => process.exit(1))"
 
 CMD ["node", "dist/index.js"]
