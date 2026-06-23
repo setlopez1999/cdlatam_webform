@@ -1,43 +1,40 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Input } from "@/components/ui/input";
+
+function fmt(n: number) {
+  return n < 1e-6 ? n.toFixed(10) : String(n);
+}
 
 export function TipoCambioInput({ value, onChange, className }: {
   value: number | null;
   onChange: (v: number | null) => void;
   className?: string;
 }) {
-  const [raw, setRaw] = useState(value != null ? String(value) : "");
-  const internalRef = useRef(false);
+  const [display, setDisplay] = useState(value != null ? fmt(value) : "");
+  const isInternal = useRef(false);
 
   useEffect(() => {
-    if (internalRef.current) { internalRef.current = false; return; }
-    setRaw(value != null ? String(value) : "");
+    if (isInternal.current) { isInternal.current = false; return; }
+    setDisplay(value != null ? fmt(value) : "");
   }, [value]);
-
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const s = e.target.value.replace(/[^0-9.,]/g, "").replace(",", ".");
-    setRaw(s);
-    internalRef.current = true;
-    const n = parseFloat(s);
-    if (!isNaN(n)) onChange(n);
-    else if (s === "") onChange(null);
-  };
-
-  const handleBlur = () => {
-    const n = parseFloat(raw);
-    if (raw === "" || raw === "." || isNaN(n)) {
-      setRaw(value != null ? String(value) : "");
-    } else {
-      const formatted = String(n);
-      if (formatted !== raw) setRaw(formatted);
-    }
-  };
 
   return (
     <Input type="text" inputMode="decimal" className={className} placeholder="1.0000" maxLength={12}
-      value={raw}
-      onChange={handleChange}
-      onBlur={handleBlur}
+      value={display}
+      onChange={e => {
+        setDisplay(e.target.value);
+        isInternal.current = true;
+        const n = parseFloat(e.target.value);
+        if (!isNaN(n)) onChange(n);
+      }}
+      onBlur={() => {
+        const n = parseFloat(display);
+        if (isNaN(n) || display === ".") {
+          setDisplay(value != null ? fmt(value) : "");
+        } else {
+          onChange(n);
+        }
+      }}
     />
   );
 }
