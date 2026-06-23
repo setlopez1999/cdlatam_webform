@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { Input } from "@/components/ui/input";
 
 function fmt(n: number) {
-  return n < 1e-6 ? n.toFixed(10) : String(n);
+  return n > 0 && n < 1e-6 ? n.toFixed(10) : String(n);
 }
 
 export function TipoCambioInput({ value, onChange, className }: {
