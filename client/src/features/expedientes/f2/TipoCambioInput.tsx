@@ -24,6 +24,7 @@ export function TipoCambioInput({ value, onChange, className }: {
       onChange={e => {
         setDisplay(e.target.value);
         isInternal.current = true;
+        if (e.target.value === "") { onChange(null); return; }
         const n = parseFloat(e.target.value);
         if (!isNaN(n)) onChange(n);
       }}
