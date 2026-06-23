@@ -9,6 +9,7 @@
  */
 import { memo } from "react";
 import { Input } from "@/components/ui/input";
+import { TipoCambioInput } from "../TipoCambioInput";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -159,13 +160,7 @@ function F2InfoGeneralInner({ data, onUpdate, catalogs, f1Suggestions, onImporta
         </FieldGroup>
 
         <FieldGroup label="Tipo de Cambio">
-          <Input type="text" inputMode="decimal" className="text-right" placeholder="1.0000" maxLength={12}
-            value={data.tipoCambio ?? ""}
-            onChange={e => {
-              const raw = e.target.value.replace(/[^0-9.,]/g, "").replace(",", ".");
-              const n = parseFloat(raw);
-              onUpdate({ tipoCambio: raw === "" || isNaN(n) ? null : n });
-            }} />
+          <TipoCambioInput value={data.tipoCambio} onChange={v => onUpdate({ tipoCambio: v })} className="text-right" />
         </FieldGroup>
 
         <FieldGroup label="Total CLP (calculado)">
