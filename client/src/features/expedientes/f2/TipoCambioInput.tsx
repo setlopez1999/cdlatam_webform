@@ -19,7 +19,7 @@ export function TipoCambioInput({ value, onChange, className }: {
   }, [value]);
 
   return (
-    <Input type="text" inputMode="decimal" className={className} placeholder="1.0000" maxLength={12}
+    <Input type="text" inputMode="decimal" className={className} placeholder="0" maxLength={12}
       value={display}
       onChange={e => {
         setDisplay(e.target.value);
