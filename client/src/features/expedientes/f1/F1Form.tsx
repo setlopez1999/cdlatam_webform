@@ -448,7 +448,7 @@ export default function F1Form({ expedienteId }: Props) {
 
       // Generar PDF de Features Resumido dinámico (SI/NO según implementación del expediente)
       // Se inyecta en el orden correcto dentro de createActaPdfBlob según ordenGlobal de las cláusulas
-      const featuresResumidoBytes = (implementacionQuery.data?.length ?? 0) > 0
+      const featuresResumidoBytes = (implementacionQuery.data?.length ?? 0) > 0 && implementacionQuery.data.some(i => i.estado)
         ? buildFeaturesResumidoPdfBytes(
             implementacionQuery.data!,
             data.razonSocial ?? "",
