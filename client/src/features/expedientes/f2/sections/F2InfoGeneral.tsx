@@ -164,8 +164,7 @@ function F2InfoGeneralInner({ data, onUpdate, catalogs, f1Suggestions, onImporta
             onChange={e => {
               const raw = e.target.value.replace(/[^0-9.,\-]/g, "").replace(",", ".");
               if (raw.endsWith(".")) return;
-              const n = parseFloat(raw);
-              if (!isNaN(n)) onUpdate({ tipoCambio: n > 0 ? n : 0 });
+              onUpdate({ tipoCambio: raw === "" || raw === "-" ? 0 : Math.max(0, parseFloat(raw)) });
             }} />
         </FieldGroup>
 

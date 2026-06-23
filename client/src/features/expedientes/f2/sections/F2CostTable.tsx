@@ -199,8 +199,7 @@ export const F2CostTable = memo(function F2CostTable({
                   onChange={e => {
                     const raw = e.target.value.replace(/[^0-9.,\-]/g, "").replace(",", ".");
                     if (raw.endsWith(".")) return;
-                    const n = parseFloat(raw);
-                    if (!isNaN(n)) onUpdate(row.id, "tipoCambio", n > 0 ? n : 0);
+                    onUpdate(row.id, "tipoCambio", raw === "" || raw === "-" ? 0 : Math.max(0, parseFloat(raw)));
                   }} />
               </td>
               <td className="px-1 py-1 min-w-[90px]">
@@ -327,8 +326,7 @@ export const F2RRHHTable = memo(function F2RRHHTable({
                   onChange={e => {
                     const raw = e.target.value.replace(/[^0-9.,\-]/g, "").replace(",", ".");
                     if (raw.endsWith(".")) return;
-                    const n = parseFloat(raw);
-                    if (!isNaN(n)) onUpdate(row.id, "tipoCambio", n > 0 ? n : 0);
+                    onUpdate(row.id, "tipoCambio", raw === "" || raw === "-" ? 0 : Math.max(0, parseFloat(raw)));
                   }} />
               </td>
               <td className="px-1 py-1 min-w-[90px]">
@@ -453,8 +451,7 @@ export const F2OtrosTable = memo(function F2OtrosTable({
                   onChange={e => {
                     const raw = e.target.value.replace(/[^0-9.,\-]/g, "").replace(",", ".");
                     if (raw.endsWith(".")) return;
-                    const n = parseFloat(raw);
-                    if (!isNaN(n)) onUpdate(row.id, "tipoCambio", n > 0 ? n : 0);
+                    onUpdate(row.id, "tipoCambio", raw === "" || raw === "-" ? 0 : Math.max(0, parseFloat(raw)));
                   }} />
               </td>
               <td className="px-1 py-1 min-w-[90px]">
