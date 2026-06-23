@@ -123,14 +123,14 @@ export interface FilaCosto {
   centroCosto: string;
   valorNeto: number;
   tipoMoneda: string;
-  tipoCambio: number;
+  tipoCambio: number | null;
   cantidad: number;
   totalNeto: number;
   iva: number;
   total: number;
   descripcionGasto: string;
   observacion: string;
-  cuota?: 1 | 2 | 3 | 4; // Cuota a la que se imputa el gasto
+  cuota?: 1 | 2 | 3 | 4;
 }
 
 export interface FilaRRHH {
@@ -140,14 +140,14 @@ export interface FilaRRHH {
   centroCosto: string;
   valorSinImpuesto: number;
   tipoMoneda: string;
-  tipoCambio: number;
+  tipoCambio: number | null;
   cantidad: number;
   totalNeto: number;
   impuesto: number;
   total: number;
   descripcionGasto: string;
   observacion: string;
-  cuota?: 1 | 2 | 3 | 4; // Cuota a la que se imputa el gasto
+  cuota?: 1 | 2 | 3 | 4;
 }
 
 export interface FilaOtros {
@@ -157,7 +157,7 @@ export interface FilaOtros {
   centroCosto: string;
   valorNeto: number;
   tipoMoneda: string;
-  tipoCambio: number;
+  tipoCambio: number | null;
   cantidad: number;
   totalNeto: number;
   iva: number;
@@ -177,7 +177,7 @@ export interface F2Data {
   solucion: string;
   tipoMoneda: string;
   montoProyecto: number;
-  tipoCambio: number;
+  tipoCambio: number | null;
   totalClp: number;
   descripcion: string;
   preventa: string;
@@ -200,7 +200,7 @@ export interface F2Data {
 
 export const F2_INITIAL: F2Data = {
   unidadNegocios: "", empresa: "", centroCostoHeader: "", solucion: "", tipoMoneda: "",
-  montoProyecto: 0, tipoCambio: 0, totalClp: 0,
+  montoProyecto: 0, tipoCambio: null, totalClp: 0,
   descripcion: "", preventa: "", fechaEntrega: "",
   ejecutivoComercial: "", plazoImplementacion: "", propuestaNumero: "",
   paisImplementacion: "", rut: "", nombreCliente: "", nombreFantasia: "",

@@ -160,11 +160,11 @@ function F2InfoGeneralInner({ data, onUpdate, catalogs, f1Suggestions, onImporta
 
         <FieldGroup label="Tipo de Cambio">
           <Input type="text" inputMode="decimal" className="text-right" placeholder="1.0000" maxLength={12}
-            value={data.tipoCambio || ""}
+            value={data.tipoCambio ?? ""}
             onChange={e => {
               const raw = e.target.value.replace(/[^0-9.,\-]/g, "").replace(",", ".");
               if (raw.endsWith(".")) return;
-              onUpdate({ tipoCambio: raw === "" || raw === "-" ? 0 : Math.max(0, parseFloat(raw)) });
+              onUpdate({ tipoCambio: raw === "" || raw === "-" ? null : parseFloat(raw) });
             }} />
         </FieldGroup>
 
