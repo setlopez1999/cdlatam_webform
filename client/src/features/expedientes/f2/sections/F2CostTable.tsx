@@ -195,7 +195,7 @@ export const F2CostTable = memo(function F2CostTable({
               </td>
               <td className="px-1 py-1 min-w-[80px]">
                 <Input type="text" inputMode="decimal" className="h-8 text-xs text-right w-full min-w-[62px]" placeholder="1" maxLength={12}
-                  value={row.tipoCambio || ""}
+                  value={row.tipoCambio ?? ""}
                   onChange={e => {
                     const raw = e.target.value.replace(/[^0-9.,]/g, "").replace(",", ".");
                     const n = parseFloat(raw);
