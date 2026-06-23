@@ -85,6 +85,7 @@ export function F1Consideraciones({
     () => lineasLibres(personalizadas, plantillasCatalogo),
     [personalizadas, plantillasCatalogo],
   );
+  const limiteAlcanzado = libres.length >= 3;
 
   const toggleCatalogo = (valorCatalogo: string, checked: boolean) => {
     const custom = lineasLibres(personalizadas, plantillasCatalogo);
@@ -105,12 +106,13 @@ export function F1Consideraciones({
     onUpdate({ consideracionesPersonalizadas: [...ordered, ...custom] });
   };
 
+  const LIMITE_LIBRES = 3;
   const agregarLibre = () => {
     const texto = nuevoItem.trim();
     if (!texto) return;
+    if (libres.length >= LIMITE_LIBRES) return;
     const catalogo = bloqueCatalogoOrdenado(plantillasCatalogo, personalizadas);
-    const lib = lineasLibres(personalizadas, plantillasCatalogo);
-    onUpdate({ consideracionesPersonalizadas: [...catalogo, ...lib, texto] });
+    onUpdate({ consideracionesPersonalizadas: [...catalogo, ...libres, texto] });
     setNuevoItem("");
   };
 
@@ -225,6 +227,7 @@ export function F1Consideraciones({
               className="h-9 text-sm flex-1"
               placeholder="Escribe una línea y pulsa Agregar…"
               value={nuevoItem}
+              disabled={limiteAlcanzado}
               onChange={e => setNuevoItem(e.target.value)}
               onKeyDown={e => {
                 if (e.key === "Enter") {
@@ -233,10 +236,13 @@ export function F1Consideraciones({
                 }
               }}
             />
-            <Button type="button" variant="outline" size="sm" onClick={agregarLibre} className="h-9 shrink-0">
+            <Button type="button" variant="outline" size="sm" onClick={agregarLibre} className="h-9 shrink-0" disabled={limiteAlcanzado}>
               <Plus className="w-3.5 h-3.5 mr-1" /> Agregar
             </Button>
           </div>
+          {limiteAlcanzado && (
+            <p className="text-xs text-muted-foreground mt-1">Máximo 3 líneas adicionales. Elimina una existente para agregar otra.</p>
+          )}
         </div>
 
         {/* ── Cláusulas legales adjuntas (auto, según unidades en Servicios) ── */}

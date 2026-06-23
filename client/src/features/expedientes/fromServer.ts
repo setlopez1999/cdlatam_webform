@@ -39,7 +39,7 @@ function f2ScalarsFromDb(ev: Record<string, unknown>): Pick<F2Data, (typeof F2_S
   const out = {} as Pick<F2Data, (typeof F2_SYNC_SCALAR_KEYS)[number]>;
   for (const key of F2_SYNC_SCALAR_KEYS) {
     if (key === "montoProyecto" || key === "tipoCambio" || key === "totalClp") {
-      out[key] = Number(ev[key] ?? (key === "tipoCambio" ? 1 : 0)) as F2Data[typeof key];
+      out[key] = Number(ev[key] ?? 0) as F2Data[typeof key];
     } else if (key === "fechaEntrega") {
       out[key] = isoDate(ev[key]);
     } else {

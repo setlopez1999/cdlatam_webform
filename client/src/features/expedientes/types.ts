@@ -200,7 +200,7 @@ export interface F2Data {
 
 export const F2_INITIAL: F2Data = {
   unidadNegocios: "", empresa: "", centroCostoHeader: "", solucion: "", tipoMoneda: "",
-  montoProyecto: 0, tipoCambio: 1, totalClp: 0,
+  montoProyecto: 0, tipoCambio: 0, totalClp: 0,
   descripcion: "", preventa: "", fechaEntrega: "",
   ejecutivoComercial: "", plazoImplementacion: "", propuestaNumero: "",
   paisImplementacion: "", rut: "", nombreCliente: "", nombreFantasia: "",

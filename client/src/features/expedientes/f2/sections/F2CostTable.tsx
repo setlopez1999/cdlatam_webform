@@ -194,13 +194,13 @@ export const F2CostTable = memo(function F2CostTable({
                 </Select>
               </td>
               <td className="px-1 py-1 min-w-[80px]">
-                <Input type="text" inputMode="decimal" className="h-8 text-xs text-right w-full min-w-[62px]" placeholder="1"
-                  value={row.tipoCambio ?? ""}
+                <Input type="text" inputMode="decimal" className="h-8 text-xs text-right w-full min-w-[62px]" placeholder="1" maxLength={12}
+                  value={row.tipoCambio || ""}
                   onChange={e => {
                     const raw = e.target.value.replace(/[^0-9.,\-]/g, "").replace(",", ".");
-                    if (raw === "" || raw === "-" || raw.endsWith(".")) return;
+                    if (raw.endsWith(".")) return;
                     const n = parseFloat(raw);
-                    if (!isNaN(n)) onUpdate(row.id, "tipoCambio", n);
+                    if (!isNaN(n)) onUpdate(row.id, "tipoCambio", n > 0 ? n : 0);
                   }} />
               </td>
               <td className="px-1 py-1 min-w-[90px]">
@@ -322,13 +322,13 @@ export const F2RRHHTable = memo(function F2RRHHTable({
                 </Select>
               </td>
               <td className="px-1 py-1 min-w-[80px]">
-                <Input type="text" inputMode="decimal" className="h-8 text-xs text-right w-full min-w-[62px]" placeholder="1"
-                  value={row.tipoCambio ?? ""}
+                <Input type="text" inputMode="decimal" className="h-8 text-xs text-right w-full min-w-[62px]" placeholder="1" maxLength={12}
+                  value={row.tipoCambio || ""}
                   onChange={e => {
                     const raw = e.target.value.replace(/[^0-9.,\-]/g, "").replace(",", ".");
-                    if (raw === "" || raw === "-" || raw.endsWith(".")) return;
+                    if (raw.endsWith(".")) return;
                     const n = parseFloat(raw);
-                    if (!isNaN(n)) onUpdate(row.id, "tipoCambio", n);
+                    if (!isNaN(n)) onUpdate(row.id, "tipoCambio", n > 0 ? n : 0);
                   }} />
               </td>
               <td className="px-1 py-1 min-w-[90px]">
@@ -448,13 +448,13 @@ export const F2OtrosTable = memo(function F2OtrosTable({
                 </Select>
               </td>
               <td className="px-1 py-1 min-w-[80px]">
-                <Input type="text" inputMode="decimal" className="h-8 text-xs text-right w-full min-w-[62px]" placeholder="1"
-                  value={row.tipoCambio ?? ""}
+                <Input type="text" inputMode="decimal" className="h-8 text-xs text-right w-full min-w-[62px]" placeholder="1" maxLength={12}
+                  value={row.tipoCambio || ""}
                   onChange={e => {
                     const raw = e.target.value.replace(/[^0-9.,\-]/g, "").replace(",", ".");
-                    if (raw === "" || raw === "-" || raw.endsWith(".")) return;
+                    if (raw.endsWith(".")) return;
                     const n = parseFloat(raw);
-                    if (!isNaN(n)) onUpdate(row.id, "tipoCambio", n);
+                    if (!isNaN(n)) onUpdate(row.id, "tipoCambio", n > 0 ? n : 0);
                   }} />
               </td>
               <td className="px-1 py-1 min-w-[90px]">

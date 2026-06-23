@@ -159,13 +159,13 @@ function F2InfoGeneralInner({ data, onUpdate, catalogs, f1Suggestions, onImporta
         </FieldGroup>
 
         <FieldGroup label="Tipo de Cambio">
-          <Input type="text" inputMode="decimal" className="text-right" placeholder="1.0000"
-            value={data.tipoCambio ?? ""}
+          <Input type="text" inputMode="decimal" className="text-right" placeholder="1.0000" maxLength={12}
+            value={data.tipoCambio || ""}
             onChange={e => {
               const raw = e.target.value.replace(/[^0-9.,\-]/g, "").replace(",", ".");
-              if (raw === "" || raw === "-" || raw.endsWith(".")) return;
+              if (raw.endsWith(".")) return;
               const n = parseFloat(raw);
-              if (!isNaN(n)) onUpdate({ tipoCambio: n });
+              if (!isNaN(n)) onUpdate({ tipoCambio: n > 0 ? n : 0 });
             }} />
         </FieldGroup>
 
