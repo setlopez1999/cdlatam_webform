@@ -8,6 +8,7 @@ import {
   resolveHeaderColor,
   fitImagePreserveAspectMm,
   drawHeaderBand,
+  USAR_LOGO_EMPRESA,
 } from "./constants";
 import cdlatamLogoOnBrand from "@/assets/cdlatam-logo-on-brand.png";
 
@@ -32,7 +33,7 @@ export function drawSharedHeader(
   margin: number,
   pageWidth: number,
   y: number,
-  opts?: HeaderOptions,
+  opts?: HeaderOptions & { empresaLogoBase64?: string },
 ): number {
   const bandH = opts?.bandHeightMm ?? DEFAULTS.bandHeightMm;
   const topM = opts?.topMarginMm ?? DEFAULTS.topMarginMm;
@@ -48,7 +49,11 @@ export function drawSharedHeader(
     const { drawW, drawH } = fitImagePreserveAspectMm(LOGO_NATURAL_W_PX, LOGO_NATURAL_H_PX, boxW, boxH);
     const imgX = margin;
     const imgY = y + topM + (bandH - drawH) / 2;
-    doc.addImage(cdlatamLogoOnBrand, "PNG", imgX, imgY, drawW, drawH, undefined, "FAST");
+    if (USAR_LOGO_EMPRESA && opts?.empresaLogoBase64) {
+      doc.addImage(opts.empresaLogoBase64, "PNG", imgX, imgY, drawW, drawH, undefined, "FAST");
+    } else {
+      doc.addImage(cdlatamLogoOnBrand, "PNG", imgX, imgY, drawW, drawH, undefined, "FAST");
+    }
   } catch { /* omitir si falla */ }
 
   const bandMid = y + topM + bandH / 2;

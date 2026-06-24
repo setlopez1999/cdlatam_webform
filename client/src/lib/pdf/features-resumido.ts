@@ -15,6 +15,9 @@ import autoTable from "jspdf-autotable";
 // Logo pre-compuesto sobre fondo azul CDLatam (sin transparencia → no se ve "engranado" en jsPDF)
 import cdlatamLogoOnBrand from "@/assets/cdlatam-logo-on-brand.png";
 
+// ── Mostrar/ocultar columna N° en la tabla ──────────────────────────────
+const MOSTRAR_NUMERACION = false;
+
 /**
  * Genera el PDF "Especificaciones y Matriz de Features".
  * Membrete: franja del color de membrete configurado (PDF_HEADER_COLOR por defecto).
@@ -86,24 +89,28 @@ export function buildFeaturesUnoPdfBytes(
   // ── Tabla de features ────────────────────────────────────────────────────────
   const startY = TOP_MARGIN + HEADER_H + BOTTOM_GAP;
 
-  // Anchos de columna: N° | Módulo/Componente | Descripción | Incluye
-  // Módulo: 28%, Descripción: 72%, Incluye: columna fija angosta
-  const colNro = 10;
+  // Anchos de columna: [N°] | Módulo/Componente | Descripción | Incluye
   const colIncluye = 18; // columna única SI/NO fusionada
+  const colNro = MOSTRAR_NUMERACION ? 10 : 0;
   const available = contentWidth - colNro - colIncluye;
   const colLabel = Math.floor(available * 0.28);  // Módulo/Componente: 28%
   const colDesc = available - colLabel;            // Descripción: 72% restante
 
   const tableRows = items.map((item, idx) => [
-    String(idx + 1),
+    ...(MOSTRAR_NUMERACION ? [String(idx + 1)] : []),
     item.label,
-    item.descripcion || "",   // ← descripcion técnica del feature
+    item.descripcion || "",
     item.estado ? "SI" : "NO",
   ]);
 
   autoTable(doc, {
     startY,
-    head: [["N°", "Módulo / Componente", "Descripción", "Incluye"]],
+    head: [[
+      ...(MOSTRAR_NUMERACION ? ["N°"] : []),
+      "Módulo / Componente",
+      "Descripción",
+      "Incluye",
+    ]],
     body: tableRows,
     margin: { left: margin, right: margin, top: TOP_MARGIN + HEADER_H + BOTTOM_GAP },
     tableWidth: contentWidth,
@@ -120,15 +127,20 @@ export function buildFeaturesUnoPdfBytes(
       fontStyle: "bold",
       halign: "center",
     },
-    columnStyles: {
-      0: { cellWidth: colNro, halign: "center" },
-      1: { cellWidth: colLabel },
-      2: { cellWidth: colDesc, textColor: COLOR_GRAY as [number, number, number], fontSize: 7.5 },
-      3: { cellWidth: colIncluye, halign: "center", fontStyle: "bold" },
-    },
+    columnStyles: (() => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const cs: Record<string, any> = {};
+      let ci = 0;
+      if (MOSTRAR_NUMERACION) cs[ci++] = { cellWidth: colNro, halign: "center" };
+      cs[ci++] = { cellWidth: colLabel };
+      cs[ci++] = { cellWidth: colDesc, textColor: COLOR_GRAY as [number, number, number], fontSize: 7.5 };
+      cs[ci++] = { cellWidth: colIncluye, halign: "center", fontStyle: "bold" };
+      return cs;
+    })(),
     alternateRowStyles: { fillColor: COLOR_LIGHT as [number, number, number] },
     didParseCell: (data) => {
-      if (data.section === "body" && data.column.index === 3) {
+      const incluyeIdx = MOSTRAR_NUMERACION ? 3 : 2;
+      if (data.section === "body" && data.column.index === incluyeIdx) {
         if (data.cell.raw === "SI") {
           data.cell.styles.textColor = [16, 185, 129] as [number, number, number]; // verde
           data.cell.styles.fontStyle = "bold";

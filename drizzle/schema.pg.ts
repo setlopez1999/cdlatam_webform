@@ -282,6 +282,7 @@ export const catalogPaises = pgTable("catalog_paises", {
 export const catalogEmpresas = pgTable("catalog_empresas", {
   id: serial("id").primaryKey(),
   valor: text("valor").notNull().unique(),
+  logoBase64: text("logoBase64"),
   activo: integer("activo").default(1).notNull(),
 });
 

@@ -5,7 +5,25 @@ import {
   integer,
   real,
   uniqueIndex,
+  customType,
 } from "drizzle-orm/sqlite-core";
+
+// Tipo timestamp que acepta string (PG) o número (SQLite epoch seconds)
+const tsCol = customType<{ data: Date; driverParam: number | string }>({
+  dataType: () => "integer",
+  fromDriver(value: unknown): Date {
+    if (typeof value === "string") {
+      const iso = value.includes("T") ? value : value.replace(" ", "T");
+      return new Date(
+        iso.endsWith("Z") || /[+-]\d{2}:\d{2}$/.test(iso) ? iso : iso + "Z",
+      );
+    }
+    return new Date((value as number) * 1000);
+  },
+  toDriver(value: Date): number {
+    return Math.floor(value.getTime() / 1000);
+  },
+});
 
 // â”€â”€â”€ Roles del sistema â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export const roles = sqliteTable("roles", {
@@ -14,8 +32,8 @@ export const roles = sqliteTable("roles", {
   label: text("label").notNull(),
   descripcion: text("descripcion"),
   activo: integer("activo").default(1).notNull(),
-  createdAt: integer("createdAt", { mode: "timestamp" }).default(sql`(strftime('%s', 'now'))`).notNull(),
-  updatedAt: integer("updatedAt", { mode: "timestamp" }).default(sql`(strftime('%s', 'now'))`).notNull(),
+  createdAt: tsCol("createdAt").default(sql`(strftime('%s', 'now'))`).notNull(),
+  updatedAt: tsCol("updatedAt").default(sql`(strftime('%s', 'now'))`).notNull(),
 });
 
 export type Role = typeof roles.$inferSelect;
@@ -35,7 +53,7 @@ export const actas = sqliteTable("actas", {
   // Encabezado
   noActa: text("noActa"),
   atencion: text("atencion"),
-  fecha: integer("fecha", { mode: "timestamp" }),
+  fecha: tsCol("fecha"),
 
   // Datos Empresa
   razonSocial: text("razonSocial"),
@@ -73,10 +91,10 @@ export const actas = sqliteTable("actas", {
   f1Datos: text("f1Datos", { mode: "json" }),
   /** Estado UI del slot F1: nuevo | sin_guardar | guardado */
   f1FormStatus: text("f1FormStatus").default("nuevo").notNull(),
-  f1SavedAt: integer("f1SavedAt", { mode: "timestamp" }),
+  f1SavedAt: tsCol("f1SavedAt"),
 
-  createdAt: integer("createdAt", { mode: "timestamp" }).default(sql`(strftime('%s', 'now'))`).notNull(),
-  updatedAt: integer("updatedAt", { mode: "timestamp" }).default(sql`(strftime('%s', 'now'))`).notNull(),
+  createdAt: tsCol("createdAt").default(sql`(strftime('%s', 'now'))`).notNull(),
+  updatedAt: tsCol("updatedAt").default(sql`(strftime('%s', 'now'))`).notNull(),
 });
 
 export type Acta = typeof actas.$inferSelect;
@@ -101,7 +119,7 @@ export const evaluaciones = sqliteTable("evaluaciones", {
   totalClp: real("totalClp"),
   descripcion: text("descripcion"),
   preventa: text("preventa"),
-  fechaEntrega: integer("fechaEntrega", { mode: "timestamp" }),
+  fechaEntrega: tsCol("fechaEntrega"),
   ejecutivoComercial: text("ejecutivoComercial"),
   plazoImplementacion: text("plazoImplementacion"),
   propuestaNumero: text("propuestaNumero"),
@@ -127,13 +145,13 @@ export const evaluaciones = sqliteTable("evaluaciones", {
 
   /** Estado UI del slot F2 */
   f2FormStatus: text("f2FormStatus").default("nuevo").notNull(),
-  f2SavedAt: integer("f2SavedAt", { mode: "timestamp" }),
+  f2SavedAt: tsCol("f2SavedAt"),
 
   // Estado workflow EP
   status: text("status").default("borrador").notNull(),
 
-  createdAt: integer("createdAt", { mode: "timestamp" }).default(sql`(strftime('%s', 'now'))`).notNull(),
-  updatedAt: integer("updatedAt", { mode: "timestamp" }).default(sql`(strftime('%s', 'now'))`).notNull(),
+  createdAt: tsCol("createdAt").default(sql`(strftime('%s', 'now'))`).notNull(),
+  updatedAt: tsCol("updatedAt").default(sql`(strftime('%s', 'now'))`).notNull(),
 });
 
 export type Evaluacion = typeof evaluaciones.$inferSelect;
@@ -148,9 +166,9 @@ export const users = sqliteTable("users", {
   role: text("role").default("user").notNull(),   // fallback string
   roleId: integer("roleId"),                       // FK blanda a roles.id
   isActive: integer("isActive").default(1).notNull(),
-  createdAt: integer("createdAt", { mode: "timestamp" }).default(sql`(strftime('%s', 'now'))`).notNull(),
-  updatedAt: integer("updatedAt", { mode: "timestamp" }).default(sql`(strftime('%s', 'now'))`).notNull(),
-  lastSignedIn: integer("lastSignedIn", { mode: "timestamp" }),
+  createdAt: tsCol("createdAt").default(sql`(strftime('%s', 'now'))`).notNull(),
+  updatedAt: tsCol("updatedAt").default(sql`(strftime('%s', 'now'))`).notNull(),
+  lastSignedIn: tsCol("lastSignedIn"),
 });
 
 export type User = typeof users.$inferSelect;
@@ -165,7 +183,7 @@ export const userRoles = sqliteTable("user_roles", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   userId: integer("userId").notNull(),
   roleId: integer("roleId").notNull(),
-  assignedAt: integer("assignedAt", { mode: "timestamp" }).default(sql`(strftime('%s', 'now'))`).notNull(),
+  assignedAt: tsCol("assignedAt").default(sql`(strftime('%s', 'now'))`).notNull(),
 });
 
 export type UserRole = typeof userRoles.$inferSelect;
@@ -179,8 +197,8 @@ export const schEmpleados = sqliteTable("sch_empleados", {
   apellido: text("apellido").notNull(),
   cargo: text("cargo"),
   activo: integer("activo").default(1).notNull(),
-  createdAt: integer("createdAt", { mode: "timestamp" }).default(sql`(strftime('%s', 'now'))`).notNull(),
-  updatedAt: integer("updatedAt", { mode: "timestamp" }).default(sql`(strftime('%s', 'now'))`).notNull(),
+  createdAt: tsCol("createdAt").default(sql`(strftime('%s', 'now'))`).notNull(),
+  updatedAt: tsCol("updatedAt").default(sql`(strftime('%s', 'now'))`).notNull(),
 });
 
 export type SchEmpleado = typeof schEmpleados.$inferSelect;
@@ -196,8 +214,8 @@ export const schContratos = sqliteTable("sch_contratos", {
   tipoDistribucion: text("tipoDistribucion").default("normal").notNull(),
   mismasHorasDiarias: integer("mismasHorasDiarias").default(1).notNull(),
   activo: integer("activo").default(1).notNull(),
-  createdAt: integer("createdAt", { mode: "timestamp" }).default(sql`(strftime('%s', 'now'))`).notNull(),
-  updatedAt: integer("updatedAt", { mode: "timestamp" }).default(sql`(strftime('%s', 'now'))`).notNull(),
+  createdAt: tsCol("createdAt").default(sql`(strftime('%s', 'now'))`).notNull(),
+  updatedAt: tsCol("updatedAt").default(sql`(strftime('%s', 'now'))`).notNull(),
 });
 
 export type SchContrato = typeof schContratos.$inferSelect;
@@ -209,7 +227,7 @@ export const schBloquesHorario = sqliteTable("sch_bloques_horario", {
   diaSemana: integer("diaSemana").notNull(),
   horaInicio: text("horaInicio").notNull(),
   horaFin: text("horaFin").notNull(),
-  createdAt: integer("createdAt", { mode: "timestamp" }).default(sql`(strftime('%s', 'now'))`).notNull(),
+  createdAt: tsCol("createdAt").default(sql`(strftime('%s', 'now'))`).notNull(),
 });
 
 export type SchBloqueHorario = typeof schBloquesHorario.$inferSelect;
@@ -302,6 +320,7 @@ export const catalogPaises = sqliteTable("catalog_paises", {
 export const catalogEmpresas = sqliteTable("catalog_empresas", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   valor: text("valor").notNull().unique(),
+  logoBase64: text("logoBase64"),
   activo: integer("activo").default(1).notNull(),
 });
 
@@ -482,7 +501,7 @@ export const catalogMeta = sqliteTable("catalog_meta", {
   title: text("title").notNull(),
   isCustom: integer("is_custom").default(0).notNull(),
   linkedField: text("linked_field"),
-  createdAt: integer("created_at", { mode: "timestamp" }).default(sql`(strftime('%s', 'now'))`).notNull(),
+  createdAt: tsCol("created_at").default(sql`(strftime('%s', 'now'))`).notNull(),
 });
 
 export type CatalogMetaRow = typeof catalogMeta.$inferSelect;
@@ -530,8 +549,8 @@ export const expedientes = sqliteTable("expedientes", {
   nombre: text("nombre").notNull(),
   creadorId: integer("creadorId").notNull(),       // FK blanda â†’ users.id
   status: text("status").default("borrador").notNull(), // "borrador" | "en_proceso" | "completado"
-  createdAt: integer("createdAt", { mode: "timestamp" }).default(sql`(strftime('%s', 'now'))`).notNull(),
-  updatedAt: integer("updatedAt", { mode: "timestamp" }).default(sql`(strftime('%s', 'now'))`).notNull(),
+  createdAt: tsCol("createdAt").default(sql`(strftime('%s', 'now'))`).notNull(),
+  updatedAt: tsCol("updatedAt").default(sql`(strftime('%s', 'now'))`).notNull(),
   /** Timestamp Unix de borrado suave (NULL = activo, valor = en papelera). */
   deletedAt: integer("deleted_at"),
 });
@@ -546,9 +565,9 @@ export const resultadosExpediente = sqliteTable("resultados_expediente", {
   /** JSON: salida de calcularResultadoF3 u objeto extendido */
   payload: text("payload", { mode: "json" }).notNull(),
   f3FormStatus: text("f3FormStatus").default("nuevo").notNull(),
-  f3SavedAt: integer("f3SavedAt", { mode: "timestamp" }),
-  createdAt: integer("createdAt", { mode: "timestamp" }).default(sql`(strftime('%s', 'now'))`).notNull(),
-  updatedAt: integer("updatedAt", { mode: "timestamp" }).default(sql`(strftime('%s', 'now'))`).notNull(),
+  f3SavedAt: tsCol("f3SavedAt"),
+  createdAt: tsCol("createdAt").default(sql`(strftime('%s', 'now'))`).notNull(),
+  updatedAt: tsCol("updatedAt").default(sql`(strftime('%s', 'now'))`).notNull(),
 });
 
 export type ResultadoExpediente = typeof resultadosExpediente.$inferSelect;
@@ -566,8 +585,8 @@ export const implementaciones = sqliteTable(
     checkKey: text("checkKey").notNull(),
     /** 0 = no, 1 = sÃ­ */
     estado: integer("estado").notNull().default(0),
-    createdAt: integer("createdAt", { mode: "timestamp" }).default(sql`(strftime('%s', 'now'))`).notNull(),
-    updatedAt: integer("updatedAt", { mode: "timestamp" }).default(sql`(strftime('%s', 'now'))`).notNull(),
+    createdAt: tsCol("createdAt").default(sql`(strftime('%s', 'now'))`).notNull(),
+    updatedAt: tsCol("updatedAt").default(sql`(strftime('%s', 'now'))`).notNull(),
   },
   table => [
     uniqueIndex("implementaciones_expedienteId_checkKey_unique").on(table.expedienteId, table.checkKey),
@@ -597,7 +616,7 @@ export const auditLog = sqliteTable("audit_log", {
   actaCodigo: text("actaCodigo"),
   changes: text("changes", { mode: "json" }),      // { before, after } o null
   ip: text("ip"),
-  createdAt: integer("createdAt", { mode: "timestamp" }).default(sql`(strftime('%s', 'now'))`).notNull(),
+  createdAt: tsCol("createdAt").default(sql`(strftime('%s', 'now'))`).notNull(),
 });
 
 export type AuditLog = typeof auditLog.$inferSelect;
@@ -627,7 +646,7 @@ export const catalogClausulas = sqliteTable("catalog_clausulas", {
    * Convencion inicial: clausulas=20-29, anexo_soporte=99
    */
   ordenGlobal: integer("orden_global").default(50).notNull(),
-  createdAt: integer("createdAt", { mode: "timestamp" }).default(sql`(strftime('%s', 'now'))`).notNull(),
+  createdAt: tsCol("createdAt").default(sql`(strftime('%s', 'now'))`).notNull(),
 });
 
 export type CatalogClausula = typeof catalogClausulas.$inferSelect;

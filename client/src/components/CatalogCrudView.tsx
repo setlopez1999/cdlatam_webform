@@ -279,6 +279,58 @@ export function CatalogCrudView({ config }: { config: CatalogConfig }) {
       );
     }
 
+    if (field.type === "image") {
+      return (
+        <div key={field.key} className="space-y-2">
+          <Label className="text-sm font-medium text-slate-300">
+            {field.label} {field.required && <span className="text-red-400">*</span>}
+          </Label>
+          {value && (
+            <div className="relative inline-block border border-white/10 rounded-lg overflow-hidden">
+              <img
+                src={value}
+                alt="Preview"
+                className="max-h-[100px] w-auto object-contain"
+                onLoad={(e) => {
+                  const img = e.currentTarget;
+                  const hint = img.closest(".space-y-2")?.querySelector(".dimension-hint");
+                  if (hint) hint.textContent = `${img.naturalWidth}×${img.naturalHeight} px`;
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => setFormData({ ...formData, [field.key]: "" })}
+                className="absolute top-1 right-1 w-5 h-5 bg-red-500/80 hover:bg-red-500 text-white rounded-full text-xs flex items-center justify-center"
+                title="Eliminar logo"
+              >
+                ✕
+              </button>
+            </div>
+          )}
+          <div className="flex items-center gap-3">
+            <label className="cursor-pointer inline-flex items-center gap-2 px-3 py-1.5 bg-[#242b3d] hover:bg-[#2a3248] border border-white/10 rounded-lg text-xs text-slate-300 transition-colors">
+              <input
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  const reader = new FileReader();
+                  reader.onload = (ev) => {
+                    setFormData({ ...formData, [field.key]: ev.target?.result as string });
+                  };
+                  reader.readAsDataURL(file);
+                }}
+              />
+              {value ? "Cambiar imagen" : "Seleccionar imagen"}
+            </label>
+            <span className="text-xs text-slate-500 dimension-hint">387×50 px recomendado</span>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div key={field.key} className="space-y-1.5">
         <Label className="text-sm font-medium text-slate-300">

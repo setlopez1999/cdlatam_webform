@@ -225,7 +225,7 @@ export async function ds_getCatalogOptions() {
         .orderBy(asc(catalogConsideracionesComerciales.orden), asc(catalogConsideracionesComerciales.id)),
     ]);
   return {
-    empresas:           toOptions(empresas),
+    empresas:           empresas.map(r => ({ value: r.valor, label: r.valor, logoBase64: r.logoBase64 })),
     nombres:            toOptions(nombres),
     monedas:            toOptions(monedas),
     documentoIdentidad: toOptions(documentoIdentidad),

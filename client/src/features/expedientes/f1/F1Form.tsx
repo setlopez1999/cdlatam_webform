@@ -182,6 +182,12 @@ export default function F1Form({ expedienteId }: Props) {
     [catalogs],
   );
 
+  const empresaLogoBase64 = useMemo(() => {
+    if (!catalogs?.empresas || !data?.sres) return undefined;
+    const empresa = (catalogs.empresas as any[]).find((e: any) => e.value === data!.sres);
+    return empresa?.logoBase64 ?? undefined;
+  }, [catalogs, data?.sres]);
+
   const plantillasConsideraciones = useMemo(
     () => catalogs?.consideracionesComerciales ?? [],
     [catalogs],
@@ -473,6 +479,7 @@ export default function F1Form({ expedienteId }: Props) {
           // Número real de acta para generar VS-10001 en el membrete del PDF
           serverNroActa: expedienteDelStore?.serverNroActa ?? null,
           serverUnidadNegocio: data?.serviciosContratados?.[0]?.unidadNegocio ?? "",
+          empresaLogoBase64,
         },
       );
       if (PDF_USE_NATIVE_PRINT) {
@@ -539,6 +546,7 @@ export default function F1Form({ expedienteId }: Props) {
         catalogs={catalogsEncabezado}
         serverNroActa={expedienteDelStore?.serverNroActa ?? null}
         serviciosContratados={data.serviciosContratados}
+        empresaLogoBase64={empresaLogoBase64}
       />
 
       <F1Empresa

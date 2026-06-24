@@ -8,6 +8,13 @@
       "when": 1781725748068,
       "tag": "0000_even_lady_bullseye",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1782000000000,
+      "tag": "0001_add_logo_base64",
+      "breakpoints": true
     }
   ]
 }

@@ -26,7 +26,7 @@ async function buildActaPdfBytes(acta: ActaData, opts: ActaPdfExportOpts = {}): 
   let y = 0;
 
   // 1. Header
-  y = drawHeaderSection(doc, lo, acta.noActa || "", acta.fecha, margin, pageWidth, y);
+  y = drawHeaderSection(doc, lo, acta.noActa || "", acta.fecha, margin, pageWidth, y, undefined, opts.empresaLogoBase64);
 
   // 2. Encabezado
   y = drawEncabezado(doc, lo, acta, margin, y, contentWidth);
@@ -117,6 +117,7 @@ export async function createActaPdfBlob(
             bandHeightMm: 5,
             topMarginMm: 2,
             bottomGapMm: 4,
+            empresaLogoBase64: opts.empresaLogoBase64,
           });
           const hdrBytes = tempDoc.output("arraybuffer") as Uint8Array;
           const hdrPdf = await PDFDocument.load(hdrBytes);

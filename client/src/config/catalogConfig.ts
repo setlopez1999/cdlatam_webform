@@ -1,4 +1,4 @@
-export type FieldType = "text" | "textarea" | "number" | "select" | "boolean";
+export type FieldType = "text" | "textarea" | "number" | "select" | "boolean" | "image";
 
 export interface CatalogField {
   key: string;
@@ -52,6 +52,7 @@ export const catalogConfigs: Record<string, CatalogConfig> = {
     bgColor: "bg-blue-500/10",
     fields: [
       { key: "valor", label: "Valor", type: "text", required: true },
+      { key: "logoBase64", label: "Logo (387×50 px recomendado)", type: "image", hiddenInTable: true },
       { key: "activo", label: "Activo", type: "boolean",  },
     ],
   },

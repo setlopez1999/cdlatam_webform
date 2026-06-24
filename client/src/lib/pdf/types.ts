@@ -25,6 +25,8 @@ export type ActaPdfExportOpts = {
   serverNroActa?: number | null;
   /** Primera unidad de negocio del acta para el prefijo VS/TX/IN/RD/HO */
   serverUnidadNegocio?: string;
+  /** Logo de la empresa (data URL) para dibujar en el membrete en lugar del logo CDLatam */
+  empresaLogoBase64?: string;
 };
 
 export interface PdfLayout {

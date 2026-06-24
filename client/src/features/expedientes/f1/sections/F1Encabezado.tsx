@@ -17,7 +17,7 @@ import { buildActaCodigo } from "@shared/documentCodes";
 const TEXTO_INTRODUCTORIO_DEFAULT =
   "Por medio de la presente, confirmo la recepción y aprobación de la propuesta comercial, en los términos y condiciones aquí expresados.";
 
-export interface CatalogItem { value: string; label: string; }
+export interface CatalogItem { value: string; label: string; logoBase64?: string; }
 
 interface Props {
   data: F1Data;
@@ -30,9 +30,11 @@ interface Props {
   serverNroActa?: number | null;
   /** Servicios contratados para extraer la primera unidad de negocio en tiempo real */
   serviciosContratados?: Array<{ unidadNegocio?: string }>;
+  /** Logo de la empresa seleccionada (data URL) para previsualización */
+  empresaLogoBase64?: string;
 }
 
-export function F1Encabezado({ data, onUpdate, catalogs, serverNroActa, serviciosContratados }: Props) {
+export function F1Encabezado({ data, onUpdate, catalogs, serverNroActa, serviciosContratados, empresaLogoBase64 }: Props) {
   // Preview del código en tiempo real: usa la primera unidad de negocio y el nroActa del servidor
   const primeraUnidad = (serviciosContratados ?? [])[0]?.unidadNegocio ?? "";
   const codigoPreview = serverNroActa
@@ -68,6 +70,15 @@ export function F1Encabezado({ data, onUpdate, catalogs, serverNroActa, servicio
               value={data.sres}
               onChange={e => onUpdate({ sres: e.target.value })}
             />
+          )}
+          {empresaLogoBase64 && (
+            <div className="mt-2 border border-white/10 rounded-lg overflow-hidden inline-block">
+              <img
+                src={empresaLogoBase64}
+                alt="Logo empresa"
+                className="max-h-[50px] w-auto object-contain"
+              />
+            </div>
           )}
         </FieldGroup>
 
