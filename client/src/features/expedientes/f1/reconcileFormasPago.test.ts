@@ -3,6 +3,7 @@ import {
   reconcileFormasPagoDesdeServicios,
   formasReconcilePatchOrNull,
   computeTotalDescuentoMantencion,
+  distributeTotalAcrossCuotas,
 } from "./reconcileFormasPago";
 import type { F1Data, FormaPago, ServicioContratado } from "../types";
 import { F1_INITIAL } from "../types";
@@ -283,4 +284,73 @@ describe("reconcileFormasPagoDesdeServicios", () => {
     expect(computeTotalDescuentoMantencion(data)).toBe(100);
   });
 
+});
+
+describe("distributeTotalAcrossCuotas", () => {
+  it("distribuye equitativamente montos divisibles", () => {
+    const cuotas = distributeTotalAcrossCuotas(200, 2);
+    expect(cuotas[0].monto).toBe(100);
+    expect(cuotas[1].monto).toBe(100);
+  });
+
+  it("asigna el remanente a la última cuota", () => {
+    const cuotas = distributeTotalAcrossCuotas(100, 3);
+    expect(cuotas[0].monto).toBe(33.33);
+    expect(cuotas[1].monto).toBe(33.33);
+    expect(cuotas[2].monto).toBe(33.34);
+  });
+
+  it("soporta 1 cuota (todo a la primera)", () => {
+    const cuotas = distributeTotalAcrossCuotas(500, 1);
+    expect(cuotas[0].monto).toBe(500);
+    expect(cuotas[1].monto).toBe(0);
+  });
+
+  it("soporta 4 cuotas", () => {
+    const cuotas = distributeTotalAcrossCuotas(1000, 4);
+    expect(cuotas[0].monto).toBe(250);
+    expect(cuotas[1].monto).toBe(250);
+    expect(cuotas[2].monto).toBe(250);
+    expect(cuotas[3].monto).toBe(250);
+  });
+
+  it("retorna ceros si el total es 0", () => {
+    const cuotas = distributeTotalAcrossCuotas(0, 3);
+    expect(cuotas[0].monto).toBe(0);
+    expect(cuotas[1].monto).toBe(0);
+    expect(cuotas[2].monto).toBe(0);
+  });
+
+  it("clampa nCuotas a 1 mínimo", () => {
+    const cuotas = distributeTotalAcrossCuotas(100, 0);
+    expect(cuotas[0].monto).toBe(100);
+  });
+
+  it("clampa nCuotas a 4 máximo", () => {
+    const cuotas = distributeTotalAcrossCuotas(200, 5);
+    expect(cuotas[0].monto).toBe(50);
+    expect(cuotas[1].monto).toBe(50);
+    expect(cuotas[2].monto).toBe(50);
+    expect(cuotas[3].monto).toBe(50);
+  });
+
+  it("preserva fechas desde baseCuotas", () => {
+    const base = [
+      { monto: 0, fecha: "2026-01-01" },
+      { monto: 0, fecha: "2026-02-01" },
+      { monto: 0, fecha: "" },
+      { monto: 0, fecha: "" },
+    ];
+    const cuotas = distributeTotalAcrossCuotas(300, 2, base);
+    expect(cuotas[0].fecha).toBe("2026-01-01");
+    expect(cuotas[1].fecha).toBe("2026-02-01");
+    expect(cuotas[0].monto).toBe(150);
+    expect(cuotas[1].monto).toBe(150);
+  });
+
+  it("maneja precisión con decimales (round centavos)", () => {
+    const cuotas = distributeTotalAcrossCuotas(10.01, 3);
+    const total = cuotas.reduce((s, c) => s + c.monto, 0);
+    expect(Math.round(total * 100) / 100).toBe(10.01);
+  });
 });
