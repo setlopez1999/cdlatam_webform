@@ -187,12 +187,15 @@ export default function GestorHorarios() {
             {empleados.length} empleado{empleados.length !== 1 ? "s" : ""} registrado{empleados.length !== 1 ? "s" : ""}
           </p>
         </div>
+        <div translate="no">
         <Button onClick={() => setShowAddModal(true)} className="gap-2">
           <UserPlus className="w-4 h-4" />
           Agregar empleado
         </Button>
+        </div>
       </div>
 
+      <div translate="no">
       {/* Tabs + botón configuración */}
       <div className="flex items-center justify-between border-b">
         <div className="flex gap-2">
@@ -441,6 +444,7 @@ export default function GestorHorarios() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      </div>{/* fin translate="no" */}
     </div>
   );
 }

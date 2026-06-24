@@ -31,9 +31,9 @@ export function PageLayout({
             <p className="text-sm text-muted-foreground mt-0.5">{subtitle}</p>
           )}
         </div>
-        {actions && <div className="flex items-center gap-2">{actions}</div>}
+        {actions && <div className="flex items-center gap-2" translate="no">{actions}</div>}
       </div>
-      {children}
+      <div translate="no">{children}</div>
     </div>
   );
 }

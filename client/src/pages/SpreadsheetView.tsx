@@ -38,6 +38,7 @@ function defaultNewRowPayload(tableName: string, rows: any[]): Record<string, an
 
 // ─── Componente de grilla por tabla ──────────────────────────────────────────
 function CatalogSheet({ tableName, textColor, allCatalogs }: { tableName: string; textColor: string; allCatalogs?: any }) {
+  // translate="no" en toolbar + grid previene NotFoundError de React con Chrome translate
   const gridRef = useRef<AgGridReact>(null);
   const [selectedRows, setSelectedRows] = useState<any[]>([]);
 
@@ -167,7 +168,7 @@ function CatalogSheet({ tableName, textColor, allCatalogs }: { tableName: string
   }, []);
 
   return (
-    <div className="flex flex-col h-full gap-3">
+    <div className="flex flex-col h-full gap-3" translate="no">
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-4 text-sm text-slate-400">
           <span className="flex items-center gap-1.5"><Hash className="w-3.5 h-3.5" /> <strong className="text-slate-200">{stats.total}</strong> registros</span>

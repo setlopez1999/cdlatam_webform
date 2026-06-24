@@ -103,8 +103,7 @@ export default function Login() {
       </div>
 
       {/* ── Panel derecho: Formulario ── */}
-      {/* translate="no" previene el error NotFoundError de React cuando el navegador traduce la página */}
-      <div className="flex-1 flex flex-col items-center justify-center px-6 py-12 relative" translate="no">
+      <div className="flex-1 flex flex-col items-center justify-center px-6 py-12 relative">
 
         {/* Mobile logo */}
         <div className="lg:hidden mb-8">
@@ -122,7 +121,8 @@ export default function Login() {
             <p className="text-white/40 text-sm">Ingresa tus credenciales para continuar</p>
           </div>
 
-          {/* Form */}
+          {/* Form - traducible el texto estático, protegido el contenido interactivo */}
+          <div translate="no">
           <form onSubmit={handleSubmit} className="space-y-5">
             {/* Error */}
             {localError && (
@@ -220,6 +220,7 @@ export default function Login() {
               )}
             </button>
           </form>
+          </div>
 
           {/* Credentials hint eliminado por seguridad — ya no se exponen credenciales en pantalla */}
         </div>

@@ -206,7 +206,7 @@ export default function ExpedienteLayout({ expedienteId, activeTab, children }: 
   return (
     <div className="flex flex-col h-full">
       {/* Header del expediente */}
-      <div className="border-b border-border bg-card px-6 py-3 flex items-center gap-3 flex-wrap">
+      <div className="border-b border-border bg-card px-6 py-3 flex items-center gap-3 flex-wrap" translate="no">
         <Button
           variant="ghost"
           size="sm"

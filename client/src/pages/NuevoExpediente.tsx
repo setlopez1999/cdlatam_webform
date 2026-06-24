@@ -63,7 +63,7 @@ export default function NuevoExpediente() {
           </CardDescription>
         </CardHeader>
 
-        <CardContent className="pt-4 flex flex-col gap-5">
+        <CardContent className="pt-4 flex flex-col gap-5" translate="no">
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="nombre-expediente">Nombre del expediente</Label>
             <Input
