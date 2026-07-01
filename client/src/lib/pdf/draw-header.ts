@@ -25,7 +25,16 @@ const DEFAULTS = {
   bottomGapMm: 10,
 };
 
-export function drawSharedHeader(
+function getImageDimensions(src: string): Promise<{ w: number; h: number }> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve({ w: img.naturalWidth, h: img.naturalHeight });
+    img.onerror = () => reject(new Error("No se pudo cargar la imagen"));
+    img.src = src;
+  });
+}
+
+export async function drawSharedHeader(
   doc: jsPDF,
   lo: PdfLayout,
   title: string,
@@ -34,7 +43,7 @@ export function drawSharedHeader(
   pageWidth: number,
   y: number,
   opts?: HeaderOptions & { empresaLogoBase64?: string },
-): number {
+): Promise<number> {
   const bandH = opts?.bandHeightMm ?? DEFAULTS.bandHeightMm;
   const topM = opts?.topMarginMm ?? DEFAULTS.topMarginMm;
   const botG = opts?.bottomGapMm ?? DEFAULTS.bottomGapMm;
@@ -46,12 +55,17 @@ export function drawSharedHeader(
   try {
     const boxW = 72;
     const boxH = 18;
-    const { drawW, drawH } = fitImagePreserveAspectMm(LOGO_NATURAL_W_PX, LOGO_NATURAL_H_PX, boxW, boxH);
-    const imgX = margin;
-    const imgY = y + topM + (bandH - drawH) / 2;
+
     if (USAR_LOGO_EMPRESA && opts?.empresaLogoBase64) {
+      const dims = await getImageDimensions(opts.empresaLogoBase64);
+      const { drawW, drawH } = fitImagePreserveAspectMm(dims.w, dims.h, boxW, boxH);
+      const imgX = margin;
+      const imgY = y + topM + (bandH - drawH) / 2;
       doc.addImage(opts.empresaLogoBase64, "PNG", imgX, imgY, drawW, drawH, undefined, "FAST");
     } else {
+      const { drawW, drawH } = fitImagePreserveAspectMm(LOGO_NATURAL_W_PX, LOGO_NATURAL_H_PX, boxW, boxH);
+      const imgX = margin;
+      const imgY = y + topM + (bandH - drawH) / 2;
       doc.addImage(cdlatamLogoOnBrand, "PNG", imgX, imgY, drawW, drawH, undefined, "FAST");
     }
   } catch { /* omitir si falla */ }

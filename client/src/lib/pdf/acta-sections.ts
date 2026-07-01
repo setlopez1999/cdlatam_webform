@@ -7,7 +7,7 @@ import { drawSharedHeader } from "./draw-header";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 
-export function drawHeaderSection(
+export async function drawHeaderSection(
   doc: jsPDF,
   lo: PdfLayout,
   noActa: string,
@@ -17,7 +17,7 @@ export function drawHeaderSection(
   y: number,
   headerColor?: [number, number, number],
   empresaLogoBase64?: string,
-): number {
+): Promise<number> {
   const rightLines = [`N\u00b0 ${noActa || "S/N"}`, `Fecha: ${formatDate(fecha)}`];
   return drawSharedHeader(doc, lo, "Acta de Aceptaci\u00f3n de Servicios", rightLines, margin, pageWidth, y, { headerColor, empresaLogoBase64 });
 }

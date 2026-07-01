@@ -26,7 +26,7 @@ async function buildActaPdfBytes(acta: ActaData, opts: ActaPdfExportOpts = {}): 
   let y = 0;
 
   // 1. Header
-  y = drawHeaderSection(doc, lo, acta.noActa || "", acta.fecha, margin, pageWidth, y, undefined, opts.empresaLogoBase64);
+  y = await drawHeaderSection(doc, lo, acta.noActa || "", acta.fecha, margin, pageWidth, y, undefined, opts.empresaLogoBase64);
 
   // 2. Encabezado
   y = drawEncabezado(doc, lo, acta, margin, y, contentWidth);
@@ -113,7 +113,7 @@ export async function createActaPdfBlob(
           const tempDoc = new jsPDF({ unit: "mm", format: "letter" });
           const tempLo = resolveLayout(tempDoc, { compact: true });
           const pw = tempDoc.internal.pageSize.getWidth();
-          drawSharedHeader(tempDoc, tempLo, "CDLatam", [], 15, pw, 0, {
+          await drawSharedHeader(tempDoc, tempLo, "CDLatam", [], 15, pw, 0, {
             bandHeightMm: 5,
             topMarginMm: 2,
             bottomGapMm: 4,

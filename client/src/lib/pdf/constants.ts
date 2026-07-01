@@ -107,7 +107,7 @@ export function resolveHeaderColor(
 }
 
 // ─── Logo de empresa en membrete del PDF ────────────────────────────────────
-export const USAR_LOGO_EMPRESA = false;
+export const USAR_LOGO_EMPRESA = true;
 
 // ─── Otros ───────────────────────────────────────────────────────────────────
 export const FEATURES_RESUMIDO_ORDEN = 20;
