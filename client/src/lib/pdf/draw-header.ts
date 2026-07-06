@@ -1,5 +1,7 @@
 import type { PdfLayout } from "./types";
 import type { jsPDF } from "jspdf";
+import { rgb } from "pdf-lib";
+import type { PDFPage, PDFFont, PDFImage } from "pdf-lib";
 import {
   PDF_COLOR_SUBTITLE,
   COLOR_TEXT,
@@ -98,6 +100,94 @@ export function drawHeaderSync(
 
   doc.setTextColor(...COLOR_TEXT);
   return y + topM + bandH + botG;
+}
+
+export function drawHeaderOnPdfLibPage(
+  page: PDFPage,
+  font: PDFFont,
+  title: string,
+  rightLines: string[],
+  pageW: number,
+  pageH: number,
+  opts?: HeaderOptions & { logoImage?: PDFImage },
+): void {
+  const mmToPt = (mm: number) => mm * 72 / 25.4;
+
+  const topMarginMm = opts?.topMarginMm ?? DEFAULTS.topMarginMm;
+  const bandHeightMm = opts?.bandHeightMm ?? DEFAULTS.bandHeightMm;
+  const marginPt = mmToPt(15);
+
+  const hColor = resolveHeaderColor(opts?.headerColor);
+  const cRgb = rgb(hColor[0] / 255, hColor[1] / 255, hColor[2] / 255);
+
+  const topBandPt = mmToPt(topMarginMm);
+  const mainBandPt = mmToPt(bandHeightMm);
+
+  page.drawRectangle({
+    x: 0,
+    y: pageH - topBandPt,
+    width: pageW,
+    height: topBandPt,
+    color: cRgb,
+  });
+
+  page.drawRectangle({
+    x: 0,
+    y: pageH - topBandPt - mainBandPt,
+    width: pageW,
+    height: mainBandPt,
+    color: cRgb,
+  });
+
+  if (opts?.logoImage) {
+    const boxWmm = 72;
+    const boxHmm = 18;
+    const { drawW, drawH } = fitImagePreserveAspectMm(
+      opts.logoImage.width,
+      opts.logoImage.height,
+      boxWmm,
+      boxHmm,
+    );
+    const logoWpt = mmToPt(drawW);
+    const logoHpt = mmToPt(drawH);
+    page.drawImage(opts.logoImage, {
+      x: marginPt,
+      y: pageH - topBandPt - mainBandPt + (mainBandPt - logoHpt) / 2,
+      width: logoWpt,
+      height: logoHpt,
+    });
+  }
+
+  const bandMid = pageH - topBandPt - mainBandPt / 2;
+  const fTitle = opts?.fontSizeTitle ?? 11;
+  const titleOff = opts?.titleOffsetY ?? -4;
+  const titleW = font.widthOfTextAtSize(title, fTitle);
+  page.drawText(title, {
+    x: pageW - marginPt - titleW,
+    y: bandMid + mmToPt(titleOff),
+    size: fTitle,
+    font,
+    color: rgb(1, 1, 1),
+  });
+
+  const fSmall = opts?.fontSizeSubtitle ?? 8;
+  const subColor = rgb(
+    PDF_COLOR_SUBTITLE[0] / 255,
+    PDF_COLOR_SUBTITLE[1] / 255,
+    PDF_COLOR_SUBTITLE[2] / 255,
+  );
+  let lineOff = opts?.firstLineOffsetY ?? 2;
+  for (const line of rightLines) {
+    const lineW = font.widthOfTextAtSize(line, fSmall);
+    page.drawText(line, {
+      x: pageW - marginPt - lineW,
+      y: bandMid + mmToPt(lineOff),
+      size: fSmall,
+      font,
+      color: subColor,
+    });
+    lineOff += 5;
+  }
 }
 
 export async function drawSharedHeader(
