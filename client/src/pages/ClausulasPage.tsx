@@ -235,11 +235,13 @@ export default function ClausulasPage() {
               placeholder="Nombre del documento"
               className="bg-[#242b3d] border-white/10 text-white flex-1"
               required
+              translate="no"
             />
             <select
               value={unidadNegocioId}
               onChange={e => setUnidadNegocioId(e.target.value)}
               className="bg-[#242b3d] border border-white/10 text-white rounded-md px-3 py-2 text-sm"
+              translate="no"
             >
               <option value="">Sin unidad de negocio</option>
               {unidadesNegocio.map((u: any) => (
@@ -268,6 +270,7 @@ export default function ClausulasPage() {
               onChange={e => setSearch(e.target.value)}
               placeholder="Buscar por nombre o archivo..."
               className="pl-9 bg-[#242b3d] border-white/10 text-white"
+              translate="no"
             />
           </div>
         </div>
@@ -307,7 +310,7 @@ export default function ClausulasPage() {
                           {c.ordenGlobal ?? 50}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-slate-300 font-medium">{c.valor}</td>
+                      <td className="px-4 py-3 text-slate-300 font-medium" translate="no">{c.valor}</td>
                       <td className="px-4 py-3">
                         <span className={`inline-flex px-2 py-0.5 rounded text-xs border ${tipoInfo.color}`}>
                           {tipoInfo.label}
@@ -322,7 +325,7 @@ export default function ClausulasPage() {
                           <span className="text-slate-500 italic">Sin unidad</span>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-slate-400 text-xs">{c.fileName}</td>
+                      <td className="px-4 py-3 text-slate-400 text-xs" translate="no">{c.fileName}</td>
                       <td className="px-4 py-3 text-slate-400 text-xs">
                         {c.fileSize ? `${(c.fileSize / 1024).toFixed(1)} KB` : "-"}
                       </td>
@@ -412,6 +415,7 @@ export default function ClausulasPage() {
                 onChange={(e) => setEditNombre(e.target.value)}
                 placeholder="Nombre del documento"
                 className="bg-[#242b3d] border-white/10 text-white"
+                translate="no"
               />
             </div>
             <div className="space-y-1.5">
@@ -420,6 +424,7 @@ export default function ClausulasPage() {
                 value={editUnidad}
                 onChange={(e) => setEditUnidad(e.target.value)}
                 className="w-full bg-[#242b3d] border border-white/10 text-white rounded-md px-3 py-2 text-sm"
+                translate="no"
               >
                 <option value={SIN_UNIDAD}>Sin unidad de negocio</option>
                 {unidadesNegocio.map((u: any) => (
@@ -437,6 +442,7 @@ export default function ClausulasPage() {
                   value={editTipo}
                   onChange={(e) => setEditTipo(e.target.value as "clausula" | "anexo_soporte")}
                   className="w-full bg-[#242b3d] border border-white/10 text-white rounded-md px-3 py-2 text-sm"
+                  translate="no"
                 >
                   <option value="clausula">Cláusula</option>
                   <option value="anexo_soporte">Anexo de Soporte</option>
@@ -451,13 +457,14 @@ export default function ClausulasPage() {
                   value={editOrden}
                   onChange={(e) => setEditOrden(Number(e.target.value))}
                   className="bg-[#242b3d] border-white/10 text-white"
+                  translate="no"
                 />
                 <p className="text-[11px] text-slate-500">Menor = aparece antes. Acta=0 (fijo).</p>
               </div>
             </div>
             {editing?.fileName && (
               <p className="text-xs text-slate-500">
-                Archivo: <span className="text-slate-300">{editing.fileName}</span>
+                Archivo: <span className="text-slate-300" translate="no">{editing.fileName}</span>
               </p>
             )}
           </div>
@@ -483,10 +490,10 @@ export default function ClausulasPage() {
           </DialogHeader>
           <div className="space-y-4 py-2">
             <p className="text-sm text-slate-300">
-              Reemplazando el archivo de: <span className="font-semibold text-white">{replacing?.valor}</span>
+              Reemplazando el archivo de: <span className="font-semibold text-white" translate="no">{replacing?.valor}</span>
             </p>
             <p className="text-xs text-slate-500">
-              Archivo actual: <span className="text-slate-400">{replacing?.fileName}</span>
+              Archivo actual: <span className="text-slate-400" translate="no">{replacing?.fileName}</span>
             </p>
             <div className="space-y-1.5">
               <label className="text-xs text-slate-400">Nuevo archivo PDF</label>

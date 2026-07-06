@@ -233,11 +233,11 @@ export default function Usuarios() {
                       </Avatar>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <p className="text-sm font-medium truncate">{u.displayName ?? u.username}</p>
+                          <p className="text-sm font-medium truncate" translate="no">{u.displayName ?? u.username}</p>
                           {getRoleBadge(u)}
                           {u.isActive !== 1 && <Badge variant="destructive" className="text-xs h-5">Inactivo</Badge>}
                         </div>
-                        <p className="text-xs text-muted-foreground">@{u.username}</p>
+                        <p className="text-xs text-muted-foreground" translate="no">@{u.username}</p>
                       </div>
                       <div className="text-right hidden sm:block">
                         <div className="flex items-center gap-1 text-xs text-muted-foreground">
@@ -297,8 +297,8 @@ export default function Usuarios() {
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2">
-                            <p className="text-sm font-medium">{r.label}</p>
-                            <Badge variant="outline" className="text-xs h-5 font-mono">{r.nombre}</Badge>
+                            <p className="text-sm font-medium" translate="no">{r.label}</p>
+                            <Badge variant="outline" className="text-xs h-5 font-mono" translate="no">{r.nombre}</Badge>
                             {r.activo !== 1 && <Badge variant="destructive" className="text-xs h-5">Inactivo</Badge>}
                           </div>
                           {r.descripcion && <p className="text-xs text-muted-foreground truncate">{r.descripcion}</p>}
@@ -366,15 +366,15 @@ export default function Usuarios() {
           <form onSubmit={handleCreateRole} className="space-y-4">
             <div className="space-y-2">
               <Label>Nombre interno * <span className="text-muted-foreground text-xs">(sin espacios, ej: gerente_ventas)</span></Label>
-              <Input placeholder="ej: gerente_ventas" value={roleForm.nombre} onChange={e => setRoleForm(f => ({ ...f, nombre: e.target.value.toLowerCase().replace(/\s+/g, "_") }))} required minLength={2} />
+              <Input placeholder="ej: gerente_ventas" value={roleForm.nombre} onChange={e => setRoleForm(f => ({ ...f, nombre: e.target.value.toLowerCase().replace(/\s+/g, "_") }))} required minLength={2} translate="no" />
             </div>
             <div className="space-y-2">
               <Label>Etiqueta visible *</Label>
-              <Input placeholder="ej: Gerente de Ventas" value={roleForm.label} onChange={e => setRoleForm(f => ({ ...f, label: e.target.value }))} required minLength={2} />
+              <Input placeholder="ej: Gerente de Ventas" value={roleForm.label} onChange={e => setRoleForm(f => ({ ...f, label: e.target.value }))} required minLength={2} translate="no" />
             </div>
             <div className="space-y-2">
               <Label>Descripción <span className="text-muted-foreground text-xs">(opcional)</span></Label>
-              <Input placeholder="ej: Acceso a reportes de ventas" value={roleForm.descripcion} onChange={e => setRoleForm(f => ({ ...f, descripcion: e.target.value }))} />
+              <Input placeholder="ej: Acceso a reportes de ventas" value={roleForm.descripcion} onChange={e => setRoleForm(f => ({ ...f, descripcion: e.target.value }))} translate="no" />
             </div>
             <DialogFooter className="pt-2">
               <Button type="button" variant="outline" onClick={() => { setShowCreateRole(false); resetRoleForm(); }}>Cancelar</Button>
@@ -390,20 +390,20 @@ export default function Usuarios() {
       <Dialog open={!!editRole && !deleteRoleConfirm} onOpenChange={(o) => { if (!o) setEditRole(null); }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2"><Pencil className="w-4 h-4" />Editar Rol — {editRole?.nombre}</DialogTitle>
+            <DialogTitle className="flex items-center gap-2"><Pencil className="w-4 h-4" />Editar Rol — <span translate="no">{editRole?.nombre}</span></DialogTitle>
           </DialogHeader>
           <form onSubmit={handleUpdateRole} className="space-y-4">
             <div className="space-y-2">
               <Label>Nombre interno *</Label>
-              <Input value={roleForm.nombre} onChange={e => setRoleForm(f => ({ ...f, nombre: e.target.value.toLowerCase().replace(/\s+/g, "_") }))} required minLength={2} />
+              <Input value={roleForm.nombre} onChange={e => setRoleForm(f => ({ ...f, nombre: e.target.value.toLowerCase().replace(/\s+/g, "_") }))} required minLength={2} translate="no" />
             </div>
             <div className="space-y-2">
               <Label>Etiqueta visible *</Label>
-              <Input value={roleForm.label} onChange={e => setRoleForm(f => ({ ...f, label: e.target.value }))} required minLength={2} />
+              <Input value={roleForm.label} onChange={e => setRoleForm(f => ({ ...f, label: e.target.value }))} required minLength={2} translate="no" />
             </div>
             <div className="space-y-2">
               <Label>Descripción</Label>
-              <Input value={roleForm.descripcion} onChange={e => setRoleForm(f => ({ ...f, descripcion: e.target.value }))} />
+              <Input value={roleForm.descripcion} onChange={e => setRoleForm(f => ({ ...f, descripcion: e.target.value }))} translate="no" />
             </div>
             <DialogFooter className="pt-2">
               <Button type="button" variant="outline" onClick={() => setEditRole(null)}>Cancelar</Button>
@@ -424,7 +424,7 @@ export default function Usuarios() {
             </DialogTitle>
           </DialogHeader>
           <p className="text-sm text-muted-foreground">
-            ¿Estás seguro de que deseas eliminar el rol <strong>{pendingDeleteRole?.label}</strong>? Esta acción no se puede deshacer.
+            ¿Estás seguro de que deseas eliminar el rol <strong translate="no">{pendingDeleteRole?.label}</strong>? Esta acción no se puede deshacer.
           </p>
           <DialogFooter className="pt-2">
             <Button variant="outline" onClick={() => setPendingDeleteRole(null)}>Cancelar</Button>
@@ -446,7 +446,7 @@ export default function Usuarios() {
           </DialogHeader>
           <div className="space-y-3">
             <p className="text-sm text-muted-foreground">
-              El rol <strong>{deleteRoleConfirm?.role.label}</strong> está asignado a los siguientes usuarios:
+              El rol <strong translate="no">{deleteRoleConfirm?.role.label}</strong> está asignado a los siguientes usuarios:
             </p>
             <div className="rounded-lg border border-border divide-y divide-border max-h-40 overflow-y-auto">
               {deleteRoleConfirm?.affected.map((u: any) => (
@@ -480,8 +480,8 @@ export default function Usuarios() {
           <div className="space-y-3">
             <p className="text-sm text-muted-foreground">
               Estás a punto de eliminar la cuenta de{" "}
-              <strong>{deleteUserConfirm?.displayName ?? deleteUserConfirm?.username}</strong>{" "}
-              (<span className="font-mono text-xs">@{deleteUserConfirm?.username}</span>).
+              <strong translate="no">{deleteUserConfirm?.displayName ?? deleteUserConfirm?.username}</strong>{" "}
+              (<span className="font-mono text-xs" translate="no">@{deleteUserConfirm?.username}</span>).
             </p>
             <div className="rounded-lg bg-amber-500/10 border border-amber-500/30 p-3 text-xs text-amber-600 space-y-1">
               <p>• La cuenta será eliminada de forma permanente.</p>

@@ -455,9 +455,11 @@ export default function F1Form({ expedienteId }: Props) {
       // Generar PDF de Features Resumido dinámico (SI/NO según implementación del expediente)
       // Se inyecta en el orden correcto dentro de createActaPdfBlob según ordenGlobal de las cláusulas
       const featuresResumidoBytes = (implementacionQuery.data?.length ?? 0) > 0 && implementacionQuery.data.some(i => i.estado)
-        ? buildFeaturesResumidoPdfBytes(
+        ? await buildFeaturesResumidoPdfBytes(
             implementacionQuery.data!,
             data.razonSocial ?? "",
+            undefined,
+            empresaLogoBase64,
           )
         : undefined;
 
@@ -500,7 +502,7 @@ export default function F1Form({ expedienteId }: Props) {
     } catch {
       toast.error("Error al generar PDF", { id: "pdf-f1" });
     }
-  }, [data, clausulasParaPdf, expedienteId, implementacionQuery.data, plantillasConsideraciones]);
+  }, [data, clausulasParaPdf, expedienteId, implementacionQuery.data, plantillasConsideraciones, empresaLogoBase64]);
 
   if (!data) return <div className="p-6 text-muted-foreground">Expediente no encontrado.</div>;
 

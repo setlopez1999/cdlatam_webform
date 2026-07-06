@@ -184,7 +184,7 @@ export default function GestorHorarios() {
         <div>
           <h1 className="text-2xl font-bold">Gestor de Horarios</h1>
           <p className="text-muted-foreground text-sm mt-0.5">
-            {empleados.length} empleado{empleados.length !== 1 ? "s" : ""} registrado{empleados.length !== 1 ? "s" : ""}
+            <span translate="no">{empleados.length}</span> empleado{empleados.length !== 1 ? "s" : ""} registrado{empleados.length !== 1 ? "s" : ""}
           </p>
         </div>
         <div translate="no">
@@ -195,7 +195,6 @@ export default function GestorHorarios() {
         </div>
       </div>
 
-      <div translate="no">
       {/* Tabs + botón configuración */}
       <div className="flex items-center justify-between border-b">
         <div className="flex gap-2">
@@ -256,7 +255,7 @@ export default function GestorHorarios() {
               {empleados.filter(e => e.activo === 1).map(e => (
                 <span key={e.id} className="flex items-center gap-1.5 text-xs">
                   <span className={`w-3 h-3 rounded-full ${colorPorEmpleado[e.id]}`} />
-                  {e.nombre} {e.apellido}
+                  <span translate="no">{e.nombre} {e.apellido}</span>
                 </span>
               ))}
             </div>
@@ -299,7 +298,7 @@ export default function GestorHorarios() {
                   value={empleadoSeleccionado ? String(empleadoSeleccionado) : ""}
                   onValueChange={val => setEmpleadoSeleccionado(Number(val))}
                 >
-                  <SelectTrigger className="w-72">
+                  <SelectTrigger className="w-72" translate="no">
                     <SelectValue placeholder="Selecciona un empleado…" />
                   </SelectTrigger>
                   <SelectContent>
@@ -307,9 +306,9 @@ export default function GestorHorarios() {
                       <SelectItem key={e.id} value={String(e.id)}>
                         <div className="flex items-center gap-2">
                           <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${colorPorEmpleado[e.id]}`} />
-                          <span>{e.nombre} {e.apellido}</span>
+                          <span translate="no">{e.nombre} {e.apellido}</span>
                           {e.cargo && (
-                            <span className="text-muted-foreground text-xs">· {e.cargo}</span>
+                            <span className="text-muted-foreground text-xs">· <span translate="no">{e.cargo}</span></span>
                           )}
                           {e.activo !== 1 && (
                             <Badge variant="secondary" className="text-xs ml-1">Inactivo</Badge>
@@ -339,21 +338,21 @@ export default function GestorHorarios() {
                       <div className="space-y-1">
                         <p>
                           <span className="font-medium">Empleado:</span>{" "}
-                          {empleadoActual?.nombre} {empleadoActual?.apellido}
+                          <span translate="no">{empleadoActual?.nombre} {empleadoActual?.apellido}</span>
                           {empleadoActual?.cargo && (
-                            <span className="text-muted-foreground ml-1">· {empleadoActual.cargo}</span>
+                            <span className="text-muted-foreground ml-1">· <span translate="no">{empleadoActual.cargo}</span></span>
                           )}
                         </p>
                         <p>
                           <span className="font-medium">Rango:</span>{" "}
-                          {contratoActivo.fechaInicio} → {contratoActivo.fechaFin ?? "Indefinido"}
+                          <span translate="no">{contratoActivo.fechaInicio} → {contratoActivo.fechaFin ?? "Indefinido"}</span>
                         </p>
-                        <p><span className="font-medium">Horas diarias:</span> {contratoActivo.horasDiarias}h</p>
+                        <p><span className="font-medium">Horas diarias:</span> <span translate="no">{contratoActivo.horasDiarias}h</span></p>
                         <p>
                           <span className="font-medium">Días:</span>{" "}
-                          {(JSON.parse(contratoActivo.diasSemana as string) as number[])
+                          <span translate="no">{(JSON.parse(contratoActivo.diasSemana as string) as number[])
                             .map((d: number) => DIAS_SEMANA[d])
-                            .join(", ")}
+                            .join(", ")}</span>
                         </p>
                       </div>
                       <div className="flex gap-1 flex-shrink-0">
@@ -425,7 +424,7 @@ export default function GestorHorarios() {
             <AlertDialogTitle>¿Eliminar empleado?</AlertDialogTitle>
             <AlertDialogDescription>
               Estás a punto de eliminar a{" "}
-              <span className="font-semibold text-foreground">
+              <span className="font-semibold text-foreground" translate="no">
                 {deleteTarget?.nombre} {deleteTarget?.apellido}
               </span>
               . Esta acción eliminará también todos sus contratos y bloques de horario.{" "}
@@ -444,7 +443,7 @@ export default function GestorHorarios() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-      </div>{/* fin translate="no" */}
+
     </div>
   );
 }

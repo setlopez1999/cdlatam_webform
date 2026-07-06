@@ -3,9 +3,9 @@ import type { ClausulaParaPdf, ActaPdfExportOpts, DocEntry } from "./types";
 import { effectiveNoActaForPdf, resolveLayout, findBestScale } from "./layout";
 import { drawHeaderSection, drawEncabezado, drawInfoLegal, drawContactSection, drawServiciosTable, drawFormasPagoSection, drawConsideracionesSection, drawClausulasSection, drawFirmaBlock, drawFooter } from "./acta-sections";
 import { getCurrencyCode, formatCurrency } from "../formatters";
-import { drawSharedHeader } from "./draw-header";
 import { jsPDF } from "jspdf";
-import { PDFDocument } from "pdf-lib";
+import { PDFDocument, rgb, StandardFonts, PDFImage } from "pdf-lib";
+import { fitImagePreserveAspectMm, USAR_LOGO_EMPRESA, PDF_HEADER_COLOR } from "./constants";
 
 async function buildActaPdfBytes(acta: ActaData, opts: ActaPdfExportOpts = {}): Promise<Uint8Array> {
   const doc = new jsPDF({ unit: "mm", format: "letter" });
@@ -87,6 +87,31 @@ export async function createActaPdfBlob(
   const PAGE_W = 612;
   const PAGE_H = 792;
 
+  // Incrustar fuente Helvetica Bold una vez (reutilizada en todas las cláusulas)
+  const helveticaBold = await merged.embedFont(StandardFonts.HelveticaBold);
+
+  // Incrustar logo de empresa una vez si aplica
+  let headerLogo: PDFImage | null = null;
+  let logoNatW = 0;
+  let logoNatH = 0;
+  if (USAR_LOGO_EMPRESA && opts.empresaLogoBase64) {
+    try {
+      const raw = opts.empresaLogoBase64.includes(",")
+        ? opts.empresaLogoBase64.split(",")[1]
+        : opts.empresaLogoBase64;
+      const imgBytes = Uint8Array.from(atob(raw), (c) => c.charCodeAt(0));
+      const isPng =
+        opts.empresaLogoBase64.includes("image/png") || raw.startsWith("iVBOR");
+      headerLogo = isPng
+        ? await merged.embedPng(imgBytes)
+        : await merged.embedJpg(imgBytes);
+      logoNatW = headerLogo.width;
+      logoNatH = headerLogo.height;
+    } catch {
+      /* omitir logo si falla */
+    }
+  }
+
   for (const entry of docsEnOrden) {
     if (entry.kind === "dynamic_features_resumido") {
       try {
@@ -105,35 +130,74 @@ export async function createActaPdfBlob(
         const pdf = await PDFDocument.load(bytes, { ignoreEncryption: true });
         // Escalar páginas importadas a Letter para que mantengan el mismo tamaño que el acta
         const copied = await merged.copyPages(pdf, pdf.getPageIndices());
-        // Generar header completo (con logo y banda) una vez para reusar en cada página
-        let headerEmbed = null;
-        const HEADER_MM = 11; // topM(2) + band(5) + botG(4)
-        const HEADER_PT = HEADER_MM * 72 / 25.4;
-        if (c.tipo === "clausula") {
-          const tempDoc = new jsPDF({ unit: "mm", format: "letter" });
-          const tempLo = resolveLayout(tempDoc, { compact: true });
-          const pw = tempDoc.internal.pageSize.getWidth();
-          await drawSharedHeader(tempDoc, tempLo, "CDLatam", [], 15, pw, 0, {
-            bandHeightMm: 5,
-            topMarginMm: 2,
-            bottomGapMm: 4,
-            empresaLogoBase64: opts.empresaLogoBase64,
-          });
-          const hdrBytes = tempDoc.output("arraybuffer") as Uint8Array;
-          const hdrPdf = await PDFDocument.load(hdrBytes);
-          const hdrPage = hdrPdf.getPage(0);
-          const box = hdrPage.getMediaBox();
-          hdrPage.setMediaBox(box.x, box.height - HEADER_PT, box.width, HEADER_PT);
-          [headerEmbed] = await merged.embedPdf(hdrPdf, [0]);
-        }
+        const HEADER_PT = 11 * 72 / 25.4; // 31.18pt ≈ 11mm
         for (const page of copied) {
           const { width: srcW, height: srcH } = page.getSize();
           const s = Math.min(PAGE_W / srcW, PAGE_H / srcH);
           page.scale(s, s);
           page.setSize(PAGE_W, PAGE_H);
           merged.addPage(page);
-          if (headerEmbed) {
-            page.drawPage(headerEmbed, { x: 0, y: PAGE_H - HEADER_PT, width: PAGE_W, height: HEADER_PT });
+          if (c.tipo === "clausula") {
+            // Revertir CTM para dibujar en coordenadas de Letter (escala 1:1)
+            page.scale(1 / s, 1 / s);
+            page.setSize(PAGE_W, PAGE_H);
+
+            const cRgb = rgb(
+              PDF_HEADER_COLOR[0] / 255,
+              PDF_HEADER_COLOR[1] / 255,
+              PDF_HEADER_COLOR[2] / 255,
+            );
+            const topBandPt = 2 * 72 / 25.4;
+            const mainBandPt = 5 * 72 / 25.4;
+
+            // Banda superior (2mm)
+            page.drawRectangle({
+              x: 0,
+              y: PAGE_H - topBandPt,
+              width: PAGE_W,
+              height: topBandPt,
+              color: cRgb,
+            });
+
+            // Banda principal (5mm)
+            page.drawRectangle({
+              x: 0,
+              y: PAGE_H - topBandPt - mainBandPt,
+              width: PAGE_W,
+              height: mainBandPt,
+              color: cRgb,
+            });
+
+            // Texto "CDLatam" — right-aligned, blanco
+            const marginPt = 15 * 72 / 25.4;
+            const titleSize = 10.7;
+            const texto = "CDLatam";
+            const textW = helveticaBold.widthOfTextAtSize(texto, titleSize);
+            page.drawText(texto, {
+              x: PAGE_W - marginPt - textW,
+              y: PAGE_H - topBandPt - mainBandPt + (mainBandPt - titleSize * 0.35) / 2,
+              size: titleSize,
+              font: helveticaBold,
+              color: rgb(1, 1, 1),
+            });
+
+            // Logo de empresa si aplica
+            if (headerLogo) {
+              const { drawW, drawH } = fitImagePreserveAspectMm(
+                logoNatW,
+                logoNatH,
+                72,
+                5,
+              );
+              const logoWpt = drawW * 72 / 25.4;
+              const logoHpt = drawH * 72 / 25.4;
+              page.drawImage(headerLogo, {
+                x: marginPt,
+                y: PAGE_H - HEADER_PT + (HEADER_PT - logoHpt) / 2,
+                width: logoWpt,
+                height: logoHpt,
+              });
+            }
           }
         }
       } catch (err) {

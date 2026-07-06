@@ -100,6 +100,7 @@ function SearchBar({ value, onChange, placeholder }: { value: string; onChange: 
         onChange={e => onChange(e.target.value)}
         placeholder={placeholder ?? "Buscar..."}
         className="pl-9 bg-[#1a1f2e] border-white/10 text-white placeholder:text-slate-500 h-9 text-sm"
+        translate="no"
       />
       {value && (
         <button onClick={() => onChange("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white">
@@ -167,7 +168,7 @@ function ResumenView({ data, catalogMeta, onSelectTab }: {
               </div>
               <div className="min-w-0">
                 <p className="text-xl font-bold text-white">{counts[m.tableName] ?? 0}</p>
-                <p className="text-xs text-slate-500 truncate">{m.title}</p>
+                <p className="text-xs text-slate-500 truncate" translate="no">{m.title}</p>
               </div>
             </button>
           ))}
@@ -189,7 +190,7 @@ function ResumenView({ data, catalogMeta, onSelectTab }: {
                 className="flex items-center gap-2 px-3 py-2 bg-amber-500/5 border border-amber-500/20 rounded-lg text-xs text-amber-300 hover:bg-amber-500/10 hover:border-amber-500/40 transition-colors"
               >
                 <div className="w-1.5 h-1.5 rounded-full bg-amber-400" />
-                {m.title}
+                <span translate="no">{m.title}</span>
               </button>
             ))}
           </div>
@@ -205,7 +206,7 @@ function ResumenView({ data, catalogMeta, onSelectTab }: {
         </div>
         <div className="flex flex-wrap gap-2">
           {data.soluciones.map((s: CatalogSolucion) => (
-            <span key={s.id} className="text-xs px-2.5 py-1 bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 rounded-full">{s.valor}</span>
+            <span key={s.id} className="text-xs px-2.5 py-1 bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 rounded-full" translate="no">{s.valor}</span>
           ))}
         </div>
       </div>
@@ -219,7 +220,7 @@ function ResumenView({ data, catalogMeta, onSelectTab }: {
         </div>
         <div className="flex flex-wrap gap-2">
           {(data.implementacionItems ?? []).map((it: CatalogImplementacionItem) => (
-            <span key={it.id} className="text-xs px-2.5 py-1 bg-sky-500/10 text-sky-200 border border-sky-500/20 rounded-full truncate max-w-full" title={it.label}>
+            <span key={it.id} className="text-xs px-2.5 py-1 bg-sky-500/10 text-sky-200 border border-sky-500/20 rounded-full truncate max-w-full" title={it.label} translate="no">
               {it.label}
             </span>
           ))}
@@ -260,7 +261,7 @@ function ExpedientesView() {
           <SearchBar value={search} onChange={setSearch} placeholder="Buscar por razón social, N° acta, nombre..." />
         </div>
         <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-40 bg-[#1a1f2e] border-white/10 text-white h-9 text-sm">
+          <SelectTrigger className="w-40 bg-[#1a1f2e] border-white/10 text-white h-9 text-sm" translate="no">
             <Filter className="w-3.5 h-3.5 mr-2 text-slate-400" /><SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -296,20 +297,20 @@ function ExpedientesView() {
                   return (
                     <tr key={exp.id} className="border-t border-white/3 hover:bg-white/3 transition-colors">
                       <td className="px-4 py-3">
-                        <span className="font-mono text-xs text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded">{f1.noActa || "-"}</span>
+                        <span className="font-mono text-xs text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded" translate="no">{f1.noActa || "-"}</span>
                       </td>
-                      <td className="px-4 py-3 text-sm font-medium text-slate-200">{f1.razonSocial || exp.nombre}</td>
-                      <td className="px-4 py-3 text-xs text-slate-400">{f1.rucDniRut || "-"}</td>
-                      <td className="px-4 py-3 text-xs text-slate-400">{f1.representanteLegal || "-"}</td>
-                      <td className="px-4 py-3 text-xs text-slate-400">{formatDate(f1.fecha ?? "")}</td>
-                      <td className="px-4 py-3 text-xs font-mono text-right text-slate-300">{formatCurrency(total)}</td>
+                      <td className="px-4 py-3 text-sm font-medium text-slate-200" translate="no">{f1.razonSocial || exp.nombre}</td>
+                      <td className="px-4 py-3 text-xs text-slate-400" translate="no">{f1.rucDniRut || "-"}</td>
+                      <td className="px-4 py-3 text-xs text-slate-400" translate="no">{f1.representanteLegal || "-"}</td>
+                      <td className="px-4 py-3 text-xs text-slate-400" translate="no">{formatDate(f1.fecha ?? "")}</td>
+                      <td className="px-4 py-3 text-xs font-mono text-right text-slate-300" translate="no">{formatCurrency(total)}</td>
                       <td className="px-4 py-3">
-                        <span className={`text-xs px-2 py-0.5 rounded-full border ${getStatusColor(exp.f1.status)}`}>
+                        <span className={`text-xs px-2 py-0.5 rounded-full border ${getStatusColor(exp.f1.status)}`} translate="no">
                           {getStatusLabel(exp.f1.status)}
                         </span>
                       </td>
                       <td className="px-4 py-3">
-                        <span className={`text-xs px-2 py-0.5 rounded-full border ${getStatusColor(exp.f2.status)}`}>
+                        <span className={`text-xs px-2 py-0.5 rounded-full border ${getStatusColor(exp.f2.status)}`} translate="no">
                           {getStatusLabel(exp.f2.status)}
                         </span>
                       </td>
@@ -338,7 +339,7 @@ function ExpedientesView() {
             </table>
           </div>
           <div className="px-4 py-2.5 border-t border-white/5 text-xs text-slate-500">
-            {filtered.length} de {expedientes.length} expedientes
+            <span translate="no">{filtered.length}</span> de <span translate="no">{expedientes.length}</span> expedientes
           </div>
         </div>
       )}
@@ -358,7 +359,7 @@ function SimpleList({ items, dotColor }: { items: string[]; dotColor: string }) 
         {filtered.map((item, i) => (
           <div key={i} className="bg-[#1a1f2e] border border-white/5 rounded-lg px-3 py-2.5 flex items-center gap-2 hover:border-white/10 transition-colors">
             <div className={`w-1.5 h-1.5 rounded-full ${dotColor} flex-shrink-0`} />
-            <span className="text-sm text-slate-200 truncate">{item}</span>
+            <span className="text-sm text-slate-200 truncate" translate="no">{item}</span>
           </div>
         ))}
       </div>

@@ -4,15 +4,15 @@ import {
   COLOR_GRAY,
   COLOR_TEXT,
   COLOR_LIGHT,
+  resolveHeaderColor,
+  USAR_LOGO_EMPRESA,
   LOGO_NATURAL_W_PX,
   LOGO_NATURAL_H_PX,
-  resolveHeaderColor,
-  fitImagePreserveAspectMm,
-  drawHeaderBand,
 } from "./constants";
+import { drawHeaderSync, getImageDimensions } from "./draw-header";
+import type { LogoRenderData } from "./draw-header";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
-// Logo pre-compuesto sobre fondo azul CDLatam (sin transparencia → no se ve "engranado" en jsPDF)
 import cdlatamLogoOnBrand from "@/assets/cdlatam-logo-on-brand.png";
 
 // ── Mostrar/ocultar columna N° en la tabla ──────────────────────────────
@@ -26,75 +26,60 @@ const MOSTRAR_NUMERACION = false;
  * @param items        Lista de features con key, label, descripcion y estado
  * @param razonSocial  Nombre del cliente (aparece en el membrete)
  * @param headerColor  Override opcional del color de membrete (prioridad máxima)
+ * @param empresaLogoBase64 Logo de la empresa (data URL) para el membrete
  */
-export function buildFeaturesUnoPdfBytes(
+export async function buildFeaturesUnoPdfBytes(
   items: Array<{ key: string; label: string; descripcion: string; estado: boolean }>,
   razonSocial: string,
   headerColor?: [number, number, number],
-): Uint8Array {
+  empresaLogoBase64?: string,
+): Promise<Uint8Array> {
   const doc = new jsPDF({ unit: "mm", format: "letter" });
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
   const margin = 15;
   const contentWidth = pageWidth - margin * 2;
-  const HEADER_H = 26;  // franja más alta (igual que Acta)
-  const TOP_MARGIN = 8; // margen superior del mismo color que la franja
-  const BOTTOM_GAP = 10; // espacio entre membrete y tabla
+  const HEADER_H = 26;
+  const TOP_MARGIN = 8;
+  const BOTTOM_GAP = 10;
 
-  // Color de membrete: override > PDF_HEADER_COLOR > PDF_COLOR_GLOBAL
   const hColor = resolveHeaderColor(headerColor);
 
-  // ── Función para dibujar el header en cada página ────────────────────────
-  const drawHeader = () => {
-    // Margen superior + franja (sólido o degradado según PDF_HEADER_USE_GRADIENT en constants.ts)
-    drawHeaderBand(doc, 0, 0, pageWidth, TOP_MARGIN, hColor);
-    drawHeaderBand(doc, 0, TOP_MARGIN, pageWidth, HEADER_H, hColor);
+  // Pre-computar logo para usar tanto en draw inicial como en didDrawPage (sync)
+  let logoRenderData: LogoRenderData;
+  if (USAR_LOGO_EMPRESA && empresaLogoBase64) {
+    const dims = await getImageDimensions(empresaLogoBase64);
+    logoRenderData = { src: empresaLogoBase64, naturalW: dims.w, naturalH: dims.h };
+  } else {
+    logoRenderData = { src: cdlatamLogoOnBrand, naturalW: LOGO_NATURAL_W_PX, naturalH: LOGO_NATURAL_H_PX };
+  }
 
-    // Centro de la franja
-    const bandMid = TOP_MARGIN + HEADER_H / 2;
+  const lo = { fontSize: { title: 11, small: 8 } };
 
-    // Logo pre-compuesto más grande (igual que Acta)
-    try {
-      const boxW = 72;
-      const boxH = 18;
-      const { drawW, drawH } = fitImagePreserveAspectMm(LOGO_NATURAL_W_PX, LOGO_NATURAL_H_PX, boxW, boxH);
-      const imgX = margin;
-      const imgY = TOP_MARGIN + (HEADER_H - drawH) / 2;
-      doc.addImage(cdlatamLogoOnBrand, "PNG", imgX, imgY, drawW, drawH, undefined, "FAST");
-    } catch { /* omitir si falla */ }
-
-    // Título a la derecha en blanco
-    doc.setTextColor(255, 255, 255);
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(11);
-    doc.text(
-      "Especificaciones y Matriz de Features",
-      pageWidth - margin,
-      bandMid - 3,
-      { align: "right", baseline: "middle" },
-    );
-
-    // Razón social debajo del título
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(8);
-    doc.setTextColor(...PDF_COLOR_SUBTITLE);
-    doc.text(razonSocial || "", pageWidth - margin, bandMid + 4, {
-      align: "right",
-      baseline: "middle",
+  const drawHeaderFn = () => {
+    drawHeaderSync(doc, lo, "Especificaciones y Matriz de Features", [razonSocial], margin, pageWidth, 0, {
+      headerColor: hColor,
+      bandHeightMm: HEADER_H,
+      topMarginMm: TOP_MARGIN,
+      bottomGapMm: BOTTOM_GAP,
+      fontSizeTitle: 11,
+      fontSizeSubtitle: 8,
+      titleOffsetY: -3,
+      firstLineOffsetY: 4,
+      logoRenderData,
     });
   };
 
-  drawHeader();
+  drawHeaderFn();
 
   // ── Tabla de features ────────────────────────────────────────────────────────
   const startY = TOP_MARGIN + HEADER_H + BOTTOM_GAP;
 
-  // Anchos de columna: [N°] | Módulo/Componente | Descripción | Incluye
-  const colIncluye = 18; // columna única SI/NO fusionada
+  const colIncluye = 18;
   const colNro = MOSTRAR_NUMERACION ? 10 : 0;
   const available = contentWidth - colNro - colIncluye;
-  const colLabel = Math.floor(available * 0.28);  // Módulo/Componente: 28%
-  const colDesc = available - colLabel;            // Descripción: 72% restante
+  const colLabel = Math.floor(available * 0.28);
+  const colDesc = available - colLabel;
 
   const tableRows = items.map((item, idx) => [
     ...(MOSTRAR_NUMERACION ? [String(idx + 1)] : []),
@@ -142,18 +127,18 @@ export function buildFeaturesUnoPdfBytes(
       const incluyeIdx = MOSTRAR_NUMERACION ? 3 : 2;
       if (data.section === "body" && data.column.index === incluyeIdx) {
         if (data.cell.raw === "SI") {
-          data.cell.styles.textColor = [16, 185, 129] as [number, number, number]; // verde
+          data.cell.styles.textColor = [16, 185, 129] as [number, number, number];
           data.cell.styles.fontStyle = "bold";
           data.cell.styles.fontSize = 9;
         } else if (data.cell.raw === "NO") {
-          data.cell.styles.textColor = [239, 68, 68] as [number, number, number]; // rojo
+          data.cell.styles.textColor = [239, 68, 68] as [number, number, number];
           data.cell.styles.fontStyle = "bold";
           data.cell.styles.fontSize = 9;
         }
       }
     },
     didDrawPage: () => {
-      drawHeader();
+      drawHeaderFn();
       doc.setFontSize(7);
       doc.setTextColor(...COLOR_GRAY);
       doc.setFont("helvetica", "normal");
@@ -164,18 +149,20 @@ export function buildFeaturesUnoPdfBytes(
     },
   });
 
-  return doc.output("arraybuffer") as unknown as Uint8Array;
+  return new Uint8Array(doc.output("arraybuffer"));
 }
 
 /** @deprecated Usar buildFeaturesUnoPdfBytes directamente */
-export function buildFeaturesResumidoPdfBytes(
+export async function buildFeaturesResumidoPdfBytes(
   items: Array<{ key: string; label: string; descripcion?: string; estado: boolean }>,
   razonSocial: string,
   headerColor?: [number, number, number],
-): Uint8Array {
+  empresaLogoBase64?: string,
+): Promise<Uint8Array> {
   return buildFeaturesUnoPdfBytes(
     items.map(i => ({ ...i, descripcion: i.descripcion ?? "" })),
     razonSocial,
     headerColor,
+    empresaLogoBase64,
   );
 }

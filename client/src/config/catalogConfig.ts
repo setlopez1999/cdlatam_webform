@@ -52,7 +52,7 @@ export const catalogConfigs: Record<string, CatalogConfig> = {
     bgColor: "bg-blue-500/10",
     fields: [
       { key: "valor", label: "Valor", type: "text", required: true },
-      { key: "logoBase64", label: "Logo (387×50 px recomendado)", type: "image", hiddenInTable: true },
+      { key: "logoBase64", label: "Logo (387×50 px recomendado)", type: "image" },
       { key: "activo", label: "Activo", type: "boolean",  },
     ],
   },

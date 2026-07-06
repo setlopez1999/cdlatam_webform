@@ -121,17 +121,16 @@ export default function Login() {
             <p className="text-white/40 text-sm">Ingresa tus credenciales para continuar</p>
           </div>
 
-          {/* Form - traducible el texto estático, protegido el contenido interactivo */}
-          <div translate="no">
+          {/* Form - labels/textos estáticos traducibles, inputs/botón protegidos */}
           <form onSubmit={handleSubmit} className="space-y-5">
-            {/* Error */}
+            {/* Error - protegido porque React lo gestiona dinámicamente */}
             {localError && (
               <div
                 className="flex items-center gap-2.5 px-4 py-3 rounded-lg text-sm"
                 style={{ background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.2)", color: "#fca5a5" }}
               >
                 <div className="w-1.5 h-1.5 rounded-full bg-red-400 flex-shrink-0" />
-                <span>{localError}</span>
+                <span translate="no">{localError}</span>
               </div>
             )}
 
@@ -143,6 +142,7 @@ export default function Login() {
               <div className="relative">
                 <User className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-white/20" />
                 <input
+                  translate="no"
                   id="username"
                   type="text"
                   placeholder="Ingresa tu usuario"
@@ -176,6 +176,7 @@ export default function Login() {
               <div className="relative">
                 <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-white/20" />
                 <input
+                  translate="no"
                   id="password"
                   type="password"
                   placeholder="••••••••"
@@ -220,7 +221,6 @@ export default function Login() {
               )}
             </button>
           </form>
-          </div>
 
           {/* Credentials hint eliminado por seguridad — ya no se exponen credenciales en pantalla */}
         </div>
