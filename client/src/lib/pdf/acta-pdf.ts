@@ -136,11 +136,13 @@ export async function createActaPdfBlob(
           if (c.tipo === "clausula") {
             page.scale(1 / s, 1 / s);
             page.setSize(PAGE_W, PAGE_H);
-            drawHeaderOnPdfLibPage(page, helveticaBold, "CDLatam", [], PAGE_W, PAGE_H, {
-              topMarginMm: 2,
-              bandHeightMm: 5,
-              fontSizeTitle: 10.7,
-              titleOffsetY: -0.5,
+            const unidadNegocio = opts.serverUnidadNegocio ?? "";
+            const tituloClausula = unidadNegocio
+              ? `Condiciones de Servicio - ${unidadNegocio}`
+              : "Condiciones de Servicio";
+            drawHeaderOnPdfLibPage(page, helveticaBold, tituloClausula, [], PAGE_W, PAGE_H, {
+              topMarginMm: 8,
+              bandHeightMm: 21,
               logoImage: headerLogo,
             });
           }

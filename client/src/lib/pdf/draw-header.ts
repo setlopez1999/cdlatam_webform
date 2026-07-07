@@ -23,6 +23,8 @@ export type HeaderOptions = {
   fontSizeSubtitle?: number;
   titleOffsetY?: number;
   firstLineOffsetY?: number;
+  logoMaxWidthMm?: number;
+  logoMaxHeightMm?: number;
 };
 
 export type LogoRenderData = {
@@ -140,8 +142,8 @@ export function drawHeaderOnPdfLibPage(
   });
 
   if (opts?.logoImage) {
-    const boxWmm = 72;
-    const boxHmm = 18;
+    const boxWmm = opts?.logoMaxWidthMm ?? 72;
+    const boxHmm = opts?.logoMaxHeightMm ?? Math.min(18, bandHeightMm - 1);
     const { drawW, drawH } = fitImagePreserveAspectMm(
       opts.logoImage.width,
       opts.logoImage.height,
